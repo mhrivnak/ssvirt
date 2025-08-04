@@ -1,4 +1,7 @@
-.PHONY: build test container-build deploy clean
+.PHONY: all build test integration-test container-build generate deploy clean lint fmt vet
+
+# Default target – so `make` without args does something useful
+all: build
 
 build:
 	go build -o bin/api-server ./cmd/api-server

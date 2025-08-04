@@ -1,6 +1,8 @@
 module github.com/mhrivnak/ssvirt
 
-go 1.24.5
+go 1.21.0
+
+toolchain go1.24.5
 
 require github.com/spf13/viper v1.20.1
 

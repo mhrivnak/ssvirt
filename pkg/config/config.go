@@ -34,7 +34,7 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	viper.SetDefault("database.url", "postgresql://user:password@localhost:5432/ssvirt")
+	viper.SetDefault("database.url", "postgresql://localhost:5432/ssvirt")
 	viper.SetDefault("database.max_connections", 25)
 	viper.SetDefault("api.port", 8080)
 	viper.SetDefault("auth.token_expiry", "24h")

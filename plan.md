@@ -265,7 +265,7 @@ CREATE TABLE user_roles (
 
 ### Project Structure
 ```
-vcd-openshift/
+ssvirt/
 ├── cmd/
 │   ├── api-server/           # Main API server entry point
 │   └── controller/           # Controller manager entry point
@@ -312,7 +312,7 @@ vcd-openshift/
 ### Dependencies & Build Configuration
 **Go Modules (go.mod):**
 ```go
-module github.com/organization/vcd-openshift
+module github.com/mhrivnak/ssvirt
 
 require (
     k8s.io/api v0.29.0
@@ -349,7 +349,7 @@ integration-test:
 	go test ./test/integration/...
 
 container-build:
-	podman build -t vcd-openshift:latest .
+	podman build -t ssvirt:latest .
 
 generate:
 	go generate ./...
