@@ -1,0 +1,65 @@
+package config
+
+import (
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	Database struct {
+		URL            string `mapstructure:"url"`
+		MaxConnections int    `mapstructure:"max_connections"`
+	} `mapstructure:"database"`
+	
+	API struct {
+		Port    int    `mapstructure:"port"`
+		TLSCert string `mapstructure:"tls_cert"`
+		TLSKey  string `mapstructure:"tls_key"`
+	} `mapstructure:"api"`
+	
+	Auth struct {
+		JWTSecret   string        `mapstructure:"jwt_secret"`
+		TokenExpiry time.Duration `mapstructure:"token_expiry"`
+	} `mapstructure:"auth"`
+	
+	Kubernetes struct {
+		Namespace string `mapstructure:"namespace"`
+	} `mapstructure:"kubernetes"`
+	
+	Log struct {
+		Level  string `mapstructure:"level"`
+		Format string `mapstructure:"format"`
+	} `mapstructure:"log"`
+}
+
+func Load() (*Config, error) {
+	viper.SetDefault("database.url", "postgresql://localhost:5432/ssvirt")
+	viper.SetDefault("database.max_connections", 25)
+	viper.SetDefault("api.port", 8080)
+	viper.SetDefault("auth.token_expiry", "24h")
+	viper.SetDefault("kubernetes.namespace", "ssvirt-system")
+	viper.SetDefault("log.level", "info")
+	viper.SetDefault("log.format", "json")
+
+	viper.SetEnvPrefix("SSVIRT")
+	viper.AutomaticEnv()
+
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("/etc/ssvirt/")
+
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, err
+		}
+	}
+
+	var config Config
+	if err := viper.Unmarshal(&config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
