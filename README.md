@@ -1,6 +1,6 @@
-# SSVirt - OpenShift-Based VMware Cloud Director
+# SSVirt - Self Service Virt
 
-SSVirt is an OpenShift-native implementation of VMware Cloud Director (VCD) APIs, providing self-service virtual machine provisioning using OpenShift Virtualization and OpenShift Advanced Cluster Management.
+SSVirt is an OpenShift-native implementation of standard APIs, providing self-service virtual machine provisioning using OpenShift Virtualization and OpenShift Advanced Cluster Management.
 
 ## Overview
 
@@ -37,9 +37,9 @@ ssvirt/
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24+
 - PostgreSQL 13+
-- OpenShift 4.14+ with OpenShift Virtualization
+- OpenShift 4.19+ with OpenShift Virtualization
 
 ### Building
 
