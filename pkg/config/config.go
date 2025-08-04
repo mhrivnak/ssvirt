@@ -8,8 +8,11 @@ import (
 
 type Config struct {
 	Database struct {
-		URL            string `mapstructure:"url"`
-		MaxConnections int    `mapstructure:"max_connections"`
+		URL              string        `mapstructure:"url"`
+		MaxConnections   int           `mapstructure:"max_connections"`
+		MaxIdleConns     int           `mapstructure:"max_idle_connections"`
+		ConnMaxLifetime  time.Duration `mapstructure:"conn_max_lifetime"`
+		ConnMaxIdleTime  time.Duration `mapstructure:"conn_max_idle_time"`
 	} `mapstructure:"database"`
 	
 	API struct {
@@ -36,6 +39,9 @@ type Config struct {
 func Load() (*Config, error) {
 	viper.SetDefault("database.url", "postgresql://localhost:5432/ssvirt")
 	viper.SetDefault("database.max_connections", 25)
+	viper.SetDefault("database.max_idle_connections", 10)
+	viper.SetDefault("database.conn_max_lifetime", "1h")
+	viper.SetDefault("database.conn_max_idle_time", "10m")
 	viper.SetDefault("api.port", 8080)
 	viper.SetDefault("auth.token_expiry", "24h")
 	viper.SetDefault("kubernetes.namespace", "ssvirt-system")

@@ -14,9 +14,9 @@ type VAppTemplate struct {
 	Description    string    `json:"description"`
 	VMInstanceType string    `json:"vm_instance_type"` // OpenShift VirtualMachineInstanceType
 	OSType         string    `json:"os_type"`
-	CPUCount       *int      `json:"cpu_count"`
-	MemoryMB       *int      `json:"memory_mb"`
-	DiskSizeGB     *int      `json:"disk_size_gb"`
+	CPUCount       *int      `gorm:"check:cpu_count > 0" json:"cpu_count"`
+	MemoryMB       *int      `gorm:"check:memory_mb > 0" json:"memory_mb"`
+	DiskSizeGB     *int      `gorm:"check:disk_size_gb > 0" json:"disk_size_gb"`
 	TemplateData   string    `gorm:"type:jsonb" json:"template_data"` // Template configuration as JSON
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

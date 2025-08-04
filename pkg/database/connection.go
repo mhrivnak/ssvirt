@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -32,7 +33,9 @@ func NewConnection(cfg *config.Config) (*DB, error) {
 	}
 
 	sqlDB.SetMaxOpenConns(cfg.Database.MaxConnections)
-	sqlDB.SetMaxIdleConns(cfg.Database.MaxConnections / 2)
+	sqlDB.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	sqlDB.SetConnMaxIdleTime(cfg.Database.ConnMaxIdleTime)
 
 	return &DB{db}, nil
 }

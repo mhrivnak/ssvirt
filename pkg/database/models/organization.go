@@ -9,11 +9,11 @@ import (
 
 type Organization struct {
 	ID          uuid.UUID `gorm:"type:uuid;primary_key" json:"id"`
-	Name        string    `gorm:"uniqueIndex;not null" json:"name"`
+	Name        string    `gorm:"uniqueIndex;not null;size:255" json:"name"`
 	DisplayName string    `json:"display_name"`
 	Description string    `json:"description"`
 	Enabled     bool      `gorm:"default:true" json:"enabled"`
-	Namespace   string    `gorm:"uniqueIndex" json:"namespace"`
+	Namespace   string    `gorm:"uniqueIndex;size:63" json:"namespace"` // Kubernetes namespace max length
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
