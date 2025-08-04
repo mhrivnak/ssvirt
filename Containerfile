@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM registry.access.redhat.com/ubi9/go-toolset:latest AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -8,9 +8,8 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o api-server ./cmd/api-server
 RUN CGO_ENABLED=0 GOOS=linux go build -o controller ./cmd/controller
 
-FROM alpine:latest
+FROM registry.access.redhat.com/ubi9/ubi:latest
 
-RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 COPY --from=builder /app/api-server .
