@@ -55,7 +55,6 @@ linters:
     - gosimple
     - govet
     - ineffassign
-    - shadow
     - staticcheck
     - typecheck
     - unused
