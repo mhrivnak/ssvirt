@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -102,7 +103,7 @@ func (s *Server) versionHandler(c *gin.Context) {
 	response := VersionResponse{
 		Version:   "1.0.0", // TODO: Get from build info
 		BuildTime: "dev",   // TODO: Get from build info
-		GoVersion: "1.24.4", // TODO: Get from runtime
+		GoVersion: runtime.Version(),
 		GitCommit: "dev",   // TODO: Get from build info
 	}
 

@@ -27,12 +27,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
 
 	// Run database migrations
 	if err := db.AutoMigrate(); err != nil {
+		db.Close()
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
+	defer db.Close()
 
 	// Initialize repositories
 	userRepo := repositories.NewUserRepository(db.DB)

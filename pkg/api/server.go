@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -89,6 +90,16 @@ func (s *Server) Start() error {
 	}
 
 	if s.config.API.TLSCert != "" && s.config.API.TLSKey != "" {
+		// Verify TLS certificate and key files exist and are readable
+		if _, err := os.Stat(s.config.API.TLSCert); err != nil {
+			log.Printf("TLS certificate file not found or unreadable: %v", err)
+			return fmt.Errorf("TLS certificate file error: %w", err)
+		}
+		if _, err := os.Stat(s.config.API.TLSKey); err != nil {
+			log.Printf("TLS key file not found or unreadable: %v", err)
+			return fmt.Errorf("TLS key file error: %w", err)
+		}
+
 		log.Println("Starting HTTPS server")
 		return s.httpServer.ListenAndServeTLS(s.config.API.TLSCert, s.config.API.TLSKey)
 	}

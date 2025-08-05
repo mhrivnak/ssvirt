@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
 
-func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB) {
+func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManager) {
 	// Create in-memory SQLite database
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
@@ -63,11 +64,11 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB) {
 	// Create API server
 	server := api.NewServer(cfg, db, authSvc, jwtManager)
 
-	return server, db
+	return server, db, jwtManager
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	server, _ := setupTestAPIServer(t)
+	server, _, _ := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	t.Run("Health check returns 200", func(t *testing.T) {
@@ -97,7 +98,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestReadinessEndpoint(t *testing.T) {
-	server, _ := setupTestAPIServer(t)
+	server, _, _ := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	t.Run("Readiness check returns 200", func(t *testing.T) {
@@ -115,14 +116,15 @@ func TestReadinessEndpoint(t *testing.T) {
 		assert.Contains(t, response, "timestamp")
 		assert.Contains(t, response, "services")
 
-		services := response["services"].(map[string]interface{})
+		services, ok := response["services"].(map[string]interface{})
+		require.True(t, ok, "services field should be a map[string]interface{}")
 		assert.Equal(t, "ready", services["database"])
 		assert.Equal(t, "ready", services["auth"])
 	})
 }
 
 func TestVersionEndpoint(t *testing.T) {
-	server, _ := setupTestAPIServer(t)
+	server, _, _ := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	t.Run("Version endpoint returns 200", func(t *testing.T) {
@@ -138,13 +140,13 @@ func TestVersionEndpoint(t *testing.T) {
 
 		assert.Equal(t, "1.0.0", response["version"])
 		assert.Equal(t, "dev", response["build_time"])
-		assert.Equal(t, "1.24.4", response["go_version"])
+		assert.Equal(t, runtime.Version(), response["go_version"])
 		assert.Equal(t, "dev", response["git_commit"])
 	})
 }
 
 func TestUserProfileEndpoint(t *testing.T) {
-	server, db := setupTestAPIServer(t)
+	server, db, jwtManager := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	// Create a test user
@@ -158,8 +160,7 @@ func TestUserProfileEndpoint(t *testing.T) {
 	require.NoError(t, user.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(user).Error)
 
-	// Create JWT manager and generate token
-	jwtManager := auth.NewJWTManager("test-secret", time.Hour)
+	// Generate token using the JWT manager from server setup
 	token, err := jwtManager.Generate(user.ID, user.Username)
 	require.NoError(t, err)
 
@@ -176,7 +177,8 @@ func TestUserProfileEndpoint(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, true, response["success"])
-		data := response["data"].(map[string]interface{})
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
 		assert.Equal(t, user.ID.String(), data["id"])
 		assert.Equal(t, "testuser", data["username"])
 		assert.Equal(t, "test@example.com", data["email"])
@@ -209,7 +211,7 @@ func TestUserProfileEndpoint(t *testing.T) {
 }
 
 func TestCORSMiddleware(t *testing.T) {
-	server, _ := setupTestAPIServer(t)
+	server, _, _ := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	t.Run("CORS headers are set", func(t *testing.T) {
@@ -232,7 +234,7 @@ func TestCORSMiddleware(t *testing.T) {
 }
 
 func TestErrorHandling(t *testing.T) {
-	server, _ := setupTestAPIServer(t)
+	server, _, _ := setupTestAPIServer(t)
 	router := server.GetRouter()
 
 	t.Run("404 for unknown endpoint", func(t *testing.T) {
