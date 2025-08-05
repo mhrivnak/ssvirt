@@ -45,12 +45,31 @@ type VAppQueryResponse struct {
 	Total int            `json:"total"`
 }
 
-// vAppsQueryHandler handles GET /api/vApps/query - list vApps accessible to user
+// vAppsQueryHandler handles GET /api/vdc/{vdc-id}/vApps/query - list vApps in VDC
 func (s *Server) vAppsQueryHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
 	claims, exists := auth.GetClaims(c)
 	if !exists {
 		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse VDC ID
+	vdcIDStr := c.Param("vdc-id")
+	vdcID, err := uuid.Parse(vdcIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VDC ID format"))
+		return
+	}
+
+	// Get VDC to check access permissions
+	vdc, err := s.vdcRepo.GetByID(vdcID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VDC not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDC"))
+		}
 		return
 	}
 
@@ -61,24 +80,22 @@ func (s *Server) vAppsQueryHandler(c *gin.Context) {
 		return
 	}
 
-	// Extract organization IDs from user roles
-	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
+	// Check if user has access to this VDC's organization
+	hasAccess := false
 	for _, role := range user.UserRoles {
-		orgIDs = append(orgIDs, role.OrganizationID)
+		if role.OrganizationID == vdc.OrganizationID {
+			hasAccess = true
+			break
+		}
 	}
 
-	// Return empty list if user has no organization access
-	if len(orgIDs) == 0 {
-		response := VAppQueryResponse{
-			VApps: []VAppResponse{},
-			Total: 0,
-		}
-		SendSuccess(c, http.StatusOK, response)
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this VDC"))
 		return
 	}
 
-	// Get vApps accessible to user (based on organization membership)
-	vapps, err := s.vappRepo.GetByOrganizationIDs(orgIDs)
+	// Get vApps for the specific VDC
+	vapps, err := s.vappRepo.GetByVDCID(vdcID)
 	if err != nil {
 		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve vApps"))
 		return

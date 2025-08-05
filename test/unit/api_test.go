@@ -843,8 +843,8 @@ func TestCatalogEndpoints(t *testing.T) {
 	token, err := jwtManager.Generate(user.ID, user.Username)
 	require.NoError(t, err)
 
-	t.Run("GET /api/catalogs/query returns catalog list", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/catalogs/query", nil)
+	t.Run("GET /api/org/{org-id}/catalogs/query returns catalog list", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/org/"+org.ID.String()+"/catalogs/query", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -972,7 +972,7 @@ func TestCatalogEndpoints(t *testing.T) {
 	})
 
 	t.Run("Catalog endpoints without token return 401", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/catalogs/query", nil)
+		req, _ := http.NewRequest("GET", "/api/org/"+org.ID.String()+"/catalogs/query", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

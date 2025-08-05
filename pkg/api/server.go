@@ -105,20 +105,22 @@ func (s *Server) setupRoutes() {
 			protected.GET("/session", s.getSessionHandler)        // GET /api/session - get current session
 
 			// Organization endpoints
-			protected.GET("/org", s.organizationsHandler)        // GET /api/org - list organizations
-			protected.GET("/org/:org-id", s.organizationHandler) // GET /api/org/{org-id} - get organization
+			protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations
+			protected.GET("/org/:org-id", s.organizationHandler)                 // GET /api/org/{org-id} - get organization
+			protected.GET("/org/:org-id/vdcs/query", s.vdcQueryHandler)          // GET /api/org/{org-id}/vdcs/query - list VDCs in organization
+			protected.GET("/org/:org-id/catalogs/query", s.catalogsQueryHandler) // GET /api/org/{org-id}/catalogs/query - list catalogs in organization
 
 			// VDC endpoints
 			protected.GET("/vdc/:vdc-id", s.vdcHandler)                                                     // GET /api/vdc/{vdc-id} - get VDC
+			protected.GET("/vdc/:vdc-id/vApps/query", s.vAppsQueryHandler)                                  // GET /api/vdc/{vdc-id}/vApps/query - list vApps in VDC
 			protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
 
 			// Catalog endpoints
-			protected.GET("/catalogs/query", s.catalogsQueryHandler)                             // GET /api/catalogs/query - list catalogs
 			protected.GET("/catalog/:catalog-id", s.catalogHandler)                              // GET /api/catalog/{catalog-id} - get catalog
 			protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
+			protected.GET("/catalogItem/:item-id", s.catalogItemHandler)                         // GET /api/catalogItem/{item-id} - get catalog item
 
 			// vApp endpoints
-			protected.GET("/vApps/query", s.vAppsQueryHandler)      // GET /api/vApps/query - list vApps
 			protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
 			protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler) // DELETE /api/vApp/{vapp-id} - delete vApp
 
