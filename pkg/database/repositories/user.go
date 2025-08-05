@@ -63,6 +63,15 @@ func (r *UserRepository) Delete(id uuid.UUID) error {
 }
 
 func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if limit > 1000 { // reasonable maximum
+		limit = 1000
+	}
 	var users []models.User
 	err := r.db.Limit(limit).Offset(offset).Find(&users).Error
 	return users, err
