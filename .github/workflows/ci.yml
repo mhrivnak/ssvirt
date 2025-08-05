@@ -41,10 +41,10 @@ jobs:
       run: go mod verify
       
     - name: Run unit tests
-      run: go test -v -race -coverprofile=coverage.out ./test/unit/...
+      run: go test -v -race -coverprofile=coverage.out -timeout=5m ./test/unit/...
       
     - name: Run integration tests
-      run: go test -v -race ./test/integration/... || echo "No integration tests found"
+      run: go test -v -race -timeout=5m ./test/integration/... || echo "No integration tests found"
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
