@@ -10,28 +10,28 @@ import (
 
 type Config struct {
 	Database struct {
-		URL              string        `mapstructure:"url"`
-		MaxConnections   int           `mapstructure:"max_connections"`
-		MaxIdleConns     int           `mapstructure:"max_idle_connections"`
-		ConnMaxLifetime  time.Duration `mapstructure:"conn_max_lifetime"`
-		ConnMaxIdleTime  time.Duration `mapstructure:"conn_max_idle_time"`
+		URL             string        `mapstructure:"url"`
+		MaxConnections  int           `mapstructure:"max_connections"`
+		MaxIdleConns    int           `mapstructure:"max_idle_connections"`
+		ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
+		ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
 	} `mapstructure:"database"`
-	
+
 	API struct {
 		Port    int    `mapstructure:"port"`
 		TLSCert string `mapstructure:"tls_cert"`
 		TLSKey  string `mapstructure:"tls_key"`
 	} `mapstructure:"api"`
-	
+
 	Auth struct {
 		JWTSecret   string        `mapstructure:"jwt_secret"`
 		TokenExpiry time.Duration `mapstructure:"token_expiry"`
 	} `mapstructure:"auth"`
-	
+
 	Kubernetes struct {
 		Namespace string `mapstructure:"namespace"`
 	} `mapstructure:"kubernetes"`
-	
+
 	Log struct {
 		Level  string `mapstructure:"level"`
 		Format string `mapstructure:"format"`

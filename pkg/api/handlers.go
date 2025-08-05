@@ -50,8 +50,8 @@ func (s *Server) healthHandler(c *gin.Context) {
 
 // ReadinessResponse represents the readiness check response
 type ReadinessResponse struct {
-	Ready     bool      `json:"ready"`
-	Timestamp time.Time `json:"timestamp"`
+	Ready     bool              `json:"ready"`
+	Timestamp time.Time         `json:"timestamp"`
 	Services  map[string]string `json:"services"`
 }
 
@@ -107,7 +107,7 @@ func (s *Server) versionHandler(c *gin.Context) {
 		Version:   "1.0.0", // TODO: Get from build info
 		BuildTime: "dev",   // TODO: Get from build info
 		GoVersion: runtime.Version(),
-		GitCommit: "dev",   // TODO: Get from build info
+		GitCommit: "dev", // TODO: Get from build info
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -314,9 +314,9 @@ type SessionRequest struct {
 
 // SessionResponse represents a successful session creation response
 type SessionResponse struct {
-	Token     string           `json:"token"`
-	ExpiresAt string           `json:"expires_at"`
-	User      SessionUserInfo  `json:"user"`
+	Token     string          `json:"token"`
+	ExpiresAt string          `json:"expires_at"`
+	User      SessionUserInfo `json:"user"`
 }
 
 // SessionUserInfo represents user information in session responses
@@ -390,7 +390,7 @@ func (s *Server) deleteSessionHandler(c *gin.Context) {
 	// should be implemented using Redis or similar cache to store invalidated tokens
 	// until their expiration time. For now, we acknowledge the logout and expect
 	// the client to discard the token.
-	
+
 	response := map[string]interface{}{
 		"message":    "Session terminated successfully",
 		"user_id":    claims.UserID.String(),
@@ -509,14 +509,14 @@ func (s *Server) catalogsQueryHandler(c *gin.Context) {
 
 // CatalogDetailResponse represents a detailed catalog response with templates
 type CatalogDetailResponse struct {
-	ID           string                    `json:"id"`
-	Name         string                    `json:"name"`
-	Description  string                    `json:"description"`
-	IsShared     bool                      `json:"is_shared"`
-	CreatedAt    string                    `json:"created_at"`
-	UpdatedAt    string                    `json:"updated_at"`
-	Templates    []CatalogItemResponse     `json:"catalog_items"`
-	TemplateCount int                      `json:"template_count"`
+	ID            string                `json:"id"`
+	Name          string                `json:"name"`
+	Description   string                `json:"description"`
+	IsShared      bool                  `json:"is_shared"`
+	CreatedAt     string                `json:"created_at"`
+	UpdatedAt     string                `json:"updated_at"`
+	Templates     []CatalogItemResponse `json:"catalog_items"`
+	TemplateCount int                   `json:"template_count"`
 }
 
 // CatalogItemResponse represents a catalog item (vApp template) response
@@ -708,11 +708,11 @@ func (s *Server) catalogItemsQueryHandler(c *gin.Context) {
 
 // InstantiateVAppTemplateRequest represents a vApp template instantiation request
 type InstantiateVAppTemplateRequest struct {
-	Name        string    `json:"name" binding:"required"`
-	Description string    `json:"description"`
-	Source      string    `json:"source" binding:"required"` // Template ID or href
-	Deploy      bool      `json:"deploy"`                    // Whether to deploy after creation
-	PowerOn     bool      `json:"power_on"`                  // Whether to power on after deployment
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description"`
+	Source      string `json:"source" binding:"required"` // Template ID or href
+	Deploy      bool   `json:"deploy"`                    // Whether to deploy after creation
+	PowerOn     bool   `json:"power_on"`                  // Whether to power on after deployment
 }
 
 // InstantiateVAppTemplateResponse represents a vApp template instantiation response
@@ -866,7 +866,7 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 		vm := &models.VM{
 			Name:      req.Name + "-vm-1", // Default VM name
 			VAppID:    vapp.ID,
-			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
+			VMName:    req.Name + "-vm-1",         // OpenShift VM resource name
 			Namespace: vdc.Organization.Namespace, // Use organization's namespace
 			Status:    vapp.Status,
 			CPUCount:  template.CPUCount,

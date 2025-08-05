@@ -18,19 +18,19 @@ import (
 
 // Server represents the API server
 type Server struct {
-	config        *config.Config
-	db            *database.DB
-	authSvc       *auth.Service
-	jwtManager    *auth.JWTManager
-	userRepo      *repositories.UserRepository
-	orgRepo       *repositories.OrganizationRepository
-	vdcRepo       *repositories.VDCRepository
-	catalogRepo   *repositories.CatalogRepository
-	templateRepo  *repositories.VAppTemplateRepository
-	vappRepo      *repositories.VAppRepository
-	vmRepo        *repositories.VMRepository
-	router        *gin.Engine
-	httpServer    *http.Server
+	config       *config.Config
+	db           *database.DB
+	authSvc      *auth.Service
+	jwtManager   *auth.JWTManager
+	userRepo     *repositories.UserRepository
+	orgRepo      *repositories.OrganizationRepository
+	vdcRepo      *repositories.VDCRepository
+	catalogRepo  *repositories.CatalogRepository
+	templateRepo *repositories.VAppTemplateRepository
+	vappRepo     *repositories.VAppRepository
+	vmRepo       *repositories.VMRepository
+	router       *gin.Engine
+	httpServer   *http.Server
 }
 
 // NewServer creates a new API server instance
@@ -94,7 +94,7 @@ func (s *Server) setupRoutes() {
 	apiRoot := s.router.Group("/api")
 	{
 		// Public authentication endpoint (no JWT middleware)
-		apiRoot.POST("/sessions", s.createSessionHandler)   // POST /api/sessions - login
+		apiRoot.POST("/sessions", s.createSessionHandler) // POST /api/sessions - login
 
 		// Protected authentication endpoints (require JWT middleware)
 		protected := apiRoot.Group("/")
@@ -105,16 +105,16 @@ func (s *Server) setupRoutes() {
 			protected.GET("/session", s.getSessionHandler)        // GET /api/session - get current session
 
 			// Organization endpoints
-			protected.GET("/org", s.organizationsHandler)          // GET /api/org - list organizations
-			protected.GET("/org/:org-id", s.organizationHandler)   // GET /api/org/{org-id} - get organization
+			protected.GET("/org", s.organizationsHandler)        // GET /api/org - list organizations
+			protected.GET("/org/:org-id", s.organizationHandler) // GET /api/org/{org-id} - get organization
 
 			// VDC endpoints
-			protected.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
+			protected.GET("/vdc/:vdc-id", s.vdcHandler)                                                     // GET /api/vdc/{vdc-id} - get VDC
 			protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
 
 			// Catalog endpoints
-			protected.GET("/catalogs/query", s.catalogsQueryHandler)        // GET /api/catalogs/query - list catalogs
-			protected.GET("/catalog/:catalog-id", s.catalogHandler)         // GET /api/catalog/{catalog-id} - get catalog
+			protected.GET("/catalogs/query", s.catalogsQueryHandler)                             // GET /api/catalogs/query - list catalogs
+			protected.GET("/catalog/:catalog-id", s.catalogHandler)                              // GET /api/catalog/{catalog-id} - get catalog
 			protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
 
 			// vApp endpoints

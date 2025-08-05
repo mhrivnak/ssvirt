@@ -15,11 +15,11 @@ var (
 	// ErrInvalidCredentials is returned when login credentials are incorrect
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrUserNotFound is returned when a requested user does not exist
-	ErrUserNotFound      = errors.New("user not found")
+	ErrUserNotFound = errors.New("user not found")
 	// ErrUserExists is returned when attempting to create a user that already exists
-	ErrUserExists        = errors.New("user already exists")
+	ErrUserExists = errors.New("user already exists")
 	// ErrUserInactive is returned when attempting to authenticate with an inactive user account
-	ErrUserInactive      = errors.New("user account is inactive")
+	ErrUserInactive = errors.New("user account is inactive")
 )
 
 // Service provides authentication operations including login, user creation, and token validation
