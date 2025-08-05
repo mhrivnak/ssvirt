@@ -81,12 +81,6 @@ func (s *Server) vappVMsQueryHandler(c *gin.Context) {
 		return
 	}
 
-	// Extract organization IDs from user roles
-	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
-	for _, role := range user.UserRoles {
-		orgIDs = append(orgIDs, role.OrganizationID)
-	}
-
 	// Check if user has access to the vApp's organization
 	vapp, err := s.vappRepo.GetWithAll(vappID)
 	if err != nil {
