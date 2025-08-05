@@ -82,9 +82,9 @@ func TestVMTranslator_ToKubeVirtVM(t *testing.T) {
 		require.NoError(t, err)
 
 		// Check defaults
-		assert.True(t, *kvVM.Spec.Running) // POWERED_ON should map to true
+		assert.True(t, *kvVM.Spec.Running)                                   // POWERED_ON should map to true
 		assert.Equal(t, uint32(1), kvVM.Spec.Template.Spec.Domain.CPU.Cores) // Default CPU
-		
+
 		// Check default memory (1Gi)
 		memoryQuantity := kvVM.Spec.Template.Spec.Domain.Resources.Requests[corev1.ResourceMemory]
 		expectedMemory := resource.NewQuantity(1024*1024*1024, resource.BinarySI)
@@ -276,18 +276,18 @@ func TestVMTranslator_CreateDataVolumeSpec(t *testing.T) {
 
 	t.Run("Create DataVolume spec with custom size", func(t *testing.T) {
 		spec := translator.CreateDataVolumeSpec(vm, 50)
-		
+
 		assert.Equal(t, "cdi.kubevirt.io/v1beta1", spec["apiVersion"])
 		assert.Equal(t, "DataVolume", spec["kind"])
-		
+
 		metadata := spec["metadata"].(map[string]interface{})
 		assert.Equal(t, "test-vm-k8s-disk", metadata["name"])
 		assert.Equal(t, "test-namespace", metadata["namespace"])
-		
+
 		labels := metadata["labels"].(map[string]string)
 		assert.Equal(t, "ssvirt", labels["app"])
 		assert.Equal(t, vm.ID.String(), labels["ssvirt.io/vm-id"])
-		
+
 		specMap := spec["spec"].(map[string]interface{})
 		pvc := specMap["pvc"].(map[string]interface{})
 		resources := pvc["resources"].(map[string]interface{})
@@ -297,7 +297,7 @@ func TestVMTranslator_CreateDataVolumeSpec(t *testing.T) {
 
 	t.Run("Create DataVolume spec with default size", func(t *testing.T) {
 		spec := translator.CreateDataVolumeSpec(vm, 0)
-		
+
 		specMap := spec["spec"].(map[string]interface{})
 		pvc := specMap["pvc"].(map[string]interface{})
 		resources := pvc["resources"].(map[string]interface{})

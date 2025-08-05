@@ -31,15 +31,15 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 			Name:      vm.VMName,
 			Namespace: vm.Namespace,
 			Labels: map[string]string{
-				"app":                    "ssvirt",
-				"ssvirt.io/vm-id":        vm.ID.String(),
-				"ssvirt.io/vapp-id":      vm.VAppID.String(),
-				"ssvirt.io/managed-by":   "ssvirt-controller",
+				"app":                  "ssvirt",
+				"ssvirt.io/vm-id":      vm.ID.String(),
+				"ssvirt.io/vapp-id":    vm.VAppID.String(),
+				"ssvirt.io/managed-by": "ssvirt-controller",
 			},
 			Annotations: map[string]string{
-				"ssvirt.io/vm-name":          vm.Name,
-				"ssvirt.io/vm-status":        vm.Status,
-				"ssvirt.io/created-by":       "ssvirt",
+				"ssvirt.io/vm-name":    vm.Name,
+				"ssvirt.io/vm-status":  vm.Status,
+				"ssvirt.io/created-by": "ssvirt",
 			},
 		},
 		Spec: kubevirtv1.VirtualMachineSpec{
@@ -47,9 +47,9 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app":                    "ssvirt",
-						"ssvirt.io/vm-id":        vm.ID.String(),
-						"ssvirt.io/vapp-id":      vm.VAppID.String(),
+						"app":               "ssvirt",
+						"ssvirt.io/vm-id":   vm.ID.String(),
+						"ssvirt.io/vapp-id": vm.VAppID.String(),
 					},
 				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
@@ -103,8 +103,13 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 
 	// Set CPU count
 	if vm.CPUCount != nil && *vm.CPUCount > 0 {
+		// Safely convert int to uint32 with bounds checking
+		cpuCount := *vm.CPUCount
+		if cpuCount < 0 || cpuCount > 2147483647 { // uint32 max is 4294967295, but we use a safe limit
+			return nil, fmt.Errorf("CPU count %d is out of valid range", cpuCount)
+		}
 		kvVM.Spec.Template.Spec.Domain.CPU = &kubevirtv1.CPU{
-			Cores: uint32(*vm.CPUCount),
+			Cores: uint32(cpuCount),
 		}
 	} else {
 		// Default to 1 CPU
@@ -182,10 +187,10 @@ func (vt *VMTranslator) CreateDataVolumeSpec(vm *models.VM, diskSizeGB int) map[
 			"name":      vm.VMName + "-disk",
 			"namespace": vm.Namespace,
 			"labels": map[string]string{
-				"app":                   "ssvirt",
-				"ssvirt.io/vm-id":       vm.ID.String(),
-				"ssvirt.io/vapp-id":     vm.VAppID.String(),
-				"ssvirt.io/managed-by":  "ssvirt-controller",
+				"app":                  "ssvirt",
+				"ssvirt.io/vm-id":      vm.ID.String(),
+				"ssvirt.io/vapp-id":    vm.VAppID.String(),
+				"ssvirt.io/managed-by": "ssvirt-controller",
 			},
 		},
 		"spec": map[string]interface{}{
@@ -218,14 +223,23 @@ func (vt *VMTranslator) UpdateVMFromKubeVirt(vm *models.VM, kvVM *kubevirtv1.Vir
 
 	// Update CPU and memory if they changed in KubeVirt
 	if kvVM.Spec.Template != nil && kvVM.Spec.Template.Spec.Domain.CPU != nil {
-		cpuCount := int(kvVM.Spec.Template.Spec.Domain.CPU.Cores)
-		vm.CPUCount = &cpuCount
+		// Safely convert uint32 to int with bounds checking
+		cores := kvVM.Spec.Template.Spec.Domain.CPU.Cores
+		if cores <= 2147483647 { // int max value
+			cpuCount := int(cores)
+			vm.CPUCount = &cpuCount
+		}
 	}
 
 	if kvVM.Spec.Template != nil {
 		if memoryQuantity, exists := kvVM.Spec.Template.Spec.Domain.Resources.Requests[corev1.ResourceMemory]; exists {
-			memoryMB := int(memoryQuantity.Value() / (1024 * 1024))
-			vm.MemoryMB = &memoryMB
+			// Safely convert memory value with bounds checking
+			memoryBytes := memoryQuantity.Value()
+			memoryMB := memoryBytes / (1024 * 1024)
+			if memoryMB <= 2147483647 { // int max value
+				memoryMBInt := int(memoryMB)
+				vm.MemoryMB = &memoryMBInt
+			}
 		}
 	}
 }

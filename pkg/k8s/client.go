@@ -30,7 +30,7 @@ func NewClient() (*Client, error) {
 
 	// Create scheme with all required APIs
 	scheme := runtime.NewScheme()
-	
+
 	// Add core Kubernetes APIs
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add core/v1 to scheme: %w", err)
@@ -64,7 +64,7 @@ func NewClientWithConfig(kubeconfigPath string) (*Client, error) {
 
 	// Create scheme with all required APIs
 	scheme := runtime.NewScheme()
-	
+
 	// Add core Kubernetes APIs
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add core/v1 to scheme: %w", err)
