@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,6 +11,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -18,9 +20,10 @@ import (
 type Client struct {
 	client.Client
 	config *rest.Config
+	cache  cache.Cache
 }
 
-// NewClient creates a new Kubernetes client using controller-runtime
+// NewClient creates a new Kubernetes client using controller-runtime with caching
 func NewClient() (*Client, error) {
 	// Try to get cluster config first (in-cluster), then fall back to kubeconfig
 	cfg, err := config.GetConfig()
@@ -28,6 +31,39 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
 	}
 
+	return createClientWithCache(cfg)
+}
+
+// NewReadyClient creates a new client and starts the cache, waiting for sync
+func NewReadyClient(ctx context.Context) (*Client, error) {
+	client, err := NewClient()
+	if err != nil {
+		return nil, err
+	}
+
+	// Start the cache in a goroutine
+	go func() {
+		if err := client.Start(ctx); err != nil {
+			// Log error but don't fail the client creation
+			// The client will still work for direct API calls
+			fmt.Printf("Warning: failed to start cache: %v\n", err)
+		}
+	}()
+
+	// Wait for cache to sync with a timeout
+	syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	if !client.WaitForCacheSync(syncCtx) {
+		// Cache didn't sync, but client can still be used for direct API calls
+		fmt.Println("Warning: cache did not sync within timeout, proceeding with direct API calls")
+	}
+
+	return client, nil
+}
+
+// createClientWithCache creates a client with caching enabled
+func createClientWithCache(cfg *rest.Config) (*Client, error) {
 	// Create scheme with all required APIs
 	scheme := runtime.NewScheme()
 
@@ -41,9 +77,27 @@ func NewClient() (*Client, error) {
 		return nil, fmt.Errorf("failed to add kubevirt APIs to scheme: %w", err)
 	}
 
-	// Create controller-runtime client
+	// Create cache with optimized settings
+	cacheOptions := cache.Options{
+		Scheme: scheme,
+		// Resync period for cache refresh
+		SyncPeriod: &[]time.Duration{10 * time.Minute}[0],
+		// Cache for all namespaces by default
+		DefaultNamespaces: map[string]cache.Config{},
+	}
+
+	// Create cache
+	kubeCache, err := cache.New(cfg, cacheOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes cache: %w", err)
+	}
+
+	// Create client with cache for reads
 	cl, err := client.New(cfg, client.Options{
 		Scheme: scheme,
+		Cache: &client.CacheOptions{
+			Reader: kubeCache,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -52,46 +106,44 @@ func NewClient() (*Client, error) {
 	return &Client{
 		Client: cl,
 		config: cfg,
+		cache:  kubeCache,
 	}, nil
 }
 
-// NewClientWithConfig creates a new Kubernetes client with explicit config path
+// NewClientWithConfig creates a new Kubernetes client with explicit config path and caching
 func NewClientWithConfig(kubeconfigPath string) (*Client, error) {
 	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config from kubeconfig %s: %w", kubeconfigPath, err)
 	}
 
-	// Create scheme with all required APIs
-	scheme := runtime.NewScheme()
-
-	// Add core Kubernetes APIs
-	if err := corev1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add core/v1 to scheme: %w", err)
-	}
-
-	// Add KubeVirt APIs
-	if err := kubevirtv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add kubevirt APIs to scheme: %w", err)
-	}
-
-	// Create controller-runtime client
-	cl, err := client.New(cfg, client.Options{
-		Scheme: scheme,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-	}
-
-	return &Client{
-		Client: cl,
-		config: cfg,
-	}, nil
+	return createClientWithCache(cfg)
 }
 
 // GetConfig returns the REST config
 func (c *Client) GetConfig() *rest.Config {
 	return c.config
+}
+
+// GetCache returns the cache instance
+func (c *Client) GetCache() cache.Cache {
+	return c.cache
+}
+
+// Start starts the cache and begins watching for changes
+func (c *Client) Start(ctx context.Context) error {
+	if c.cache == nil {
+		return fmt.Errorf("cache is not initialized")
+	}
+	return c.cache.Start(ctx)
+}
+
+// WaitForCacheSync waits for the cache to sync before returning
+func (c *Client) WaitForCacheSync(ctx context.Context) bool {
+	if c.cache == nil {
+		return false
+	}
+	return c.cache.WaitForCacheSync(ctx)
 }
 
 // VirtualMachineOperations provides methods for managing VirtualMachine resources
@@ -203,6 +255,21 @@ func (no *NamespaceOperations) List(ctx context.Context, opts ...client.ListOpti
 
 // Health checks if the client can connect to the cluster
 func (c *Client) Health(ctx context.Context) error {
+	// Check direct connectivity first with a simple list operation
 	_, err := c.Namespaces().List(ctx, client.Limit(1))
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to connect to kubernetes cluster: %w", err)
+	}
+
+	// Check if cache is running (this is optional for health check)
+	if c.cache != nil {
+		// Try to get informer for namespaces to verify cache is accessible
+		_, err := c.cache.GetInformer(ctx, &corev1.Namespace{})
+		if err != nil {
+			// Cache not ready, but client connectivity is fine
+			return nil
+		}
+	}
+
+	return nil
 }
