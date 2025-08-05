@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +12,14 @@ import (
 
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+)
+
+// VM power states
+const (
+	VMStatePoweredOn  = "POWERED_ON"
+	VMStatePoweredOff = "POWERED_OFF"
+	VMStateSuspended  = "SUSPENDED"
+	VMStateUnresolved = "UNRESOLVED"
 )
 
 // VMResponse represents a VM response
@@ -559,22 +566,22 @@ type VMPowerActionResponse struct {
 
 // powerOnVMHandler handles POST /api/vm/{vm-id}/power/action/powerOn - power on VM
 func (s *Server) powerOnVMHandler(c *gin.Context) {
-	s.handleVMPowerAction(c, "powerOn", "POWERED_ON", "VM power on initiated")
+	s.handleVMPowerAction(c, "powerOn", VMStatePoweredOn, "VM power on initiated")
 }
 
 // powerOffVMHandler handles POST /api/vm/{vm-id}/power/action/powerOff - power off VM
 func (s *Server) powerOffVMHandler(c *gin.Context) {
-	s.handleVMPowerAction(c, "powerOff", "POWERED_OFF", "VM power off initiated")
+	s.handleVMPowerAction(c, "powerOff", VMStatePoweredOff, "VM power off initiated")
 }
 
 // suspendVMHandler handles POST /api/vm/{vm-id}/power/action/suspend - suspend VM
 func (s *Server) suspendVMHandler(c *gin.Context) {
-	s.handleVMPowerAction(c, "suspend", "SUSPENDED", "VM suspend initiated")
+	s.handleVMPowerAction(c, "suspend", VMStateSuspended, "VM suspend initiated")
 }
 
 // resetVMHandler handles POST /api/vm/{vm-id}/power/action/reset - reset VM
 func (s *Server) resetVMHandler(c *gin.Context) {
-	s.handleVMPowerAction(c, "reset", "POWERED_ON", "VM reset initiated")
+	s.handleVMPowerAction(c, "reset", VMStatePoweredOn, "VM reset initiated")
 }
 
 // handleVMPowerAction is a helper function that implements the common logic for VM power operations
@@ -664,37 +671,53 @@ func (s *Server) handleVMPowerAction(c *gin.Context, action, targetStatus, messa
 		}{
 			ID:     taskID,
 			Status: "running",
-			Type:   "vm" + strings.Title(action),
+			Type:   getTaskType(action),
 		},
 	}
 
 	SendSuccess(c, http.StatusOK, response)
 }
 
+// getTaskType returns the task type for a given power action
+func getTaskType(action string) string {
+	switch action {
+	case "powerOn":
+		return "vmPowerOn"
+	case "powerOff":
+		return "vmPowerOff"
+	case "suspend":
+		return "vmSuspend"
+	case "reset":
+		return "vmReset"
+	default:
+		return "vmPower" + action
+	}
+}
+
 // validatePowerTransition validates if a power state transition is allowed
 func (s *Server) validatePowerTransition(currentStatus, action string) error {
 	switch action {
 	case "powerOn":
-		if currentStatus == "POWERED_ON" {
+		if currentStatus == VMStatePoweredOn {
 			return fmt.Errorf("VM is already powered on")
 		}
 		// Allow powerOn from POWERED_OFF, SUSPENDED, UNRESOLVED states
 	case "powerOff":
-		if currentStatus == "POWERED_OFF" {
+		if currentStatus == VMStatePoweredOff {
 			return fmt.Errorf("VM is already powered off")
 		}
-		if currentStatus == "UNRESOLVED" {
+		if currentStatus == VMStateUnresolved {
 			return fmt.Errorf("Cannot power off an unresolved VM")
 		}
 	case "suspend":
-		if currentStatus != "POWERED_ON" {
+		if currentStatus != VMStatePoweredOn {
 			return fmt.Errorf("VM must be powered on to suspend")
 		}
-		if currentStatus == "SUSPENDED" {
+		if currentStatus == VMStateSuspended {
 			return fmt.Errorf("VM is already suspended")
 		}
 	case "reset":
-		if currentStatus != "POWERED_ON" {
+		if currentStatus != VMStatePoweredOn {
 			return fmt.Errorf("VM must be powered on to reset")
 		}
 	}
