@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log"
+	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -43,6 +45,11 @@ func Load() (*Config, error) {
 	viper.SetDefault("database.conn_max_lifetime", "1h")
 	viper.SetDefault("database.conn_max_idle_time", "10m")
 	viper.SetDefault("api.port", 8080)
+	// JWT secret MUST be explicitly configured - no insecure default
+	if os.Getenv("SSVIRT_AUTH_JWT_SECRET") == "" {
+		log.Println("WARNING: JWT secret not configured. Set SSVIRT_AUTH_JWT_SECRET environment variable.")
+		viper.SetDefault("auth.jwt_secret", "development-secret-change-in-production")
+	}
 	viper.SetDefault("auth.token_expiry", "24h")
 	viper.SetDefault("kubernetes.namespace", "ssvirt-system")
 	viper.SetDefault("log.level", "info")
