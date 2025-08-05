@@ -27,12 +27,14 @@ type Server struct {
 	vdcRepo       *repositories.VDCRepository
 	catalogRepo   *repositories.CatalogRepository
 	templateRepo  *repositories.VAppTemplateRepository
+	vappRepo      *repositories.VAppRepository
+	vmRepo        *repositories.VMRepository
 	router        *gin.Engine
 	httpServer    *http.Server
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository) *Server {
 	server := &Server{
 		config:       cfg,
 		db:           db,
@@ -43,6 +45,8 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		vdcRepo:      vdcRepo,
 		catalogRepo:  catalogRepo,
 		templateRepo: templateRepo,
+		vappRepo:     vappRepo,
+		vmRepo:       vmRepo,
 	}
 
 	// Configure gin mode based on log level
@@ -106,6 +110,7 @@ func (s *Server) setupRoutes() {
 
 			// VDC endpoints
 			protected.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
+			protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
 
 			// Catalog endpoints
 			protected.GET("/catalogs/query", s.catalogsQueryHandler)        // GET /api/catalogs/query - list catalogs

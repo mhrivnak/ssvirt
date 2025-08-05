@@ -63,11 +63,13 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	vdcRepo := repositories.NewVDCRepository(gormDB)
 	catalogRepo := repositories.NewCatalogRepository(gormDB)
 	templateRepo := repositories.NewVAppTemplateRepository(gormDB)
+	vappRepo := repositories.NewVAppRepository(gormDB)
+	vmRepo := repositories.NewVMRepository(gormDB)
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Create API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, orgRepo, vdcRepo, catalogRepo, templateRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
 
 	return server, db, jwtManager
 }
@@ -971,6 +973,205 @@ func TestCatalogEndpoints(t *testing.T) {
 
 	t.Run("Catalog endpoints without token return 401", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/api/catalogs/query", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+func TestVAppTemplateInstantiation(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test organization
+	org := &models.Organization{
+		Name:        "test-org",
+		DisplayName: "Test Organization",
+		Description: "Test description",
+		Enabled:     true,
+		Namespace:   "test-org-ns",
+	}
+	require.NoError(t, db.DB.Create(org).Error)
+
+	// Create test VDC
+	cpuLimit := 100
+	memoryLimit := 8192
+	storageLimit := 102400
+	vdc := &models.VDC{
+		Name:            "test-vdc",
+		OrganizationID:  org.ID,
+		AllocationModel: "PayAsYouGo",
+		CPULimit:        &cpuLimit,
+		MemoryLimitMB:   &memoryLimit,
+		StorageLimitMB:  &storageLimit,
+		Enabled:         true,
+	}
+	require.NoError(t, db.DB.Create(vdc).Error)
+
+	// Create test catalog
+	catalog := &models.Catalog{
+		Name:           "test-catalog",
+		OrganizationID: org.ID,
+		Description:    "Test catalog",
+		IsShared:       false,
+	}
+	require.NoError(t, db.DB.Create(catalog).Error)
+
+	// Create test vApp template
+	cpuCount := 2
+	memoryMB := 4096
+	diskSizeGB := 20
+	template := &models.VAppTemplate{
+		Name:           "ubuntu-template",
+		CatalogID:      catalog.ID,
+		Description:    "Ubuntu 20.04 template",
+		OSType:         "linux",
+		VMInstanceType: "standard.small",
+		CPUCount:       &cpuCount,
+		MemoryMB:       &memoryMB,
+		DiskSizeGB:     &diskSizeGB,
+		TemplateData:   `{"vm_spec": {"cpu": 2, "memory": "4Gi"}}`,
+	}
+	require.NoError(t, db.DB.Create(template).Error)
+
+	// Create test user
+	user := &models.User{
+		Username:  "testuser",
+		Email:     "test@example.com",
+		FirstName: "Test",
+		LastName:  "User",
+		IsActive:  true,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create user role to give access to the organization
+	userRole := &models.UserRole{
+		UserID:         user.ID,
+		OrganizationID: org.ID,
+		Role:           "VAppUser",
+	}
+	require.NoError(t, db.DB.Create(userRole).Error)
+
+	token, err := jwtManager.Generate(user.ID, user.Username)
+	require.NoError(t, err)
+
+	t.Run("POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate creates vApp", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":        "test-vapp",
+			"description": "Test vApp from template",
+			"source":      template.ID.String(),
+			"deploy":      true,
+			"power_on":    false,
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vdc/"+vdc.ID.String()+"/action/instantiateVAppTemplate", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, "test-vapp", data["name"])
+		assert.Equal(t, "Test vApp from template", data["description"])
+		assert.Equal(t, "POWERED_OFF", data["status"])
+		assert.Equal(t, vdc.ID.String(), data["vdc_id"])
+		assert.Equal(t, template.ID.String(), data["template_id"])
+
+		// Verify task info
+		task, ok := data["task"].(map[string]interface{})
+		require.True(t, ok, "task field should be a map[string]interface{}")
+		assert.Equal(t, "running", task["status"])
+		assert.Equal(t, "vappInstantiateFromTemplate", task["type"])
+		assert.NotEmpty(t, task["id"])
+
+		// Verify vApp was created in database
+		var createdVApp models.VApp
+		err = db.DB.Where("name = ?", "test-vapp").First(&createdVApp).Error
+		require.NoError(t, err)
+		assert.Equal(t, "test-vapp", createdVApp.Name)
+		assert.Equal(t, vdc.ID, createdVApp.VDCID)
+		assert.Equal(t, template.ID, *createdVApp.TemplateID)
+
+		// Verify VM was created
+		var createdVM models.VM
+		err = db.DB.Where("v_app_id = ?", createdVApp.ID).First(&createdVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "test-vapp-vm-1", createdVM.Name)
+		assert.Equal(t, org.Namespace, createdVM.Namespace)
+		assert.Equal(t, cpuCount, *createdVM.CPUCount)
+		assert.Equal(t, memoryMB, *createdVM.MemoryMB)
+	})
+
+	t.Run("POST with invalid VDC ID returns 400", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":   "test-vapp",
+			"source": template.ID.String(),
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vdc/invalid-uuid/action/instantiateVAppTemplate", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("POST with non-existent VDC returns 404", func(t *testing.T) {
+		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
+		requestData := map[string]interface{}{
+			"name":   "test-vapp",
+			"source": template.ID.String(),
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vdc/"+nonExistentID+"/action/instantiateVAppTemplate", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("POST with invalid template ID returns 400", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":   "test-vapp",
+			"source": "invalid-uuid",
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vdc/"+vdc.ID.String()+"/action/instantiateVAppTemplate", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("POST without token returns 401", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":   "test-vapp",
+			"source": template.ID.String(),
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vdc/"+vdc.ID.String()+"/action/instantiateVAppTemplate", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
