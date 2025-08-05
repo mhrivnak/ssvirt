@@ -361,10 +361,10 @@ func TestClient_CacheIntegration(t *testing.T) {
 	t.Run("Client has cache functionality", func(t *testing.T) {
 		// We can't create a real client without a cluster, but we can test the structure
 		// This ensures the cache-related methods are available
-		
+
 		// Test that the client has the expected methods for caching
 		// This is more of a compile-time check to ensure the interface is correct
-		
+
 		// Test that methods exist by checking they compile (they would fail at runtime without cluster)
 		// This is mainly to ensure the API surface is correct
 		var client *k8s.Client
@@ -373,14 +373,14 @@ func TestClient_CacheIntegration(t *testing.T) {
 			_ = client.GetConfig()
 			_ = client.GetCache()
 		}
-		
+
 		// If we reach here, the methods compiled successfully
 		assert.True(t, true, "Cache methods exist and compile")
 	})
-	
+
 	t.Run("VMTranslator handles integer overflow safely", func(t *testing.T) {
 		translator := k8s.NewVMTranslator()
-		
+
 		// Test very large CPU count that could cause overflow
 		largeCPUCount := 2147483648 // Larger than int32 max
 		vm := &models.VM{
