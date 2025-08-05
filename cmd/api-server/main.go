@@ -37,13 +37,15 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repositories.NewUserRepository(db.DB)
+	orgRepo := repositories.NewOrganizationRepository(db.DB)
+	vdcRepo := repositories.NewVDCRepository(db.DB)
 
 	// Initialize authentication services
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Initialize API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, orgRepo, vdcRepo)
 
 	// Start server in a goroutine
 	go func() {

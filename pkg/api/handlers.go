@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 )
@@ -141,6 +143,163 @@ func (s *Server) userProfileHandler(c *gin.Context) {
 		Email:     user.Email,
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// OrganizationResponse represents an organization response
+type OrganizationResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+	Enabled     bool   `json:"enabled"`
+	Namespace   string `json:"namespace"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+// OrganizationListResponse represents a list of organizations
+type OrganizationListResponse struct {
+	Organizations []OrganizationResponse `json:"organizations"`
+	Total         int                    `json:"total"`
+}
+
+// organizationsHandler handles GET /api/org - list all organizations
+func (s *Server) organizationsHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	_, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Get organizations from database
+	orgs, err := s.orgRepo.List()
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve organizations"))
+		return
+	}
+
+	// Convert to response format
+	orgResponses := make([]OrganizationResponse, len(orgs))
+	for i, org := range orgs {
+		orgResponses[i] = OrganizationResponse{
+			ID:          org.ID.String(),
+			Name:        org.Name,
+			DisplayName: org.DisplayName,
+			Description: org.Description,
+			Enabled:     org.Enabled,
+			Namespace:   org.Namespace,
+			CreatedAt:   org.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
+		}
+	}
+
+	response := OrganizationListResponse{
+		Organizations: orgResponses,
+		Total:         len(orgResponses),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// organizationHandler handles GET /api/org/{org-id} - get specific organization
+func (s *Server) organizationHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	_, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse organization ID
+	orgIDStr := c.Param("org-id")
+	orgID, err := uuid.Parse(orgIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
+		return
+	}
+
+	// Get organization from database
+	org, err := s.orgRepo.GetByID(orgID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Organization not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve organization"))
+		}
+		return
+	}
+
+	response := OrganizationResponse{
+		ID:          org.ID.String(),
+		Name:        org.Name,
+		DisplayName: org.DisplayName,
+		Description: org.Description,
+		Enabled:     org.Enabled,
+		Namespace:   org.Namespace,
+		CreatedAt:   org.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// VDCResponse represents a VDC response
+type VDCResponse struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	OrganizationID  string `json:"organization_id"`
+	AllocationModel string `json:"allocation_model"`
+	CPULimit        *int   `json:"cpu_limit"`
+	MemoryLimitMB   *int   `json:"memory_limit_mb"`
+	StorageLimitMB  *int   `json:"storage_limit_mb"`
+	Enabled         bool   `json:"enabled"`
+	CreatedAt       string `json:"created_at"`
+	UpdatedAt       string `json:"updated_at"`
+}
+
+// vdcHandler handles GET /api/vdc/{vdc-id} - get specific VDC
+func (s *Server) vdcHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	_, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse VDC ID
+	vdcIDStr := c.Param("vdc-id")
+	vdcID, err := uuid.Parse(vdcIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VDC ID format"))
+		return
+	}
+
+	// Get VDC from database
+	vdc, err := s.vdcRepo.GetByID(vdcID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VDC not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDC"))
+		}
+		return
+	}
+
+	response := VDCResponse{
+		ID:              vdc.ID.String(),
+		Name:            vdc.Name,
+		OrganizationID:  vdc.OrganizationID.String(),
+		AllocationModel: string(vdc.AllocationModel),
+		CPULimit:        vdc.CPULimit,
+		MemoryLimitMB:   vdc.MemoryLimitMB,
+		StorageLimitMB:  vdc.StorageLimitMB,
+		Enabled:         vdc.Enabled,
+		CreatedAt:       vdc.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:       vdc.UpdatedAt.Format(time.RFC3339),
 	}
 
 	SendSuccess(c, http.StatusOK, response)

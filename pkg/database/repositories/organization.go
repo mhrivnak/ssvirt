@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -16,6 +18,9 @@ func NewOrganizationRepository(db *gorm.DB) *OrganizationRepository {
 }
 
 func (r *OrganizationRepository) Create(org *models.Organization) error {
+	if org == nil {
+		return errors.New("organization cannot be nil")
+	}
 	return r.db.Create(org).Error
 }
 
@@ -44,6 +49,9 @@ func (r *OrganizationRepository) List() ([]models.Organization, error) {
 }
 
 func (r *OrganizationRepository) Update(org *models.Organization) error {
+	if org == nil {
+		return errors.New("organization cannot be nil")
+	}
 	return r.db.Save(org).Error
 }
 

@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"errors"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -16,6 +18,9 @@ func NewVDCRepository(db *gorm.DB) *VDCRepository {
 }
 
 func (r *VDCRepository) Create(vdc *models.VDC) error {
+	if vdc == nil {
+		return errors.New("VDC cannot be nil")
+	}
 	return r.db.Create(vdc).Error
 }
 
@@ -41,6 +46,9 @@ func (r *VDCRepository) List() ([]models.VDC, error) {
 }
 
 func (r *VDCRepository) Update(vdc *models.VDC) error {
+	if vdc == nil {
+		return errors.New("VDC cannot be nil")
+	}
 	return r.db.Save(vdc).Error
 }
 
