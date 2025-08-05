@@ -65,3 +65,101 @@ func (r *VMRepository) GetWithVApp(id uuid.UUID) (*models.VM, error) {
 	}
 	return &vm, nil
 }
+
+func (r *VMRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.VM, error) {
+	if len(orgIDs) == 0 {
+		return []models.VM{}, nil
+	}
+
+	var vms []models.VM
+	err := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
+		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
+		Where("vdcs.organization_id IN ?", orgIDs).
+		Find(&vms).Error
+	return vms, err
+}
+
+func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []uuid.UUID, vappID *uuid.UUID, status string, limit, offset int) ([]models.VM, int64, error) {
+	if len(orgIDs) == 0 {
+		return []models.VM{}, 0, nil
+	}
+
+	// Build the base query
+	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
+		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
+		Where("vdcs.organization_id IN ?", orgIDs)
+
+	// Apply filters
+	if vappID != nil {
+		query = query.Where("vms.v_app_id = ?", *vappID)
+	}
+	if status != "" {
+		query = query.Where("vms.status = ?", status)
+	}
+
+	// Count total records
+	var total int64
+	countQuery := r.db.Table("vms").
+		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
+		Where("vdcs.organization_id IN ?", orgIDs)
+
+	if vappID != nil {
+		countQuery = countQuery.Where("vms.v_app_id = ?", *vappID)
+	}
+	if status != "" {
+		countQuery = countQuery.Where("vms.status = ?", status)
+	}
+
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+
+	var vms []models.VM
+	err := query.Find(&vms).Error
+	return vms, total, err
+}
+
+func (r *VMRepository) GetByVAppIDWithFilters(vappID uuid.UUID, status string, limit, offset int) ([]models.VM, int64, error) {
+	// Build the base query for specific vApp
+	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
+		Where("v_app_id = ?", vappID)
+
+	// Apply status filter
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	// Count total records
+	var total int64
+	countQuery := r.db.Table("vms").Where("v_app_id = ?", vappID)
+	if status != "" {
+		countQuery = countQuery.Where("status = ?", status)
+	}
+
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+
+	var vms []models.VM
+	err := query.Find(&vms).Error
+	return vms, total, err
+}
