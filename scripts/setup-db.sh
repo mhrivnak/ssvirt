@@ -5,9 +5,31 @@
 
 set -e
 
+# Function to generate a secure random password
+generate_password() {
+    # Generate a 24-character password with alphanumeric characters and safe symbols
+    # Using /dev/urandom for cryptographically secure randomness
+    if command -v openssl >/dev/null 2>&1; then
+        # Use openssl if available (most secure)
+        openssl rand -base64 18 | tr -d '/+=' | head -c 24
+    elif [[ -r /dev/urandom ]]; then
+        # Fallback to /dev/urandom with tr
+        LC_ALL=C tr -dc 'A-Za-z0-9!@#$%^&*' </dev/urandom | head -c 24
+    else
+        # Last resort fallback using date and random
+        echo "$(date +%s)$(shuf -i 1000-9999 -n 1)abcXYZ" | head -c 24
+    fi
+}
+
 DB_NAME="${DB_NAME:-ssvirt}"
 DB_USER="${DB_USER:-ssvirt}"
-DB_PASSWORD="${DB_PASSWORD:-ssvirt_dev_password}"
+# Generate secure random password if not provided via environment
+if [[ -z "${DB_PASSWORD:-}" ]]; then
+    DB_PASSWORD="$(generate_password)"
+    echo "Generated secure random password for database user $DB_USER"
+else
+    DB_PASSWORD="${DB_PASSWORD}"
+fi
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
