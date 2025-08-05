@@ -83,11 +83,12 @@ jobs:
       run: |
         echo "Running basic lint checks..."
         go vet ./...
-        go fmt ./...
-        # Check if go fmt made any changes
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "Code is not properly formatted. Please run 'go fmt ./...'"
-          git diff
+        # Check if code is properly formatted
+        UNFORMATTED=$(go fmt -l ./...)
+        if [ -n "$UNFORMATTED" ]; then
+          echo "Code is not properly formatted. The following files need formatting:"
+          echo "$UNFORMATTED"
+          echo "Please run 'go fmt ./...' to fix formatting issues."
           exit 1
         fi
         echo "Lint checks passed!"
