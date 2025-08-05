@@ -105,14 +105,14 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []uuid.UUID, vappI
 		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
 		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
 		Where("vdcs.organization_id IN ?", orgIDs)
-	
+
 	if vappID != nil {
 		countQuery = countQuery.Where("vms.v_app_id = ?", *vappID)
 	}
 	if status != "" {
 		countQuery = countQuery.Where("vms.status = ?", status)
 	}
-	
+
 	if err := countQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

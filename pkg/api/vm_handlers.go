@@ -15,19 +15,19 @@ import (
 
 // VMResponse represents a VM response
 type VMResponse struct {
-	ID         string  `json:"id"`
-	Name       string  `json:"name"`
-	VAppID     string  `json:"vapp_id"`
-	VAppName   string  `json:"vapp_name,omitempty"`
-	VMName     string  `json:"vm_name"`
-	Namespace  string  `json:"namespace"`
-	Status     string  `json:"status"`
-	CPUCount   *int    `json:"cpu_count"`
-	MemoryMB   *int    `json:"memory_mb"`
-	CreatedAt  string  `json:"created_at"`
-	UpdatedAt  string  `json:"updated_at"`
-	VDCName    string  `json:"vdc_name,omitempty"`
-	OrgName    string  `json:"org_name,omitempty"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	VAppID    string `json:"vapp_id"`
+	VAppName  string `json:"vapp_name,omitempty"`
+	VMName    string `json:"vm_name"`
+	Namespace string `json:"namespace"`
+	Status    string `json:"status"`
+	CPUCount  *int   `json:"cpu_count"`
+	MemoryMB  *int   `json:"memory_mb"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	VDCName   string `json:"vdc_name,omitempty"`
+	OrgName   string `json:"org_name,omitempty"`
 }
 
 // VMQueryResponse represents a VM query response
@@ -38,11 +38,11 @@ type VMQueryResponse struct {
 
 // CreateVMRequest represents a VM creation request
 type CreateVMRequest struct {
-	Name      string `json:"name" binding:"required"`
-	VAppID    string `json:"vapp_id" binding:"required"`
-	VMName    string `json:"vm_name,omitempty"`
-	CPUCount  *int   `json:"cpu_count,omitempty"`
-	MemoryMB  *int   `json:"memory_mb,omitempty"`
+	Name     string `json:"name" binding:"required"`
+	VAppID   string `json:"vapp_id" binding:"required"`
+	VMName   string `json:"vm_name,omitempty"`
+	CPUCount *int   `json:"cpu_count,omitempty"`
+	MemoryMB *int   `json:"memory_mb,omitempty"`
 }
 
 // UpdateVMRequest represents a VM update request
