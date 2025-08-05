@@ -13,6 +13,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
+	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
 
 // Server represents the API server
@@ -21,17 +22,21 @@ type Server struct {
 	db         *database.DB
 	authSvc    *auth.Service
 	jwtManager *auth.JWTManager
+	orgRepo    *repositories.OrganizationRepository
+	vdcRepo    *repositories.VDCRepository
 	router     *gin.Engine
 	httpServer *http.Server
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository) *Server {
 	server := &Server{
 		config:     cfg,
 		db:         db,
 		authSvc:    authSvc,
 		jwtManager: jwtManager,
+		orgRepo:    orgRepo,
+		vdcRepo:    vdcRepo,
 	}
 
 	// Configure gin mode based on log level
@@ -70,9 +75,21 @@ func (s *Server) setupRoutes() {
 		protected := v1.Group("/")
 		protected.Use(auth.JWTMiddleware(s.jwtManager))
 		{
-			// Placeholder for future authenticated endpoints
+			// User endpoints
 			protected.GET("/user/profile", s.userProfileHandler)
 		}
+	}
+
+	// Organization and VDC endpoints (at root level for VMware Cloud Director compatibility)
+	api := s.router.Group("/api")
+	api.Use(auth.JWTMiddleware(s.jwtManager))
+	{
+		// Organization endpoints
+		api.GET("/org", s.organizationsHandler)          // GET /api/org - list organizations
+		api.GET("/org/:org-id", s.organizationHandler)   // GET /api/org/{org-id} - get organization
+
+		// VDC endpoints
+		api.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
 	}
 }
 
