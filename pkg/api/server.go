@@ -22,6 +22,7 @@ type Server struct {
 	db            *database.DB
 	authSvc       *auth.Service
 	jwtManager    *auth.JWTManager
+	userRepo      *repositories.UserRepository
 	orgRepo       *repositories.OrganizationRepository
 	vdcRepo       *repositories.VDCRepository
 	catalogRepo   *repositories.CatalogRepository
@@ -31,12 +32,13 @@ type Server struct {
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository) *Server {
 	server := &Server{
 		config:       cfg,
 		db:           db,
 		authSvc:      authSvc,
 		jwtManager:   jwtManager,
+		userRepo:     userRepo,
 		orgRepo:      orgRepo,
 		vdcRepo:      vdcRepo,
 		catalogRepo:  catalogRepo,

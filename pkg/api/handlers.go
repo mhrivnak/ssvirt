@@ -457,14 +457,27 @@ type CatalogQueryResponse struct {
 // catalogsQueryHandler handles GET /api/catalogs/query - list catalogs accessible to user
 func (s *Server) catalogsQueryHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
-	_, exists := auth.GetClaims(c)
+	claims, exists := auth.GetClaims(c)
 	if !exists {
 		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
 		return
 	}
 
-	// For now, return all catalogs. In a real implementation, we would filter based on user's organization access
-	catalogs, err := s.catalogRepo.List()
+	// Get user with their organization roles
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Extract organization IDs from user roles
+	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
+	for _, role := range user.UserRoles {
+		orgIDs = append(orgIDs, role.OrganizationID)
+	}
+
+	// Get catalogs accessible to user (based on organization membership and shared catalogs)
+	catalogs, err := s.catalogRepo.GetByOrganizationIDs(orgIDs)
 	if err != nil {
 		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalogs"))
 		return

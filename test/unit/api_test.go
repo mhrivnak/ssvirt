@@ -67,7 +67,7 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Create API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, orgRepo, vdcRepo, catalogRepo, templateRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, orgRepo, vdcRepo, catalogRepo, templateRepo)
 
 	return server, db, jwtManager
 }
@@ -829,6 +829,14 @@ func TestCatalogEndpoints(t *testing.T) {
 	}
 	require.NoError(t, user.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create user role to give access to the organization
+	userRole := &models.UserRole{
+		UserID:         user.ID,
+		OrganizationID: org.ID,
+		Role:           "VAppUser",
+	}
+	require.NoError(t, db.DB.Create(userRole).Error)
 
 	token, err := jwtManager.Generate(user.ID, user.Username)
 	require.NoError(t, err)

@@ -47,7 +47,7 @@ func main() {
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Initialize API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, orgRepo, vdcRepo, catalogRepo, templateRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, orgRepo, vdcRepo, catalogRepo, templateRepo)
 
 	// Start server in a goroutine
 	go func() {
