@@ -6,6 +6,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/klog/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -46,7 +47,7 @@ func NewReadyClient(ctx context.Context) (*Client, error) {
 		if err := client.Start(ctx); err != nil {
 			// Log error but don't fail the client creation
 			// The client will still work for direct API calls
-			fmt.Printf("Warning: failed to start cache: %v\n", err)
+			klog.Warningf("Failed to start cache: %v", err)
 		}
 	}()
 
@@ -56,7 +57,7 @@ func NewReadyClient(ctx context.Context) (*Client, error) {
 
 	if !client.WaitForCacheSync(syncCtx) {
 		// Cache didn't sync, but client can still be used for direct API calls
-		fmt.Println("Warning: cache did not sync within timeout, proceeding with direct API calls")
+		klog.Warning("Cache did not sync within timeout, proceeding with direct API calls")
 	}
 
 	return client, nil
