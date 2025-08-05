@@ -59,7 +59,7 @@ func (r *VAppRepository) GetWithVMs(id uuid.UUID) (*models.VApp, error) {
 
 func (r *VAppRepository) GetWithAll(id uuid.UUID) (*models.VApp, error) {
 	var vapp models.VApp
-	err := r.db.Preload("VDC").Preload("Template").Preload("VMs").Where("id = ?", id).First(&vapp).Error
+	err := r.db.Preload("VDC").Preload("VDC.Organization").Preload("Template").Preload("VMs").Where("id = ?", id).First(&vapp).Error
 	if err != nil {
 		return nil, err
 	}

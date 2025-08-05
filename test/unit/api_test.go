@@ -1178,3 +1178,390 @@ func TestVAppTemplateInstantiation(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
+
+func TestVMEndpoints(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test organization
+	org := &models.Organization{
+		Name:        "test-org",
+		DisplayName: "Test Organization",
+		Description: "Test description",
+		Enabled:     true,
+		Namespace:   "test-org-ns",
+	}
+	require.NoError(t, db.DB.Create(org).Error)
+
+	// Create test VDC
+	cpuLimit := 100
+	memoryLimit := 8192
+	storageLimit := 102400
+	vdc := &models.VDC{
+		Name:            "test-vdc",
+		OrganizationID:  org.ID,
+		AllocationModel: "PayAsYouGo",
+		CPULimit:        &cpuLimit,
+		MemoryLimitMB:   &memoryLimit,
+		StorageLimitMB:  &storageLimit,
+		Enabled:         true,
+	}
+	require.NoError(t, db.DB.Create(vdc).Error)
+
+	// Create test vApp
+	vapp := &models.VApp{
+		Name:        "test-vapp",
+		VDCID:       vdc.ID,
+		Status:      "POWERED_OFF",
+		Description: "Test vApp",
+	}
+	require.NoError(t, db.DB.Create(vapp).Error)
+
+	// Create test VMs
+	cpuCount := 2
+	memoryMB := 4096
+	vm1 := &models.VM{
+		Name:      "test-vm-1",
+		VAppID:    vapp.ID,
+		VMName:    "test-vm-1",
+		Namespace: org.Namespace,
+		Status:    "POWERED_OFF",
+		CPUCount:  &cpuCount,
+		MemoryMB:  &memoryMB,
+	}
+	vm2 := &models.VM{
+		Name:      "test-vm-2",
+		VAppID:    vapp.ID,
+		VMName:    "test-vm-2",
+		Namespace: org.Namespace,
+		Status:    "POWERED_ON",
+		CPUCount:  &cpuCount,
+		MemoryMB:  &memoryMB,
+	}
+	require.NoError(t, db.DB.Create(vm1).Error)
+	require.NoError(t, db.DB.Create(vm2).Error)
+
+	// Create test user
+	user := &models.User{
+		Username:  "testuser",
+		Email:     "test@example.com",
+		FirstName: "Test",
+		LastName:  "User",
+		IsActive:  true,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create user role to give access to the organization
+	userRole := &models.UserRole{
+		UserID:         user.ID,
+		OrganizationID: org.ID,
+		Role:           "VAppUser",
+	}
+	require.NoError(t, db.DB.Create(userRole).Error)
+
+	token, err := jwtManager.Generate(user.ID, user.Username)
+	require.NoError(t, err)
+
+	t.Run("GET /api/vms/query returns VM list", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vms/query", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		vms, ok := data["vms"].([]interface{})
+		require.True(t, ok, "vms field should be an array")
+		assert.Equal(t, 2, len(vms))
+		assert.Equal(t, float64(2), data["total"])
+
+		// Check first VM
+		firstVM := vms[0].(map[string]interface{})
+		assert.Equal(t, vm1.ID.String(), firstVM["id"])
+		assert.Equal(t, "test-vm-1", firstVM["name"])
+		assert.Equal(t, vapp.ID.String(), firstVM["vapp_id"])
+		assert.Equal(t, "test-vapp", firstVM["vapp_name"])
+		assert.Equal(t, "POWERED_OFF", firstVM["status"])
+		assert.Equal(t, float64(2), firstVM["cpu_count"])
+		assert.Equal(t, float64(4096), firstVM["memory_mb"])
+	})
+
+	t.Run("GET /api/vms/query with vapp_id filter", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vms/query?vapp_id="+vapp.ID.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		vms, ok := data["vms"].([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, 2, len(vms))
+	})
+
+	t.Run("GET /api/vms/query with status filter", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vms/query?status=POWERED_ON", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		vms, ok := data["vms"].([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, 1, len(vms))
+
+		firstVM := vms[0].(map[string]interface{})
+		assert.Equal(t, "POWERED_ON", firstVM["status"])
+	})
+
+	t.Run("GET /api/vm/{vm-id} returns specific VM", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vm/"+vm1.ID.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, vm1.ID.String(), data["id"])
+		assert.Equal(t, "test-vm-1", data["name"])
+		assert.Equal(t, vapp.ID.String(), data["vapp_id"])
+		assert.Equal(t, "test-vapp", data["vapp_name"])
+		assert.Equal(t, "test-vm-1", data["vm_name"])
+		assert.Equal(t, org.Namespace, data["namespace"])
+		assert.Equal(t, "POWERED_OFF", data["status"])
+		assert.Equal(t, float64(2), data["cpu_count"])
+		assert.Equal(t, float64(4096), data["memory_mb"])
+	})
+
+	t.Run("POST /api/vms creates new VM", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":      "new-test-vm",
+			"vapp_id":   vapp.ID.String(),
+			"vm_name":   "new-test-vm",
+			"cpu_count": 4,
+			"memory_mb": 8192,
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, "new-test-vm", data["name"])
+		assert.Equal(t, vapp.ID.String(), data["vapp_id"])
+		assert.Equal(t, "test-vapp", data["vapp_name"])
+		assert.Equal(t, "new-test-vm", data["vm_name"])
+		assert.Equal(t, org.Namespace, data["namespace"])
+		assert.Equal(t, "UNRESOLVED", data["status"])
+		assert.Equal(t, float64(4), data["cpu_count"])
+		assert.Equal(t, float64(8192), data["memory_mb"])
+
+		// Verify VM was created in database
+		var createdVM models.VM
+		err = db.DB.Where("name = ?", "new-test-vm").First(&createdVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "new-test-vm", createdVM.Name)
+		assert.Equal(t, vapp.ID, createdVM.VAppID)
+	})
+
+	t.Run("PUT /api/vm/{vm-id} updates VM", func(t *testing.T) {
+		updateData := map[string]interface{}{
+			"name":      "updated-vm-name",
+			"cpu_count": 8,
+			"memory_mb": 16384,
+			"status":    "POWERED_ON",
+		}
+		jsonData, _ := json.Marshal(updateData)
+
+		req, _ := http.NewRequest("PUT", "/api/vm/"+vm1.ID.String(), strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, vm1.ID.String(), data["id"])
+		assert.Equal(t, "updated-vm-name", data["name"])
+		assert.Equal(t, "POWERED_ON", data["status"])
+		assert.Equal(t, float64(8), data["cpu_count"])
+		assert.Equal(t, float64(16384), data["memory_mb"])
+
+		// Verify VM was updated in database
+		var updatedVM models.VM
+		err = db.DB.Where("id = ?", vm1.ID).First(&updatedVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "updated-vm-name", updatedVM.Name)
+		assert.Equal(t, "POWERED_ON", updatedVM.Status)
+		assert.Equal(t, 8, *updatedVM.CPUCount)
+		assert.Equal(t, 16384, *updatedVM.MemoryMB)
+	})
+
+	t.Run("DELETE /api/vm/{vm-id} deletes VM", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/api/vm/"+vm2.ID.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, "VM deleted successfully", data["message"])
+		assert.Equal(t, vm2.ID.String(), data["vm_id"])
+		assert.Equal(t, true, data["deleted"])
+
+		// Verify VM was deleted from database
+		var deletedVM models.VM
+		err = db.DB.Where("id = ?", vm2.ID).First(&deletedVM).Error
+		assert.Equal(t, gorm.ErrRecordNotFound, err)
+	})
+
+	t.Run("GET /api/vm/{vm-id} with invalid ID returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vm/invalid-uuid", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Bad Request", response["error"])
+		assert.Equal(t, "Invalid VM ID format", response["message"])
+	})
+
+	t.Run("GET /api/vm/{vm-id} with non-existent ID returns 404", func(t *testing.T) {
+		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
+		req, _ := http.NewRequest("GET", "/api/vm/"+nonExistentID, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Not Found", response["error"])
+		assert.Equal(t, "VM not found", response["message"])
+	})
+
+	t.Run("POST /api/vms with invalid vApp ID returns 400", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name":    "test-vm",
+			"vapp_id": "invalid-uuid",
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("POST /api/vms with non-existent vApp returns 404", func(t *testing.T) {
+		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
+		requestData := map[string]interface{}{
+			"name":    "test-vm",
+			"vapp_id": nonExistentID,
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+
+	t.Run("VM endpoints without token return 401", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vms/query", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("POST /api/vms with missing required fields returns 400", func(t *testing.T) {
+		requestData := map[string]interface{}{
+			"name": "test-vm",
+			// vapp_id missing
+		}
+		jsonData, _ := json.Marshal(requestData)
+
+		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+}

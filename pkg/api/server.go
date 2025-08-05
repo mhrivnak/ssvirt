@@ -121,6 +121,13 @@ func (s *Server) setupRoutes() {
 			protected.GET("/vApps/query", s.vAppsQueryHandler)      // GET /api/vApps/query - list vApps
 			protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
 			protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler) // DELETE /api/vApp/{vapp-id} - delete vApp
+
+			// VM endpoints
+			protected.GET("/vms/query", s.vmsQueryHandler)   // GET /api/vms/query - list VMs
+			protected.POST("/vms", s.createVMHandler)        // POST /api/vms - create VM
+			protected.GET("/vm/:vm-id", s.vmHandler)         // GET /api/vm/{vm-id} - get VM
+			protected.PUT("/vm/:vm-id", s.updateVMHandler)   // PUT /api/vm/{vm-id} - update VM
+			protected.DELETE("/vm/:vm-id", s.deleteVMHandler) // DELETE /api/vm/{vm-id} - delete VM
 		}
 	}
 }
