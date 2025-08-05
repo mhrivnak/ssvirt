@@ -80,16 +80,27 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
-	// Organization and VDC endpoints (at root level for VMware Cloud Director compatibility)
-	api := s.router.Group("/api")
-	api.Use(auth.JWTMiddleware(s.jwtManager))
+	// Authentication endpoints (at root level for VMware Cloud Director compatibility)
+	apiRoot := s.router.Group("/api")
 	{
-		// Organization endpoints
-		api.GET("/org", s.organizationsHandler)          // GET /api/org - list organizations
-		api.GET("/org/:org-id", s.organizationHandler)   // GET /api/org/{org-id} - get organization
+		// Public authentication endpoints (no JWT middleware)
+		apiRoot.POST("/sessions", s.createSessionHandler)   // POST /api/sessions - login
 
-		// VDC endpoints
-		api.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
+		// Protected authentication endpoints (require JWT middleware)
+		protected := apiRoot.Group("/")
+		protected.Use(auth.JWTMiddleware(s.jwtManager))
+		{
+			// Session management
+			protected.DELETE("/sessions", s.deleteSessionHandler) // DELETE /api/sessions - logout
+			protected.GET("/session", s.getSessionHandler)        // GET /api/session - get current session
+
+			// Organization endpoints
+			protected.GET("/org", s.organizationsHandler)          // GET /api/org - list organizations
+			protected.GET("/org/:org-id", s.organizationHandler)   // GET /api/org/{org-id} - get organization
+
+			// VDC endpoints
+			protected.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
+		}
 	}
 }
 
