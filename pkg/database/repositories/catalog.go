@@ -34,6 +34,17 @@ func (r *CatalogRepository) GetByOrganizationID(orgID uuid.UUID) ([]models.Catal
 	return catalogs, err
 }
 
+func (r *CatalogRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.Catalog, error) {
+	var catalogs []models.Catalog
+	if len(orgIDs) == 0 {
+		// If user has no organization access, only return shared catalogs
+		err := r.db.Where("is_shared = true").Find(&catalogs).Error
+		return catalogs, err
+	}
+	err := r.db.Where("organization_id IN ? OR is_shared = true", orgIDs).Find(&catalogs).Error
+	return catalogs, err
+}
+
 func (r *CatalogRepository) List() ([]models.Catalog, error) {
 	var catalogs []models.Catalog
 	err := r.db.Find(&catalogs).Error

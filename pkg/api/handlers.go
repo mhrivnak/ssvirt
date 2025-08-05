@@ -385,9 +385,10 @@ func (s *Server) deleteSessionHandler(c *gin.Context) {
 		return
 	}
 
-	// In a more sophisticated implementation, we might maintain a blacklist of tokens
-	// or store sessions in a database/cache. For now, we simply acknowledge the logout.
-	// The client should discard the token.
+	// NOTE: This is a simplified logout implementation. In production, token blacklisting
+	// should be implemented using Redis or similar cache to store invalidated tokens
+	// until their expiration time. For now, we acknowledge the logout and expect
+	// the client to discard the token.
 	
 	response := map[string]interface{}{
 		"message":    "Session terminated successfully",
@@ -432,6 +433,273 @@ func (s *Server) getSessionHandler(c *gin.Context) {
 			LastName:  user.LastName,
 		},
 		ExpiresAt: expiresAt.Format(time.RFC3339),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// CatalogResponse represents a catalog response
+type CatalogResponse struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Organization string `json:"organization"`
+	Description  string `json:"description"`
+	IsShared     bool   `json:"is_shared"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+// CatalogQueryResponse represents a catalog query response
+type CatalogQueryResponse struct {
+	Catalogs []CatalogResponse `json:"catalogs"`
+	Total    int               `json:"total"`
+}
+
+// catalogsQueryHandler handles GET /api/catalogs/query - list catalogs accessible to user
+func (s *Server) catalogsQueryHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Get user with their organization roles
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Extract organization IDs from user roles
+	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
+	for _, role := range user.UserRoles {
+		orgIDs = append(orgIDs, role.OrganizationID)
+	}
+
+	// Get catalogs accessible to user (based on organization membership and shared catalogs)
+	catalogs, err := s.catalogRepo.GetByOrganizationIDs(orgIDs)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalogs"))
+		return
+	}
+
+	// Convert to response format
+	catalogResponses := make([]CatalogResponse, len(catalogs))
+	for i, catalog := range catalogs {
+		catalogResponses[i] = CatalogResponse{
+			ID:           catalog.ID.String(),
+			Name:         catalog.Name,
+			Organization: catalog.OrganizationID.String(),
+			Description:  catalog.Description,
+			IsShared:     catalog.IsShared,
+			CreatedAt:    catalog.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    catalog.UpdatedAt.Format(time.RFC3339),
+		}
+	}
+
+	response := CatalogQueryResponse{
+		Catalogs: catalogResponses,
+		Total:    len(catalogResponses),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// CatalogDetailResponse represents a detailed catalog response with templates
+type CatalogDetailResponse struct {
+	ID           string                    `json:"id"`
+	Name         string                    `json:"name"`
+	Description  string                    `json:"description"`
+	IsShared     bool                      `json:"is_shared"`
+	CreatedAt    string                    `json:"created_at"`
+	UpdatedAt    string                    `json:"updated_at"`
+	Templates    []CatalogItemResponse     `json:"catalog_items"`
+	TemplateCount int                      `json:"template_count"`
+}
+
+// CatalogItemResponse represents a catalog item (vApp template) response
+type CatalogItemResponse struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	OSType         string `json:"os_type"`
+	VMInstanceType string `json:"vm_instance_type"`
+	CPUCount       *int   `json:"cpu_count"`
+	MemoryMB       *int   `json:"memory_mb"`
+	DiskSizeGB     *int   `json:"disk_size_gb"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+}
+
+// catalogHandler handles GET /api/catalog/{catalog-id} - get specific catalog with details
+func (s *Server) catalogHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse catalog ID
+	catalogIDStr := c.Param("catalog-id")
+	catalogID, err := uuid.Parse(catalogIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog ID format"))
+		return
+	}
+
+	// Get catalog with templates from database
+	catalog, err := s.catalogRepo.GetWithTemplates(catalogID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog"))
+		}
+		return
+	}
+
+	// Check if user has access to this catalog
+	// Get user with their organization roles to verify access
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Check if catalog is shared (accessible to all users) or if user belongs to catalog's organization
+	hasAccess := catalog.IsShared
+	if !hasAccess {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == catalog.OrganizationID {
+				hasAccess = true
+				break
+			}
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog"))
+		return
+	}
+
+	// Convert templates to response format
+	templateResponses := make([]CatalogItemResponse, len(catalog.VAppTemplates))
+	for i, template := range catalog.VAppTemplates {
+		templateResponses[i] = CatalogItemResponse{
+			ID:             template.ID.String(),
+			Name:           template.Name,
+			Description:    template.Description,
+			OSType:         template.OSType,
+			VMInstanceType: template.VMInstanceType,
+			CPUCount:       template.CPUCount,
+			MemoryMB:       template.MemoryMB,
+			DiskSizeGB:     template.DiskSizeGB,
+			CreatedAt:      template.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
+		}
+	}
+
+	response := CatalogDetailResponse{
+		ID:            catalog.ID.String(),
+		Name:          catalog.Name,
+		Description:   catalog.Description,
+		IsShared:      catalog.IsShared,
+		CreatedAt:     catalog.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:     catalog.UpdatedAt.Format(time.RFC3339),
+		Templates:     templateResponses,
+		TemplateCount: len(templateResponses),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// CatalogItemsQueryResponse represents a catalog items query response
+type CatalogItemsQueryResponse struct {
+	CatalogItems []CatalogItemResponse `json:"catalog_items"`
+	Total        int                   `json:"total"`
+}
+
+// catalogItemsQueryHandler handles GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
+func (s *Server) catalogItemsQueryHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse catalog ID
+	catalogIDStr := c.Param("catalog-id")
+	catalogID, err := uuid.Parse(catalogIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog ID format"))
+		return
+	}
+
+	// Verify catalog exists
+	catalog, err := s.catalogRepo.GetByID(catalogID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog"))
+		}
+		return
+	}
+
+	// Check if user has access to this catalog
+	// Get user with their organization roles to verify access
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Check if catalog is shared (accessible to all users) or if user belongs to catalog's organization
+	hasAccess := catalog.IsShared
+	if !hasAccess {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == catalog.OrganizationID {
+				hasAccess = true
+				break
+			}
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog"))
+		return
+	}
+
+	// Get templates for this catalog
+	templates, err := s.templateRepo.GetByCatalogID(catalogID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog items"))
+		return
+	}
+
+	// Convert to response format
+	itemResponses := make([]CatalogItemResponse, len(templates))
+	for i, template := range templates {
+		itemResponses[i] = CatalogItemResponse{
+			ID:             template.ID.String(),
+			Name:           template.Name,
+			Description:    template.Description,
+			OSType:         template.OSType,
+			VMInstanceType: template.VMInstanceType,
+			CPUCount:       template.CPUCount,
+			MemoryMB:       template.MemoryMB,
+			DiskSizeGB:     template.DiskSizeGB,
+			CreatedAt:      template.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
+		}
+	}
+
+	response := CatalogItemsQueryResponse{
+		CatalogItems: itemResponses,
+		Total:        len(itemResponses),
 	}
 
 	SendSuccess(c, http.StatusOK, response)

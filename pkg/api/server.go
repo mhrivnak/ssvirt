@@ -18,25 +18,31 @@ import (
 
 // Server represents the API server
 type Server struct {
-	config     *config.Config
-	db         *database.DB
-	authSvc    *auth.Service
-	jwtManager *auth.JWTManager
-	orgRepo    *repositories.OrganizationRepository
-	vdcRepo    *repositories.VDCRepository
-	router     *gin.Engine
-	httpServer *http.Server
+	config        *config.Config
+	db            *database.DB
+	authSvc       *auth.Service
+	jwtManager    *auth.JWTManager
+	userRepo      *repositories.UserRepository
+	orgRepo       *repositories.OrganizationRepository
+	vdcRepo       *repositories.VDCRepository
+	catalogRepo   *repositories.CatalogRepository
+	templateRepo  *repositories.VAppTemplateRepository
+	router        *gin.Engine
+	httpServer    *http.Server
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository) *Server {
 	server := &Server{
-		config:     cfg,
-		db:         db,
-		authSvc:    authSvc,
-		jwtManager: jwtManager,
-		orgRepo:    orgRepo,
-		vdcRepo:    vdcRepo,
+		config:       cfg,
+		db:           db,
+		authSvc:      authSvc,
+		jwtManager:   jwtManager,
+		userRepo:     userRepo,
+		orgRepo:      orgRepo,
+		vdcRepo:      vdcRepo,
+		catalogRepo:  catalogRepo,
+		templateRepo: templateRepo,
 	}
 
 	// Configure gin mode based on log level
@@ -83,7 +89,7 @@ func (s *Server) setupRoutes() {
 	// Authentication endpoints (at root level for VMware Cloud Director compatibility)
 	apiRoot := s.router.Group("/api")
 	{
-		// Public authentication endpoints (no JWT middleware)
+		// Public authentication endpoint (no JWT middleware)
 		apiRoot.POST("/sessions", s.createSessionHandler)   // POST /api/sessions - login
 
 		// Protected authentication endpoints (require JWT middleware)
@@ -100,6 +106,11 @@ func (s *Server) setupRoutes() {
 
 			// VDC endpoints
 			protected.GET("/vdc/:vdc-id", s.vdcHandler)            // GET /api/vdc/{vdc-id} - get VDC
+
+			// Catalog endpoints
+			protected.GET("/catalogs/query", s.catalogsQueryHandler)        // GET /api/catalogs/query - list catalogs
+			protected.GET("/catalog/:catalog-id", s.catalogHandler)         // GET /api/catalog/{catalog-id} - get catalog
+			protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
 		}
 	}
 }
