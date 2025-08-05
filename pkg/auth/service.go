@@ -69,6 +69,9 @@ type CreateUserRequest struct {
 
 // Login authenticates a user with username/password and returns a JWT token if successful
 func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
+	if req == nil {
+		return nil, errors.New("login request cannot be nil")
+	}
 	user, err := s.userRepo.GetByUsername(req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -105,6 +108,9 @@ func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
 
 // CreateUser creates a new user account with the provided information
 func (s *Service) CreateUser(req *CreateUserRequest) (*models.User, error) {
+	if req == nil {
+		return nil, errors.New("create user request cannot be nil")
+	}
 	// Check if user already exists
 	if _, err := s.userRepo.GetByUsername(req.Username); err == nil {
 		return nil, ErrUserExists

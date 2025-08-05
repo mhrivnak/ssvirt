@@ -230,4 +230,16 @@ func TestAuthService(t *testing.T) {
 		_, err := authService.CreateUser(req)
 		assert.ErrorIs(t, err, auth.ErrUserExists)
 	})
+
+	t.Run("Login with nil request", func(t *testing.T) {
+		_, err := authService.Login(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "login request cannot be nil")
+	})
+
+	t.Run("Create user with nil request", func(t *testing.T) {
+		_, err := authService.CreateUser(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "create user request cannot be nil")
+	})
 }
