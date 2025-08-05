@@ -1,0 +1,93 @@
+name: PR Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-1.22-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-1.22-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run unit tests
+      run: |
+        echo "Running unit tests..."
+        go test -v -race -coverprofile=coverage.out ./test/unit/...
+        
+    - name: Generate coverage report
+      run: go tool cover -html=coverage.out -o coverage.html
+      
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage.html
+
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+        
+    - name: Check if code compiles
+      run: |
+        echo "Checking if all packages compile..."
+        go build ./cmd/api-server
+        go build ./cmd/controller  
+        go build ./cmd/user-admin
+        echo "All packages compile successfully!"
+
+  lint-check:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+        
+    - name: Run basic lint checks
+      run: |
+        echo "Running basic lint checks..."
+        go vet ./...
+        go fmt ./...
+        # Check if go fmt made any changes
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "Code is not properly formatted. Please run 'go fmt ./...'"
+          git diff
+          exit 1
+        fi
+        echo "Lint checks passed!"
