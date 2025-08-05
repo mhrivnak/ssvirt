@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -64,6 +65,16 @@ func (s *Server) vAppsQueryHandler(c *gin.Context) {
 	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
 	for _, role := range user.UserRoles {
 		orgIDs = append(orgIDs, role.OrganizationID)
+	}
+
+	// Return empty list if user has no organization access
+	if len(orgIDs) == 0 {
+		response := VAppQueryResponse{
+			VApps: []VAppResponse{},
+			Total: 0,
+		}
+		SendSuccess(c, http.StatusOK, response)
+		return
 	}
 
 	// Get vApps accessible to user (based on organization membership)
@@ -275,9 +286,17 @@ func (s *Server) deleteVAppHandler(c *gin.Context) {
 
 	// Use transaction for atomic deletion of vApp and its VMs
 	tx := s.db.DB.Begin()
+	if tx.Error != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to start transaction"))
+		return
+	}
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback()
+			if tx != nil {
+				tx.Rollback()
+			}
+			// Log the panic for debugging
+			log.Printf("panic during vApp deletion: %v", r)
 			panic(r)
 		}
 	}()

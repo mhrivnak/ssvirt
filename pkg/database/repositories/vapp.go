@@ -67,6 +67,10 @@ func (r *VAppRepository) GetWithAll(id uuid.UUID) (*models.VApp, error) {
 }
 
 func (r *VAppRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.VApp, error) {
+	if len(orgIDs) == 0 {
+		return []models.VApp{}, nil
+	}
+
 	var vapps []models.VApp
 	err := r.db.Preload("VDC").Preload("Template").Preload("VMs").
 		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
