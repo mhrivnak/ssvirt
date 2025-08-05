@@ -3,8 +3,6 @@ run:
   go: "1.24"
 
 linters-settings:
-  govet:
-    check-shadowing: true
   revive:
     rules:
       - name: exported
@@ -57,6 +55,7 @@ linters:
     - gosimple
     - govet
     - ineffassign
+    - shadow
     - staticcheck
     - typecheck
     - unused

@@ -750,8 +750,8 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 
 	// Parse request body
 	var req InstantiateVAppTemplateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", err.Error()))
+	if bindErr := c.ShouldBindJSON(&req); bindErr != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", bindErr.Error()))
 		return
 	}
 

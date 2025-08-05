@@ -118,9 +118,9 @@ func (s *Server) setupRoutes() {
 			protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
 
 			// vApp endpoints
-			protected.GET("/vApps/query", s.vAppsQueryHandler)              // GET /api/vApps/query - list vApps
-			protected.GET("/vApp/:vapp-id", s.vAppHandler)                  // GET /api/vApp/{vapp-id} - get vApp
-			protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler)         // DELETE /api/vApp/{vapp-id} - delete vApp
+			protected.GET("/vApps/query", s.vAppsQueryHandler)      // GET /api/vApps/query - list vApps
+			protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
+			protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler) // DELETE /api/vApp/{vapp-id} - delete vApp
 		}
 	}
 }
