@@ -1,8 +1,10 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -539,4 +541,162 @@ func (s *Server) deleteVMHandler(c *gin.Context) {
 	}
 
 	SendSuccess(c, http.StatusOK, response)
+}
+
+// VMPowerActionResponse represents a VM power action response
+type VMPowerActionResponse struct {
+	VMID      string `json:"vm_id"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+	Task      struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Type   string `json:"type"`
+	} `json:"task"`
+}
+
+// powerOnVMHandler handles POST /api/vm/{vm-id}/power/action/powerOn - power on VM
+func (s *Server) powerOnVMHandler(c *gin.Context) {
+	s.handleVMPowerAction(c, "powerOn", "POWERED_ON", "VM power on initiated")
+}
+
+// powerOffVMHandler handles POST /api/vm/{vm-id}/power/action/powerOff - power off VM
+func (s *Server) powerOffVMHandler(c *gin.Context) {
+	s.handleVMPowerAction(c, "powerOff", "POWERED_OFF", "VM power off initiated")
+}
+
+// suspendVMHandler handles POST /api/vm/{vm-id}/power/action/suspend - suspend VM
+func (s *Server) suspendVMHandler(c *gin.Context) {
+	s.handleVMPowerAction(c, "suspend", "SUSPENDED", "VM suspend initiated")
+}
+
+// resetVMHandler handles POST /api/vm/{vm-id}/power/action/reset - reset VM
+func (s *Server) resetVMHandler(c *gin.Context) {
+	s.handleVMPowerAction(c, "reset", "POWERED_ON", "VM reset initiated")
+}
+
+// handleVMPowerAction is a helper function that implements the common logic for VM power operations
+func (s *Server) handleVMPowerAction(c *gin.Context, action, targetStatus, message string) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse VM ID
+	vmIDStr := c.Param("vm-id")
+	vmID, err := uuid.Parse(vmIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VM ID format"))
+		return
+	}
+
+	// Get existing VM
+	vm, err := s.vmRepo.GetByID(vmID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VM not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VM"))
+		}
+		return
+	}
+
+	// Check if user has access to this VM's organization
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Get vApp with VDC and organization info for access control
+	vapp, err := s.vappRepo.GetWithAll(vm.VAppID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve vApp information"))
+		return
+	}
+
+	hasAccess := false
+	if vapp.VDC != nil {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == vapp.VDC.OrganizationID {
+				hasAccess = true
+				break
+			}
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to control this VM"))
+		return
+	}
+
+	// Validate power state transition
+	if err := s.validatePowerTransition(vm.Status, action); err != nil {
+		SendError(c, NewAPIError(http.StatusConflict, "Conflict", err.Error()))
+		return
+	}
+
+	// Update VM status in database
+	vm.Status = targetStatus
+	if err := s.vmRepo.Update(vm); err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to update VM status"))
+		return
+	}
+
+	// Generate mock task ID for VMware Cloud Director compatibility
+	taskID := uuid.New().String()
+
+	// Create response
+	response := VMPowerActionResponse{
+		VMID:      vmID.String(),
+		Action:    action,
+		Status:    targetStatus,
+		Message:   message,
+		Timestamp: time.Now().Format(time.RFC3339),
+		Task: struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Type   string `json:"type"`
+		}{
+			ID:     taskID,
+			Status: "running",
+			Type:   "vm" + strings.Title(action),
+		},
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// validatePowerTransition validates if a power state transition is allowed
+func (s *Server) validatePowerTransition(currentStatus, action string) error {
+	switch action {
+	case "powerOn":
+		if currentStatus == "POWERED_ON" {
+			return fmt.Errorf("VM is already powered on")
+		}
+		// Allow powerOn from POWERED_OFF, SUSPENDED, UNRESOLVED states
+	case "powerOff":
+		if currentStatus == "POWERED_OFF" {
+			return fmt.Errorf("VM is already powered off")
+		}
+		if currentStatus == "UNRESOLVED" {
+			return fmt.Errorf("Cannot power off an unresolved VM")
+		}
+	case "suspend":
+		if currentStatus != "POWERED_ON" {
+			return fmt.Errorf("VM must be powered on to suspend")
+		}
+		if currentStatus == "SUSPENDED" {
+			return fmt.Errorf("VM is already suspended")
+		}
+	case "reset":
+		if currentStatus != "POWERED_ON" {
+			return fmt.Errorf("VM must be powered on to reset")
+		}
+	}
+	return nil
 }

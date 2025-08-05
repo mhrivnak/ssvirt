@@ -1585,3 +1585,305 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 }
+
+func TestVMPowerOperations(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test organization
+	org := &models.Organization{
+		Name:        "test-org",
+		DisplayName: "Test Organization",
+		Description: "Test description",
+		Enabled:     true,
+		Namespace:   "test-org-ns",
+	}
+	require.NoError(t, db.DB.Create(org).Error)
+
+	// Create test VDC
+	cpuLimit := 100
+	memoryLimit := 8192
+	storageLimit := 102400
+	vdc := &models.VDC{
+		Name:            "test-vdc",
+		OrganizationID:  org.ID,
+		AllocationModel: "PayAsYouGo",
+		CPULimit:        &cpuLimit,
+		MemoryLimitMB:   &memoryLimit,
+		StorageLimitMB:  &storageLimit,
+		Enabled:         true,
+	}
+	require.NoError(t, db.DB.Create(vdc).Error)
+
+	// Create test vApp
+	vapp := &models.VApp{
+		Name:        "test-vapp",
+		VDCID:       vdc.ID,
+		Status:      "POWERED_OFF",
+		Description: "Test vApp",
+	}
+	require.NoError(t, db.DB.Create(vapp).Error)
+
+	// Create test VM
+	cpuCount := 2
+	memoryMB := 4096
+	vm := &models.VM{
+		Name:      "test-vm",
+		VAppID:    vapp.ID,
+		VMName:    "test-vm",
+		Namespace: org.Namespace,
+		Status:    "POWERED_OFF",
+		CPUCount:  &cpuCount,
+		MemoryMB:  &memoryMB,
+	}
+	require.NoError(t, db.DB.Create(vm).Error)
+
+	// Create test user
+	user := &models.User{
+		Username:  "testuser",
+		Email:     "test@example.com",
+		FirstName: "Test",
+		LastName:  "User",
+		IsActive:  true,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create user role to give access to the organization
+	userRole := &models.UserRole{
+		UserID:         user.ID,
+		OrganizationID: org.ID,
+		Role:           "VAppUser",
+	}
+	require.NoError(t, db.DB.Create(userRole).Error)
+
+	token, err := jwtManager.Generate(user.ID, user.Username)
+	require.NoError(t, err)
+
+	t.Run("POST /api/vm/{vm-id}/power/action/powerOn powers on VM", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/powerOn", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, vm.ID.String(), data["vm_id"])
+		assert.Equal(t, "powerOn", data["action"])
+		assert.Equal(t, "POWERED_ON", data["status"])
+		assert.Equal(t, "VM power on initiated", data["message"])
+		assert.Contains(t, data, "timestamp")
+
+		// Check task info
+		task, ok := data["task"].(map[string]interface{})
+		require.True(t, ok, "task field should be a map[string]interface{}")
+		assert.Equal(t, "running", task["status"])
+		assert.Equal(t, "vmPowerOn", task["type"])
+		assert.NotEmpty(t, task["id"])
+
+		// Verify VM status was updated in database
+		var updatedVM models.VM
+		err = db.DB.Where("id = ?", vm.ID).First(&updatedVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "POWERED_ON", updatedVM.Status)
+	})
+
+	t.Run("POST /api/vm/{vm-id}/power/action/powerOff powers off VM", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/powerOff", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		assert.Equal(t, "powerOff", data["action"])
+		assert.Equal(t, "POWERED_OFF", data["status"])
+		assert.Equal(t, "VM power off initiated", data["message"])
+
+		// Verify VM status was updated in database
+		var updatedVM models.VM
+		err = db.DB.Where("id = ?", vm.ID).First(&updatedVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "POWERED_OFF", updatedVM.Status)
+	})
+
+	t.Run("POST /api/vm/{vm-id}/power/action/suspend suspends VM", func(t *testing.T) {
+		// First power on the VM
+		vm.Status = "POWERED_ON"
+		require.NoError(t, db.DB.Save(vm).Error)
+
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		assert.Equal(t, "suspend", data["action"])
+		assert.Equal(t, "SUSPENDED", data["status"])
+		assert.Equal(t, "VM suspend initiated", data["message"])
+
+		// Verify VM status was updated in database
+		var updatedVM models.VM
+		err = db.DB.Where("id = ?", vm.ID).First(&updatedVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "SUSPENDED", updatedVM.Status)
+	})
+
+	t.Run("POST /api/vm/{vm-id}/power/action/reset resets VM", func(t *testing.T) {
+		// First power on the VM
+		vm.Status = "POWERED_ON"
+		require.NoError(t, db.DB.Save(vm).Error)
+
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/reset", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		assert.Equal(t, "reset", data["action"])
+		assert.Equal(t, "POWERED_ON", data["status"])
+		assert.Equal(t, "VM reset initiated", data["message"])
+
+		// Verify VM status remains POWERED_ON after reset
+		var updatedVM models.VM
+		err = db.DB.Where("id = ?", vm.ID).First(&updatedVM).Error
+		require.NoError(t, err)
+		assert.Equal(t, "POWERED_ON", updatedVM.Status)
+	})
+
+	t.Run("Power operations with invalid VM ID return 400", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/vm/invalid-uuid/power/action/powerOn", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Bad Request", response["error"])
+		assert.Equal(t, "Invalid VM ID format", response["message"])
+	})
+
+	t.Run("Power operations with non-existent VM return 404", func(t *testing.T) {
+		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
+		req, _ := http.NewRequest("POST", "/api/vm/"+nonExistentID+"/power/action/powerOn", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Not Found", response["error"])
+		assert.Equal(t, "VM not found", response["message"])
+	})
+
+	t.Run("Power operations without token return 401", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/powerOn", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("Invalid power state transitions return 409", func(t *testing.T) {
+		// Set VM to POWERED_ON
+		vm.Status = "POWERED_ON"
+		require.NoError(t, db.DB.Save(vm).Error)
+
+		// Try to power on an already powered on VM
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/powerOn", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Conflict", response["error"])
+		assert.Equal(t, "VM is already powered on", response["message"])
+	})
+
+	t.Run("Suspend powered off VM returns 409", func(t *testing.T) {
+		// Set VM to POWERED_OFF
+		vm.Status = "POWERED_OFF"
+		require.NoError(t, db.DB.Save(vm).Error)
+
+		// Try to suspend a powered off VM
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/suspend", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Conflict", response["error"])
+		assert.Equal(t, "VM must be powered on to suspend", response["message"])
+	})
+
+	t.Run("Reset powered off VM returns 409", func(t *testing.T) {
+		// Set VM to POWERED_OFF
+		vm.Status = "POWERED_OFF"
+		require.NoError(t, db.DB.Save(vm).Error)
+
+		// Try to reset a powered off VM
+		req, _ := http.NewRequest("POST", "/api/vm/"+vm.ID.String()+"/power/action/reset", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusConflict, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Conflict", response["error"])
+		assert.Equal(t, "VM must be powered on to reset", response["message"])
+	})
+}
