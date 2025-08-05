@@ -306,6 +306,82 @@ func (s *Server) vdcHandler(c *gin.Context) {
 	SendSuccess(c, http.StatusOK, response)
 }
 
+// VDCQueryResponse represents a VDC query response
+type VDCQueryResponse struct {
+	VDCs  []VDCResponse `json:"vdcs"`
+	Total int           `json:"total"`
+}
+
+// vdcQueryHandler handles GET /api/org/{org-id}/vdcs/query - list VDCs in organization
+func (s *Server) vdcQueryHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse organization ID
+	orgIDStr := c.Param("org-id")
+	orgID, err := uuid.Parse(orgIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
+		return
+	}
+
+	// Get user with their organization roles
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Check if user has access to this organization
+	hasAccess := false
+	for _, role := range user.UserRoles {
+		if role.OrganizationID == orgID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this organization"))
+		return
+	}
+
+	// Get VDCs for the organization
+	vdcs, err := s.vdcRepo.GetByOrganizationID(orgID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDCs"))
+		return
+	}
+
+	// Convert to response format
+	vdcResponses := make([]VDCResponse, len(vdcs))
+	for i, vdc := range vdcs {
+		vdcResponses[i] = VDCResponse{
+			ID:              vdc.ID.String(),
+			Name:            vdc.Name,
+			OrganizationID:  vdc.OrganizationID.String(),
+			AllocationModel: string(vdc.AllocationModel),
+			CPULimit:        vdc.CPULimit,
+			MemoryLimitMB:   vdc.MemoryLimitMB,
+			StorageLimitMB:  vdc.StorageLimitMB,
+			Enabled:         vdc.Enabled,
+			CreatedAt:       vdc.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:       vdc.UpdatedAt.Format(time.RFC3339),
+		}
+	}
+
+	response := VDCQueryResponse{
+		VDCs:  vdcResponses,
+		Total: len(vdcResponses),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
 // SessionRequest represents a session creation request (login)
 type SessionRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -456,12 +532,20 @@ type CatalogQueryResponse struct {
 	Total    int               `json:"total"`
 }
 
-// catalogsQueryHandler handles GET /api/catalogs/query - list catalogs accessible to user
+// catalogsQueryHandler handles GET /api/org/{org-id}/catalogs/query - list catalogs in organization
 func (s *Server) catalogsQueryHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
 	claims, exists := auth.GetClaims(c)
 	if !exists {
 		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse organization ID
+	orgIDStr := c.Param("org-id")
+	orgID, err := uuid.Parse(orgIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
 		return
 	}
 
@@ -472,14 +556,22 @@ func (s *Server) catalogsQueryHandler(c *gin.Context) {
 		return
 	}
 
-	// Extract organization IDs from user roles
-	orgIDs := make([]uuid.UUID, 0, len(user.UserRoles))
+	// Check if user has access to this organization
+	hasAccess := false
 	for _, role := range user.UserRoles {
-		orgIDs = append(orgIDs, role.OrganizationID)
+		if role.OrganizationID == orgID {
+			hasAccess = true
+			break
+		}
 	}
 
-	// Get catalogs accessible to user (based on organization membership and shared catalogs)
-	catalogs, err := s.catalogRepo.GetByOrganizationIDs(orgIDs)
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this organization"))
+		return
+	}
+
+	// Get catalogs for the specific organization
+	catalogs, err := s.catalogRepo.GetByOrganizationID(orgID)
 	if err != nil {
 		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalogs"))
 		return
@@ -701,6 +793,81 @@ func (s *Server) catalogItemsQueryHandler(c *gin.Context) {
 	response := CatalogItemsQueryResponse{
 		CatalogItems: itemResponses,
 		Total:        len(itemResponses),
+	}
+
+	SendSuccess(c, http.StatusOK, response)
+}
+
+// catalogItemHandler handles GET /api/catalogItem/{item-id} - get specific catalog item (vApp template)
+func (s *Server) catalogItemHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse catalog item ID
+	itemIDStr := c.Param("item-id")
+	itemID, err := uuid.Parse(itemIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog item ID format"))
+		return
+	}
+
+	// Get template from database
+	template, err := s.templateRepo.GetByID(itemID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog item not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog item"))
+		}
+		return
+	}
+
+	// Get catalog to check access permissions
+	catalog, err := s.catalogRepo.GetByID(template.CatalogID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog information"))
+		return
+	}
+
+	// Check if user has access to this catalog
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Check if catalog is shared or if user belongs to catalog's organization
+	hasAccess := catalog.IsShared
+	if !hasAccess {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == catalog.OrganizationID {
+				hasAccess = true
+				break
+			}
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog item"))
+		return
+	}
+
+	// Convert to response format
+	response := CatalogItemResponse{
+		ID:             template.ID.String(),
+		Name:           template.Name,
+		Description:    template.Description,
+		OSType:         template.OSType,
+		VMInstanceType: template.VMInstanceType,
+		CPUCount:       template.CPUCount,
+		MemoryMB:       template.MemoryMB,
+		DiskSizeGB:     template.DiskSizeGB,
+		CreatedAt:      template.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
 	}
 
 	SendSuccess(c, http.StatusOK, response)
