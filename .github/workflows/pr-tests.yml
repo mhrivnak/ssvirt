@@ -40,7 +40,7 @@ jobs:
       run: go tool cover -html=coverage.out -o coverage.html
       
     - name: Upload coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: coverage.html
@@ -84,7 +84,7 @@ jobs:
         echo "Running basic lint checks..."
         go vet ./...
         # Check if code is properly formatted
-        UNFORMATTED=$(go fmt -l ./...)
+        UNFORMATTED=$(gofmt -l .)
         if [ -n "$UNFORMATTED" ]; then
           echo "Code is not properly formatted. The following files need formatting:"
           echo "$UNFORMATTED"

@@ -30,7 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("Failed to close database connection: %v", err)
+		}
+	}()
 
 	if err := db.AutoMigrate(); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
