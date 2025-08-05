@@ -385,9 +385,10 @@ func (s *Server) deleteSessionHandler(c *gin.Context) {
 		return
 	}
 
-	// In a more sophisticated implementation, we might maintain a blacklist of tokens
-	// or store sessions in a database/cache. For now, we simply acknowledge the logout.
-	// The client should discard the token.
+	// NOTE: This is a simplified logout implementation. In production, token blacklisting
+	// should be implemented using Redis or similar cache to store invalidated tokens
+	// until their expiration time. For now, we acknowledge the logout and expect
+	// the client to discard the token.
 	
 	response := map[string]interface{}{
 		"message":    "Session terminated successfully",
@@ -487,12 +488,13 @@ func (s *Server) catalogsQueryHandler(c *gin.Context) {
 	catalogResponses := make([]CatalogResponse, len(catalogs))
 	for i, catalog := range catalogs {
 		catalogResponses[i] = CatalogResponse{
-			ID:          catalog.ID.String(),
-			Name:        catalog.Name,
-			Description: catalog.Description,
-			IsShared:    catalog.IsShared,
-			CreatedAt:   catalog.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:   catalog.UpdatedAt.Format(time.RFC3339),
+			ID:           catalog.ID.String(),
+			Name:         catalog.Name,
+			Organization: catalog.OrganizationID.String(),
+			Description:  catalog.Description,
+			IsShared:     catalog.IsShared,
+			CreatedAt:    catalog.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:    catalog.UpdatedAt.Format(time.RFC3339),
 		}
 	}
 

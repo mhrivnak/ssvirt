@@ -533,12 +533,12 @@ func TestAuthenticationEndpoints(t *testing.T) {
 		Email:     "inactive@example.com",
 		FirstName: "Inactive",
 		LastName:  "User",
-		IsActive:  true, // Create as active first
+		IsActive:  false,
 	}
 	require.NoError(t, inactiveUser.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(inactiveUser).Error)
 	
-	// Now explicitly set to inactive to override GORM default
+	// Explicitly set to inactive to override any GORM defaults
 	require.NoError(t, db.DB.Model(inactiveUser).Update("is_active", false).Error)
 
 	t.Run("POST /api/sessions with valid credentials creates session", func(t *testing.T) {

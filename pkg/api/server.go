@@ -89,7 +89,7 @@ func (s *Server) setupRoutes() {
 	// Authentication endpoints (at root level for VMware Cloud Director compatibility)
 	apiRoot := s.router.Group("/api")
 	{
-		// Public authentication endpoints (no JWT middleware)
+		// Public authentication endpoint (no JWT middleware)
 		apiRoot.POST("/sessions", s.createSessionHandler)   // POST /api/sessions - login
 
 		// Protected authentication endpoints (require JWT middleware)
