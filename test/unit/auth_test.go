@@ -93,7 +93,7 @@ func TestUserModel(t *testing.T) {
 
 	t.Run("Set and check password", func(t *testing.T) {
 		password := "testpassword123"
-		
+
 		err := user.SetPassword(password)
 		require.NoError(t, err)
 		assert.NotEmpty(t, user.PasswordHash)

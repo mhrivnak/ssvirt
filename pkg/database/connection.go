@@ -41,7 +41,7 @@ func NewConnection(cfg *config.Config) (*DB, error) {
 
 func (db *DB) AutoMigrate() error {
 	log.Println("Running database auto-migration...")
-	
+
 	err := db.DB.AutoMigrate(
 		&models.User{},
 		&models.Organization{},

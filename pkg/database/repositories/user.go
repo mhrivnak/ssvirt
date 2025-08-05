@@ -2,7 +2,7 @@ package repositories
 
 import (
 	"errors"
-	
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 

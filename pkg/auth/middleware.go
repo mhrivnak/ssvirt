@@ -11,11 +11,11 @@ const (
 	// AuthorizationHeader is the HTTP header name for authorization tokens
 	AuthorizationHeader = "Authorization"
 	// BearerPrefix is the expected prefix for Bearer tokens in the Authorization header
-	BearerPrefix        = "Bearer "
+	BearerPrefix = "Bearer "
 	// UserContextKey is the Gin context key for storing user ID
-	UserContextKey      = "user"
+	UserContextKey = "user"
 	// ClaimsContextKey is the Gin context key for storing JWT claims
-	ClaimsContextKey    = "claims"
+	ClaimsContextKey = "claims"
 )
 
 // JWTMiddleware creates a Gin middleware that requires valid JWT authentication

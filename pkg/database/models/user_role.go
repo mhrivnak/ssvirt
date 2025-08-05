@@ -8,12 +8,12 @@ import (
 )
 
 type UserRole struct {
-	ID             uuid.UUID `gorm:"type:uuid;primary_key" json:"id"`
-	UserID         uuid.UUID `gorm:"type:uuid;not null" json:"user_id"`
-	OrganizationID uuid.UUID `gorm:"type:uuid;not null" json:"organization_id"`
-	Role           string    `gorm:"not null" json:"role"` // OrgAdmin, VAppUser, VAppAuthor, etc.
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	UserID         uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
+	OrganizationID uuid.UUID      `gorm:"type:uuid;not null" json:"organization_id"`
+	Role           string         `gorm:"not null" json:"role"` // OrgAdmin, VAppUser, VAppAuthor, etc.
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships

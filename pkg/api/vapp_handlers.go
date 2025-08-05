@@ -15,17 +15,17 @@ import (
 
 // VAppResponse represents a vApp response
 type VAppResponse struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Status      string           `json:"status"`
-	VDCID       string           `json:"vdc_id"`
-	VDCName     string           `json:"vdc_name"`
-	TemplateID  *string          `json:"template_id"`
-	TemplateName *string         `json:"template_name"`
-	CreatedAt   string           `json:"created_at"`
-	UpdatedAt   string           `json:"updated_at"`
-	VMs         []VAppVMResponse `json:"vms,omitempty"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Description  string           `json:"description"`
+	Status       string           `json:"status"`
+	VDCID        string           `json:"vdc_id"`
+	VDCName      string           `json:"vdc_name"`
+	TemplateID   *string          `json:"template_id"`
+	TemplateName *string          `json:"template_name"`
+	CreatedAt    string           `json:"created_at"`
+	UpdatedAt    string           `json:"updated_at"`
+	VMs          []VAppVMResponse `json:"vms,omitempty"`
 }
 
 // VAppVMResponse represents a VM within a vApp response
