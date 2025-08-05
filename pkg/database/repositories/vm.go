@@ -129,3 +129,37 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []uuid.UUID, vappI
 	err := query.Find(&vms).Error
 	return vms, total, err
 }
+
+func (r *VMRepository) GetByVAppIDWithFilters(vappID uuid.UUID, status string, limit, offset int) ([]models.VM, int64, error) {
+	// Build the base query for specific vApp
+	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
+		Where("v_app_id = ?", vappID)
+
+	// Apply status filter
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	// Count total records
+	var total int64
+	countQuery := r.db.Table("vms").Where("v_app_id = ?", vappID)
+	if status != "" {
+		countQuery = countQuery.Where("status = ?", status)
+	}
+
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+
+	var vms []models.VM
+	err := query.Find(&vms).Error
+	return vms, total, err
+}

@@ -1263,8 +1263,8 @@ func TestVMEndpoints(t *testing.T) {
 	token, err := jwtManager.Generate(user.ID, user.Username)
 	require.NoError(t, err)
 
-	t.Run("GET /api/vms/query returns VM list", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/vms/query", nil)
+	t.Run("GET /api/vApp/{vapp-id}/vms/query returns VM list", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vApp/"+vapp.ID.String()+"/vms/query", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -1295,8 +1295,8 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, float64(4096), firstVM["memory_mb"])
 	})
 
-	t.Run("GET /api/vms/query with vapp_id filter", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/vms/query?vapp_id="+vapp.ID.String(), nil)
+	t.Run("GET /api/vApp/{vapp-id}/vms/query with status filter", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vApp/"+vapp.ID.String()+"/vms/query?status=POWERED_ON", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -1312,11 +1312,35 @@ func TestVMEndpoints(t *testing.T) {
 
 		vms, ok := data["vms"].([]interface{})
 		require.True(t, ok)
-		assert.Equal(t, 2, len(vms))
+		assert.Equal(t, 1, len(vms))
+
+		firstVM := vms[0].(map[string]interface{})
+		assert.Equal(t, "POWERED_ON", firstVM["status"])
 	})
 
-	t.Run("GET /api/vms/query with status filter", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/vms/query?status=POWERED_ON", nil)
+	t.Run("GET /api/vApp/{vapp-id}/vms/query with pagination", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vApp/"+vapp.ID.String()+"/vms/query?limit=1&offset=0", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok)
+
+		vms, ok := data["vms"].([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, 1, len(vms))
+		assert.Equal(t, float64(2), data["total"]) // Total should still be 2
+	})
+
+	t.Run("GET /api/vApp/{vapp-id}/vms/query with status filter", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/vApp/"+vapp.ID.String()+"/vms/query?status=POWERED_ON", nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -1365,17 +1389,16 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, float64(4096), data["memory_mb"])
 	})
 
-	t.Run("POST /api/vms creates new VM", func(t *testing.T) {
+	t.Run("POST /api/vApp/{vapp-id}/vms creates new VM", func(t *testing.T) {
 		requestData := map[string]interface{}{
 			"name":      "new-test-vm",
-			"vapp_id":   vapp.ID.String(),
 			"vm_name":   "new-test-vm",
 			"cpu_count": 4,
 			"memory_mb": 8192,
 		}
 		jsonData, _ := json.Marshal(requestData)
 
-		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req, _ := http.NewRequest("POST", "/api/vApp/"+vapp.ID.String()+"/vms", strings.NewReader(string(jsonData)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -1508,14 +1531,13 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, "VM not found", response["message"])
 	})
 
-	t.Run("POST /api/vms with invalid vApp ID returns 400", func(t *testing.T) {
+	t.Run("POST /api/vApp/{vapp-id}/vms with invalid vApp ID returns 400", func(t *testing.T) {
 		requestData := map[string]interface{}{
-			"name":    "test-vm",
-			"vapp_id": "invalid-uuid",
+			"name": "test-vm",
 		}
 		jsonData, _ := json.Marshal(requestData)
 
-		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req, _ := http.NewRequest("POST", "/api/vApp/invalid-uuid/vms", strings.NewReader(string(jsonData)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -1524,15 +1546,14 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
 
-	t.Run("POST /api/vms with non-existent vApp returns 404", func(t *testing.T) {
+	t.Run("POST /api/vApp/{vapp-id}/vms with non-existent vApp returns 404", func(t *testing.T) {
 		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
 		requestData := map[string]interface{}{
-			"name":    "test-vm",
-			"vapp_id": nonExistentID,
+			"name": "test-vm",
 		}
 		jsonData, _ := json.Marshal(requestData)
 
-		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req, _ := http.NewRequest("POST", "/api/vApp/"+nonExistentID+"/vms", strings.NewReader(string(jsonData)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -1542,21 +1563,20 @@ func TestVMEndpoints(t *testing.T) {
 	})
 
 	t.Run("VM endpoints without token return 401", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/api/vms/query", nil)
+		req, _ := http.NewRequest("GET", "/api/vApp/"+vapp.ID.String()+"/vms/query", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
-	t.Run("POST /api/vms with missing required fields returns 400", func(t *testing.T) {
+	t.Run("POST /api/vApp/{vapp-id}/vms with missing required fields returns 400", func(t *testing.T) {
 		requestData := map[string]interface{}{
-			"name": "test-vm",
-			// vapp_id missing
+			// name missing
 		}
 		jsonData, _ := json.Marshal(requestData)
 
-		req, _ := http.NewRequest("POST", "/api/vms", strings.NewReader(string(jsonData)))
+		req, _ := http.NewRequest("POST", "/api/vApp/"+vapp.ID.String()+"/vms", strings.NewReader(string(jsonData)))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()

@@ -39,7 +39,6 @@ type VMQueryResponse struct {
 // CreateVMRequest represents a VM creation request
 type CreateVMRequest struct {
 	Name     string `json:"name" binding:"required"`
-	VAppID   string `json:"vapp_id" binding:"required"`
 	VMName   string `json:"vm_name,omitempty"`
 	CPUCount *int   `json:"cpu_count,omitempty"`
 	MemoryMB *int   `json:"memory_mb,omitempty"`
@@ -53,8 +52,8 @@ type UpdateVMRequest struct {
 	Status   string `json:"status,omitempty"`
 }
 
-// vmsQueryHandler handles GET /api/vms/query - list VMs accessible to user
-func (s *Server) vmsQueryHandler(c *gin.Context) {
+// vappVMsQueryHandler handles GET /api/vApp/{vapp-id}/vms/query - list VMs in a specific vApp
+func (s *Server) vappVMsQueryHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
 	claims, exists := auth.GetClaims(c)
 	if !exists {
@@ -62,8 +61,15 @@ func (s *Server) vmsQueryHandler(c *gin.Context) {
 		return
 	}
 
+	// Parse vApp ID from URL parameter
+	vappIDStr := c.Param("vapp-id")
+	vappID, err := uuid.Parse(vappIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid vApp ID format"))
+		return
+	}
+
 	// Parse query parameters
-	vappID := c.Query("vapp_id")
 	status := c.Query("status")
 	limitStr := c.Query("limit")
 	offsetStr := c.Query("offset")
@@ -81,23 +87,33 @@ func (s *Server) vmsQueryHandler(c *gin.Context) {
 		orgIDs = append(orgIDs, role.OrganizationID)
 	}
 
-	// Return empty list if user has no organization access
-	if len(orgIDs) == 0 {
-		response := VMQueryResponse{
-			VMs:   []VMResponse{},
-			Total: 0,
+	// Check if user has access to the vApp's organization
+	vapp, err := s.vappRepo.GetWithAll(vappID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "vApp not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve vApp"))
 		}
-		SendSuccess(c, http.StatusOK, response)
 		return
 	}
 
-	// Parse filters
-	var vappIDPtr *uuid.UUID
-	if vappID != "" {
-		if parsedVAppID, parseErr := uuid.Parse(vappID); parseErr == nil {
-			vappIDPtr = &parsedVAppID
+	hasAccess := false
+	if vapp.VDC != nil {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == vapp.VDC.OrganizationID {
+				hasAccess = true
+				break
+			}
 		}
 	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this vApp"))
+		return
+	}
+
+	// vApp ID is already validated from URL parameter
 
 	// Parse pagination
 	var limit, offset int
@@ -112,8 +128,8 @@ func (s *Server) vmsQueryHandler(c *gin.Context) {
 		}
 	}
 
-	// Get VMs with filters
-	vms, total, err := s.vmRepo.GetByOrganizationIDsWithFilters(orgIDs, vappIDPtr, status, limit, offset)
+	// Get VMs from the specific vApp with filters
+	vms, total, err := s.vmRepo.GetByVAppIDWithFilters(vappID, status, limit, offset)
 	if err != nil {
 		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VMs"))
 		return
@@ -245,8 +261,8 @@ func (s *Server) vmHandler(c *gin.Context) {
 	SendSuccess(c, http.StatusOK, vmResponse)
 }
 
-// createVMHandler handles POST /api/vms - create a new VM
-func (s *Server) createVMHandler(c *gin.Context) {
+// createVMInVAppHandler handles POST /api/vApp/{vapp-id}/vms - create a new VM in a vApp
+func (s *Server) createVMInVAppHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
 	claims, exists := auth.GetClaims(c)
 	if !exists {
@@ -254,17 +270,18 @@ func (s *Server) createVMHandler(c *gin.Context) {
 		return
 	}
 
+	// Parse vApp ID from URL parameter
+	vappIDStr := c.Param("vapp-id")
+	vappID, err := uuid.Parse(vappIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid vApp ID format"))
+		return
+	}
+
 	// Parse request body
 	var req CreateVMRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", err.Error()))
-		return
-	}
-
-	// Parse vApp ID
-	vappID, err := uuid.Parse(req.VAppID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid vApp ID format"))
 		return
 	}
 
