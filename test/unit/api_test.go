@@ -28,7 +28,7 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	require.NoError(t, err)
 
 	// Auto-migrate the schema
-	err = gormDB.AutoMigrate(&models.User{}, &models.Organization{}, &models.UserRole{}, &models.VDC{})
+	err = gormDB.AutoMigrate(&models.User{}, &models.Organization{}, &models.UserRole{}, &models.VDC{}, &models.Catalog{}, &models.VAppTemplate{}, &models.VApp{}, &models.VM{})
 	require.NoError(t, err)
 
 	db := &database.DB{DB: gormDB}
@@ -61,11 +61,13 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	userRepo := repositories.NewUserRepository(gormDB)
 	orgRepo := repositories.NewOrganizationRepository(gormDB)
 	vdcRepo := repositories.NewVDCRepository(gormDB)
+	catalogRepo := repositories.NewCatalogRepository(gormDB)
+	templateRepo := repositories.NewVAppTemplateRepository(gormDB)
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Create API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, orgRepo, vdcRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, orgRepo, vdcRepo, catalogRepo, templateRepo)
 
 	return server, db, jwtManager
 }
@@ -756,6 +758,211 @@ func TestAuthenticationEndpoints(t *testing.T) {
 	t.Run("GET /api/session with invalid token returns 401", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/api/session", nil)
 		req.Header.Set("Authorization", "Bearer invalid-token")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+func TestCatalogEndpoints(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test organization
+	org := &models.Organization{
+		Name:        "test-org",
+		DisplayName: "Test Organization",
+		Description: "Test description",
+		Enabled:     true,
+		Namespace:   "test-org-ns",
+	}
+	require.NoError(t, db.DB.Create(org).Error)
+
+	// Create test catalogs
+	catalog1 := &models.Catalog{
+		Name:           "test-catalog-1",
+		OrganizationID: org.ID,
+		Description:    "Test catalog 1",
+		IsShared:       false,
+	}
+	catalog2 := &models.Catalog{
+		Name:           "shared-catalog",
+		OrganizationID: org.ID,
+		Description:    "Shared catalog",
+		IsShared:       true,
+	}
+	require.NoError(t, db.DB.Create(catalog1).Error)
+	require.NoError(t, db.DB.Create(catalog2).Error)
+
+	// Create test vApp templates
+	cpuCount := 2
+	memoryMB := 4096
+	diskSizeGB := 20
+	template1 := &models.VAppTemplate{
+		Name:           "ubuntu-template",
+		CatalogID:      catalog1.ID,
+		Description:    "Ubuntu 20.04 template",
+		OSType:         "linux",
+		VMInstanceType: "standard.small",
+		CPUCount:       &cpuCount,
+		MemoryMB:       &memoryMB,
+		DiskSizeGB:     &diskSizeGB,
+		TemplateData:   `{"vm_spec": {"cpu": 2, "memory": "4Gi"}}`,
+	}
+	template2 := &models.VAppTemplate{
+		Name:        "centos-template",
+		CatalogID:   catalog1.ID,
+		Description: "CentOS 8 template",
+		OSType:      "linux",
+	}
+	require.NoError(t, db.DB.Create(template1).Error)
+	require.NoError(t, db.DB.Create(template2).Error)
+
+	// Create test user and token
+	user := &models.User{
+		Username:  "testuser",
+		Email:     "test@example.com",
+		FirstName: "Test",
+		LastName:  "User",
+		IsActive:  true,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	token, err := jwtManager.Generate(user.ID, user.Username)
+	require.NoError(t, err)
+
+	t.Run("GET /api/catalogs/query returns catalog list", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/catalogs/query", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		catalogs, ok := data["catalogs"].([]interface{})
+		require.True(t, ok, "catalogs field should be an array")
+		assert.Equal(t, 2, len(catalogs))
+		assert.Equal(t, float64(2), data["total"])
+
+		// Check first catalog
+		firstCatalog := catalogs[0].(map[string]interface{})
+		assert.Equal(t, catalog1.ID.String(), firstCatalog["id"])
+		assert.Equal(t, "test-catalog-1", firstCatalog["name"])
+		assert.Equal(t, "Test catalog 1", firstCatalog["description"])
+		assert.Equal(t, false, firstCatalog["is_shared"])
+	})
+
+	t.Run("GET /api/catalog/{catalog-id} returns specific catalog with templates", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/catalog/"+catalog1.ID.String(), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, catalog1.ID.String(), data["id"])
+		assert.Equal(t, "test-catalog-1", data["name"])
+		assert.Equal(t, "Test catalog 1", data["description"])
+		assert.Equal(t, false, data["is_shared"])
+		assert.Equal(t, float64(2), data["template_count"])
+
+		templates, ok := data["catalog_items"].([]interface{})
+		require.True(t, ok, "catalog_items field should be an array")
+		assert.Equal(t, 2, len(templates))
+
+		// Check first template
+		firstTemplate := templates[0].(map[string]interface{})
+		assert.Equal(t, template1.ID.String(), firstTemplate["id"])
+		assert.Equal(t, "ubuntu-template", firstTemplate["name"])
+		assert.Equal(t, "Ubuntu 20.04 template", firstTemplate["description"])
+		assert.Equal(t, "linux", firstTemplate["os_type"])
+		assert.Equal(t, "standard.small", firstTemplate["vm_instance_type"])
+		assert.Equal(t, float64(2), firstTemplate["cpu_count"])
+		assert.Equal(t, float64(4096), firstTemplate["memory_mb"])
+		assert.Equal(t, float64(20), firstTemplate["disk_size_gb"])
+	})
+
+	t.Run("GET /api/catalog/{catalog-id}/catalogItems/query returns catalog items", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/catalog/"+catalog1.ID.String()+"/catalogItems/query", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		catalogItems, ok := data["catalog_items"].([]interface{})
+		require.True(t, ok, "catalog_items field should be an array")
+		assert.Equal(t, 2, len(catalogItems))
+		assert.Equal(t, float64(2), data["total"])
+
+		// Check first item
+		firstItem := catalogItems[0].(map[string]interface{})
+		assert.Equal(t, template1.ID.String(), firstItem["id"])
+		assert.Equal(t, "ubuntu-template", firstItem["name"])
+		assert.Equal(t, "Ubuntu 20.04 template", firstItem["description"])
+	})
+
+	t.Run("GET /api/catalog/{catalog-id} with invalid ID returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/catalog/invalid-uuid", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Bad Request", response["error"])
+		assert.Equal(t, "Invalid catalog ID format", response["message"])
+	})
+
+	t.Run("GET /api/catalog/{catalog-id} with non-existent ID returns 404", func(t *testing.T) {
+		nonExistentID := "550e8400-e29b-41d4-a716-446655440000"
+		req, _ := http.NewRequest("GET", "/api/catalog/"+nonExistentID, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Not Found", response["error"])
+		assert.Equal(t, "Catalog not found", response["message"])
+	})
+
+	t.Run("Catalog endpoints without token return 401", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/catalogs/query", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
