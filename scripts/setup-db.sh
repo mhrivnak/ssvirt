@@ -24,9 +24,23 @@ generate_password() {
 DB_NAME="${DB_NAME:-ssvirt}"
 DB_USER="${DB_USER:-ssvirt}"
 # Generate secure random password if not provided via environment
+PASSWORD_FILE=".ssvirt-db-password"
 if [[ -z "${DB_PASSWORD:-}" ]]; then
-    DB_PASSWORD="$(generate_password)"
-    echo "Generated secure random password for database user $DB_USER"
+    # Check if password file exists and use it
+    if [[ -f "$PASSWORD_FILE" ]]; then
+        DB_PASSWORD="$(grep SSVIRT_DB_PASSWORD "$PASSWORD_FILE" | cut -d= -f2)"
+        echo "Using existing password from $PASSWORD_FILE"
+    else
+        # Generate new password and save it
+        DB_PASSWORD="$(generate_password)"
+        echo "Generated secure random password for database user $DB_USER"
+        
+        # Save password to secure file for future use
+        echo "SSVIRT_DB_PASSWORD=$DB_PASSWORD" > "$PASSWORD_FILE"
+        chmod 600 "$PASSWORD_FILE"
+        echo "Password saved to $PASSWORD_FILE (readable only by you)"
+        echo "To reuse this password, run: export SSVIRT_DB_PASSWORD=\$(grep SSVIRT_DB_PASSWORD $PASSWORD_FILE | cut -d= -f2)"
+    fi
 else
     DB_PASSWORD="${DB_PASSWORD}"
 fi

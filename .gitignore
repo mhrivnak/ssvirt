@@ -41,6 +41,7 @@ Thumbs.db
 config.yaml
 config.yml
 .env
+.ssvirt-db-password
 
 # Temporary files
 tmp/
