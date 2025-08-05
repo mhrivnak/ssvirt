@@ -130,6 +130,12 @@ func (s *Server) setupRoutes() {
 			protected.GET("/vm/:vm-id", s.vmHandler)                         // GET /api/vm/{vm-id} - get VM
 			protected.PUT("/vm/:vm-id", s.updateVMHandler)                   // PUT /api/vm/{vm-id} - update VM
 			protected.DELETE("/vm/:vm-id", s.deleteVMHandler)                // DELETE /api/vm/{vm-id} - delete VM
+
+			// VM power operation endpoints
+			protected.POST("/vm/:vm-id/power/action/powerOn", s.powerOnVMHandler)   // POST /api/vm/{vm-id}/power/action/powerOn - power on VM
+			protected.POST("/vm/:vm-id/power/action/powerOff", s.powerOffVMHandler) // POST /api/vm/{vm-id}/power/action/powerOff - power off VM
+			protected.POST("/vm/:vm-id/power/action/suspend", s.suspendVMHandler)   // POST /api/vm/{vm-id}/power/action/suspend - suspend VM
+			protected.POST("/vm/:vm-id/power/action/reset", s.resetVMHandler)       // POST /api/vm/{vm-id}/power/action/reset - reset VM
 		}
 	}
 }
