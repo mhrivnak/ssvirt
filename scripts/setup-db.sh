@@ -31,4 +31,4 @@ psql -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" -d "$DB_NAME" -c "CREATE EX
 unset PGPASSWORD
 
 echo "Database setup completed successfully!"
-echo "Database URL: postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME"
+echo "Database URL: postgresql://$DB_USER:****@$DB_HOST:$DB_PORT/$DB_NAME"
