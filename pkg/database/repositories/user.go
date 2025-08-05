@@ -52,7 +52,10 @@ func (r *UserRepository) GetByEmail(email string) (*models.User, error) {
 }
 
 func (r *UserRepository) Update(user *models.User) error {
-	return r.db.Save(user).Error
+	if user == nil {
+		return errors.New("user cannot be nil")
+	}
+	return r.db.Updates(user).Error
 }
 
 func (r *UserRepository) Delete(id uuid.UUID) error {
