@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -75,7 +76,9 @@ func (vm *VMManager) GetVM(ctx context.Context, vmName, namespace string) (*kube
 	if vmID, exists := kvVM.Labels["ssvirt.io/vm-id"]; exists {
 		if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil && dbVM.ID.String() == vmID {
 			vm.translator.UpdateVMFromKubeVirt(dbVM, kvVM)
-			_ = vm.vmRepo.Update(dbVM) // Best effort update
+			if err := vm.vmRepo.Update(dbVM); err != nil {
+				log.Printf("Warning: failed to update VM status in database for VM %s/%s: %v", namespace, vmName, err)
+			}
 		}
 	}
 
@@ -177,7 +180,9 @@ func (vm *VMManager) SuspendVM(ctx context.Context, vmName, namespace string) er
 	// Update database status
 	if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil {
 		dbVM.Status = "SUSPENDED"
-		_ = vm.vmRepo.Update(dbVM)
+		if err := vm.vmRepo.Update(dbVM); err != nil {
+			log.Printf("Warning: failed to update VM status to SUSPENDED in database for VM %s/%s: %v", namespace, vmName, err)
+		}
 	}
 
 	return nil
@@ -234,7 +239,9 @@ func (vm *VMManager) setPowerState(ctx context.Context, vmName, namespace string
 		} else {
 			dbVM.Status = "POWERED_OFF"
 		}
-		_ = vm.vmRepo.Update(dbVM)
+		if err := vm.vmRepo.Update(dbVM); err != nil {
+			log.Printf("Warning: failed to update VM power status in database for VM %s/%s: %v", namespace, vmName, err)
+		}
 	}
 
 	return nil
