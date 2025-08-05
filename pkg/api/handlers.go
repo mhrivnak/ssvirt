@@ -535,7 +535,7 @@ type CatalogItemResponse struct {
 // catalogHandler handles GET /api/catalog/{catalog-id} - get specific catalog with details
 func (s *Server) catalogHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
-	_, exists := auth.GetClaims(c)
+	claims, exists := auth.GetClaims(c)
 	if !exists {
 		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
 		return
@@ -557,6 +557,30 @@ func (s *Server) catalogHandler(c *gin.Context) {
 		} else {
 			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog"))
 		}
+		return
+	}
+
+	// Check if user has access to this catalog
+	// Get user with their organization roles to verify access
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	// Check if catalog is shared (accessible to all users) or if user belongs to catalog's organization
+	hasAccess := catalog.IsShared
+	if !hasAccess {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == catalog.OrganizationID {
+				hasAccess = true
+				break
+			}
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog"))
 		return
 	}
 
