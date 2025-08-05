@@ -62,9 +62,8 @@ func NewReadyClient(ctx context.Context) (*Client, error) {
 	return client, nil
 }
 
-// createClientWithCache creates a client with caching enabled
-func createClientWithCache(cfg *rest.Config) (*Client, error) {
-	// Create scheme with all required APIs
+// createScheme creates and configures the runtime scheme with all required APIs
+func createScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 
 	// Add core Kubernetes APIs
@@ -75,6 +74,17 @@ func createClientWithCache(cfg *rest.Config) (*Client, error) {
 	// Add KubeVirt APIs
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add kubevirt APIs to scheme: %w", err)
+	}
+
+	return scheme, nil
+}
+
+// createClientWithCache creates a client with caching enabled
+func createClientWithCache(cfg *rest.Config) (*Client, error) {
+	// Create scheme with all required APIs
+	scheme, err := createScheme()
+	if err != nil {
+		return nil, err
 	}
 
 	// Create cache with optimized settings

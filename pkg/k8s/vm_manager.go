@@ -51,8 +51,8 @@ func (vm *VMManager) CreateVM(ctx context.Context, dbVM *models.VM, diskSizeGB i
 		return fmt.Errorf("failed to create VM in OpenShift: %w", err)
 	}
 
-	// Update VM status in database
-	dbVM.Status = "UNRESOLVED" // Initial status
+	// Update VM status in database based on KubeVirt VM state
+	dbVM.Status = vm.translator.VMStatusFromKubeVirt(kvVM)
 	if err := vm.vmRepo.Update(dbVM); err != nil {
 		// Try to clean up the created VM
 		_ = vm.client.VMs(dbVM.Namespace).Delete(ctx, dbVM.VMName)
