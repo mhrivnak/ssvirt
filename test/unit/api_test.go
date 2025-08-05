@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -506,5 +507,258 @@ func TestAPIErrorHelpers(t *testing.T) {
 		assert.Equal(t, "Internal Error", apiErr.Error)
 		assert.Equal(t, "Something went wrong", apiErr.Message)
 		assert.Empty(t, apiErr.Details)
+	})
+}
+
+func TestAuthenticationEndpoints(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test user
+	user := &models.User{
+		Username:  "authuser",
+		Email:     "authuser@example.com",
+		FirstName: "Auth",
+		LastName:  "User",
+		IsActive:  true,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create inactive user for testing
+	inactiveUser := &models.User{
+		Username:  "inactiveuser",
+		Email:     "inactive@example.com",
+		FirstName: "Inactive",
+		LastName:  "User",
+		IsActive:  true, // Create as active first
+	}
+	require.NoError(t, inactiveUser.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(inactiveUser).Error)
+	
+	// Now explicitly set to inactive to override GORM default
+	require.NoError(t, db.DB.Model(inactiveUser).Update("is_active", false).Error)
+
+	t.Run("POST /api/sessions with valid credentials creates session", func(t *testing.T) {
+		loginData := map[string]string{
+			"username": "authuser",
+			"password": "password123",
+		}
+		jsonData, _ := json.Marshal(loginData)
+
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Contains(t, data, "token")
+		assert.Contains(t, data, "expires_at")
+		assert.Contains(t, data, "user")
+
+		userData := data["user"].(map[string]interface{})
+		assert.Equal(t, user.ID.String(), userData["id"])
+		assert.Equal(t, "authuser", userData["username"])
+		assert.Equal(t, "authuser@example.com", userData["email"])
+		assert.Equal(t, "Auth", userData["first_name"])
+		assert.Equal(t, "User", userData["last_name"])
+
+		// Verify token is valid
+		token := data["token"].(string)
+		_, err = jwtManager.Verify(token)
+		assert.NoError(t, err)
+	})
+
+	t.Run("POST /api/sessions with invalid credentials returns 401", func(t *testing.T) {
+		loginData := map[string]string{
+			"username": "authuser",
+			"password": "wrongpassword",
+		}
+		jsonData, _ := json.Marshal(loginData)
+
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Unauthorized", response["error"])
+		assert.Equal(t, "Invalid username or password", response["message"])
+	})
+
+	t.Run("POST /api/sessions with non-existent user returns 401", func(t *testing.T) {
+		loginData := map[string]string{
+			"username": "nonexistent",
+			"password": "password123",
+		}
+		jsonData, _ := json.Marshal(loginData)
+
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Unauthorized", response["error"])
+		assert.Equal(t, "Invalid username or password", response["message"])
+	})
+
+	t.Run("POST /api/sessions with inactive user returns 403", func(t *testing.T) {
+		loginData := map[string]string{
+			"username": "inactiveuser",
+			"password": "password123",
+		}
+		jsonData, _ := json.Marshal(loginData)
+
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Forbidden", response["error"])
+		assert.Equal(t, "User account is inactive", response["message"])
+	})
+
+	t.Run("POST /api/sessions with invalid JSON returns 400", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader("{invalid json}"))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, "Bad Request", response["error"])
+		assert.Equal(t, "Invalid request body", response["message"])
+	})
+
+	t.Run("POST /api/sessions with missing fields returns 400", func(t *testing.T) {
+		loginData := map[string]string{
+			"username": "authuser",
+			// password missing
+		}
+		jsonData, _ := json.Marshal(loginData)
+
+		req, _ := http.NewRequest("POST", "/api/sessions", strings.NewReader(string(jsonData)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// Create a valid token for protected endpoint tests
+	token, err := jwtManager.Generate(user.ID, user.Username)
+	require.NoError(t, err)
+
+	t.Run("DELETE /api/sessions with valid token logs out", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/api/sessions", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, "Session terminated successfully", data["message"])
+		assert.Equal(t, user.ID.String(), data["user_id"])
+		assert.Equal(t, "authuser", data["username"])
+		assert.Equal(t, true, data["logged_out"])
+	})
+
+	t.Run("DELETE /api/sessions without token returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/api/sessions", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("DELETE /api/sessions with invalid token returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/api/sessions", nil)
+		req.Header.Set("Authorization", "Bearer invalid-token")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("GET /api/session with valid token returns session info", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/session", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		require.NoError(t, err)
+
+		assert.Equal(t, true, response["success"])
+		data, ok := response["data"].(map[string]interface{})
+		require.True(t, ok, "data field should be a map[string]interface{}")
+
+		assert.Equal(t, true, data["authenticated"])
+		assert.Contains(t, data, "expires_at")
+
+		userData := data["user"].(map[string]interface{})
+		assert.Equal(t, user.ID.String(), userData["id"])
+		assert.Equal(t, "authuser", userData["username"])
+		assert.Equal(t, "authuser@example.com", userData["email"])
+		assert.Equal(t, "Auth", userData["first_name"])
+		assert.Equal(t, "User", userData["last_name"])
+	})
+
+	t.Run("GET /api/session without token returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/session", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("GET /api/session with invalid token returns 401", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/api/session", nil)
+		req.Header.Set("Authorization", "Bearer invalid-token")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }
