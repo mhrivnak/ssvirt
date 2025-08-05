@@ -64,3 +64,12 @@ func (r *VDCRepository) GetWithVApps(id uuid.UUID) (*models.VDC, error) {
 	}
 	return &vdc, nil
 }
+
+func (r *VDCRepository) GetWithOrganization(id uuid.UUID) (*models.VDC, error) {
+	var vdc models.VDC
+	err := r.db.Preload("Organization").Where("id = ?", id).First(&vdc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vdc, nil
+}

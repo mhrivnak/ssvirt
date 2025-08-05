@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/auth"
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
 // HealthResponse represents the health check response
@@ -703,4 +704,208 @@ func (s *Server) catalogItemsQueryHandler(c *gin.Context) {
 	}
 
 	SendSuccess(c, http.StatusOK, response)
+}
+
+// InstantiateVAppTemplateRequest represents a vApp template instantiation request
+type InstantiateVAppTemplateRequest struct {
+	Name        string    `json:"name" binding:"required"`
+	Description string    `json:"description"`
+	Source      string    `json:"source" binding:"required"` // Template ID or href
+	Deploy      bool      `json:"deploy"`                    // Whether to deploy after creation
+	PowerOn     bool      `json:"power_on"`                  // Whether to power on after deployment
+}
+
+// InstantiateVAppTemplateResponse represents a vApp template instantiation response
+type InstantiateVAppTemplateResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+	VDCID       string `json:"vdc_id"`
+	TemplateID  string `json:"template_id"`
+	CreatedAt   string `json:"created_at"`
+	Task        struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Type   string `json:"type"`
+	} `json:"task"`
+}
+
+// instantiateVAppTemplateHandler handles POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
+func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
+	// Get user claims from JWT middleware
+	claims, exists := auth.GetClaims(c)
+	if !exists {
+		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
+		return
+	}
+
+	// Parse VDC ID
+	vdcIDStr := c.Param("vdc-id")
+	vdcID, err := uuid.Parse(vdcIDStr)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VDC ID format"))
+		return
+	}
+
+	// Parse request body
+	var req InstantiateVAppTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", err.Error()))
+		return
+	}
+
+	// Verify VDC exists and user has access
+	vdc, err := s.vdcRepo.GetWithOrganization(vdcID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VDC not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDC"))
+		}
+		return
+	}
+
+	// Check if user has access to this VDC's organization
+	user, err := s.userRepo.GetWithRoles(claims.UserID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
+		return
+	}
+
+	hasAccess := false
+	for _, role := range user.UserRoles {
+		if role.OrganizationID == vdc.OrganizationID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this VDC"))
+		return
+	}
+
+	// Parse template ID from source (could be ID or href)
+	templateID, err := uuid.Parse(req.Source)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid template ID format"))
+		return
+	}
+
+	// Verify template exists
+	template, err := s.templateRepo.GetByID(templateID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Template not found"))
+		} else {
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve template"))
+		}
+		return
+	}
+
+	// Check if user has access to template's catalog
+	catalog, err := s.catalogRepo.GetByID(template.CatalogID)
+	if err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve template catalog"))
+		return
+	}
+
+	// Check catalog access (shared or user's organization)
+	catalogAccess := catalog.IsShared
+	if !catalogAccess {
+		for _, role := range user.UserRoles {
+			if role.OrganizationID == catalog.OrganizationID {
+				catalogAccess = true
+				break
+			}
+		}
+	}
+
+	if !catalogAccess {
+		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this template"))
+		return
+	}
+
+	// Create vApp from template
+	vapp := &models.VApp{
+		Name:        req.Name,
+		VDCID:       vdcID,
+		TemplateID:  &templateID,
+		Status:      "UNRESOLVED", // Initial status
+		Description: req.Description,
+	}
+
+	// Set status based on request parameters
+	if req.Deploy {
+		if req.PowerOn {
+			vapp.Status = "POWERED_ON"
+		} else {
+			vapp.Status = "POWERED_OFF"
+		}
+	}
+
+	// Use transaction for atomic creation
+	tx := s.db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	// Create vApp in database
+	if err := tx.Create(vapp).Error; err != nil {
+		tx.Rollback()
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create vApp"))
+		return
+	}
+
+	// Create VMs based on template specifications
+	if template.CPUCount != nil && template.MemoryMB != nil {
+		vm := &models.VM{
+			Name:      req.Name + "-vm-1", // Default VM name
+			VAppID:    vapp.ID,
+			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
+			Namespace: vdc.Organization.Namespace, // Use organization's namespace
+			Status:    vapp.Status,
+			CPUCount:  template.CPUCount,
+			MemoryMB:  template.MemoryMB,
+		}
+
+		if err := tx.Create(vm).Error; err != nil {
+			tx.Rollback()
+			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create VM"))
+			return
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to commit transaction"))
+		return
+	}
+
+	// Generate mock task ID for VMware Cloud Director compatibility
+	taskID := uuid.New().String()
+
+	response := InstantiateVAppTemplateResponse{
+		ID:          vapp.ID.String(),
+		Name:        vapp.Name,
+		Description: vapp.Description,
+		Status:      vapp.Status,
+		VDCID:       vapp.VDCID.String(),
+		TemplateID:  vapp.TemplateID.String(),
+		CreatedAt:   vapp.CreatedAt.Format(time.RFC3339),
+		Task: struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+			Type   string `json:"type"`
+		}{
+			ID:     taskID,
+			Status: "running",
+			Type:   "vappInstantiateFromTemplate",
+		},
+	}
+
+	SendSuccess(c, http.StatusCreated, response)
 }
