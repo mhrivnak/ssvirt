@@ -845,8 +845,18 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 		}
 	}
 
+	// Use transaction for atomic creation
+	tx := s.db.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
+
 	// Create vApp in database
-	if err := s.vappRepo.Create(vapp); err != nil {
+	if err := tx.Create(vapp).Error; err != nil {
+		tx.Rollback()
 		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create vApp"))
 		return
 	}
@@ -863,12 +873,16 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 			MemoryMB:  template.MemoryMB,
 		}
 
-		if err := s.vmRepo.Create(vm); err != nil {
-			// If VM creation fails, we should clean up the vApp
-			s.vappRepo.Delete(vapp.ID)
+		if err := tx.Create(vm).Error; err != nil {
+			tx.Rollback()
 			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create VM"))
 			return
 		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to commit transaction"))
+		return
 	}
 
 	// Generate mock task ID for VMware Cloud Director compatibility
