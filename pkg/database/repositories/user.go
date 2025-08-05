@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"errors"
+	
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -16,6 +18,9 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 }
 
 func (r *UserRepository) Create(user *models.User) error {
+	if user == nil {
+		return errors.New("user cannot be nil")
+	}
 	return r.db.Create(user).Error
 }
 

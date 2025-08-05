@@ -157,6 +157,12 @@ func TestUserRepository(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, users, 1)
 	})
+
+	t.Run("Create nil user returns error", func(t *testing.T) {
+		err := userRepo.Create(nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "user cannot be nil")
+	})
 }
 
 func TestAuthService(t *testing.T) {
