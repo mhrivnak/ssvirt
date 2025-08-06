@@ -11,12 +11,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	userdefinednetworkv1 "github.com/ovn-org/ovn-kubernetes/go-controller/pkg/crd/userdefinednetwork/v1"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
@@ -600,26 +601,22 @@ func (r *VDCReconciler) handleOrphanedNamespace(ctx context.Context, log logr.Lo
 
 // createUserDefinedNetwork creates a UserDefinedNetwork for the VDC namespace
 func (r *VDCReconciler) createUserDefinedNetwork(ctx context.Context, log logr.Logger, vdc *models.VDC, namespace *corev1.Namespace) error {
-	// Create an unstructured UserDefinedNetwork object
-	udn := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "k8s.ovn.org/v1",
-			"kind":       "UserDefinedNetwork",
-			"metadata": map[string]interface{}{
-				"name":      "vdc-network",
-				"namespace": namespace.Name,
-				"labels": map[string]interface{}{
-					"ssvirt.io/vdc-id":             vdc.ID.String(),
-					"app.kubernetes.io/managed-by": "ssvirt",
-				},
+	// Create a typed UserDefinedNetwork object
+	udn := &userdefinednetworkv1.UserDefinedNetwork{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "vdc-network",
+			Namespace: namespace.Name,
+			Labels: map[string]string{
+				"ssvirt.io/vdc-id":             vdc.ID.String(),
+				"app.kubernetes.io/managed-by": "ssvirt",
 			},
-			"spec": map[string]interface{}{
-				"topology": "Layer2",
-				"layer2": map[string]interface{}{
-					"role": "Primary",
-					"subnets": []interface{}{
-						"192.168.100.0/24",
-					},
+		},
+		Spec: userdefinednetworkv1.UserDefinedNetworkSpec{
+			Topology: userdefinednetworkv1.NetworkTopologyLayer2,
+			Layer2: &userdefinednetworkv1.Layer2Config{
+				Role: userdefinednetworkv1.NetworkRolePrimary,
+				Subnets: userdefinednetworkv1.DualStackCIDRs{
+					"192.168.100.0/24",
 				},
 			},
 		},
@@ -632,10 +629,7 @@ func (r *VDCReconciler) createUserDefinedNetwork(ctx context.Context, log logr.L
 // reconcileUserDefinedNetwork ensures the UserDefinedNetwork exists and is properly configured
 func (r *VDCReconciler) reconcileUserDefinedNetwork(ctx context.Context, log logr.Logger, vdc *models.VDC, namespace *corev1.Namespace) error {
 	// Check if UserDefinedNetwork exists
-	udn := &unstructured.Unstructured{}
-	udn.SetAPIVersion("k8s.ovn.org/v1")
-	udn.SetKind("UserDefinedNetwork")
-
+	udn := &userdefinednetworkv1.UserDefinedNetwork{}
 	err := r.Get(ctx, client.ObjectKey{Name: "vdc-network", Namespace: namespace.Name}, udn)
 	if err != nil {
 		if errors.IsNotFound(err) {
