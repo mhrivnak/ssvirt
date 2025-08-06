@@ -156,7 +156,6 @@ type OrganizationResponse struct {
 	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
-	Namespace   string `json:"namespace"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
@@ -192,7 +191,6 @@ func (s *Server) organizationsHandler(c *gin.Context) {
 			DisplayName: org.DisplayName,
 			Description: org.Description,
 			Enabled:     org.Enabled,
-			Namespace:   org.Namespace,
 			CreatedAt:   org.CreatedAt.Format(time.RFC3339),
 			UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
 		}
@@ -240,7 +238,6 @@ func (s *Server) organizationHandler(c *gin.Context) {
 		DisplayName: org.DisplayName,
 		Description: org.Description,
 		Enabled:     org.Enabled,
-		Namespace:   org.Namespace,
 		CreatedAt:   org.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
 	}
@@ -253,6 +250,7 @@ type VDCResponse struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
 	OrganizationID  string `json:"organization_id"`
+	NamespaceName   string `json:"namespace_name"`
 	AllocationModel string `json:"allocation_model"`
 	CPULimit        *int   `json:"cpu_limit"`
 	MemoryLimitMB   *int   `json:"memory_limit_mb"`
@@ -294,6 +292,7 @@ func (s *Server) vdcHandler(c *gin.Context) {
 		ID:              vdc.ID.String(),
 		Name:            vdc.Name,
 		OrganizationID:  vdc.OrganizationID.String(),
+		NamespaceName:   vdc.NamespaceName,
 		AllocationModel: string(vdc.AllocationModel),
 		CPULimit:        vdc.CPULimit,
 		MemoryLimitMB:   vdc.MemoryLimitMB,
@@ -364,6 +363,7 @@ func (s *Server) vdcQueryHandler(c *gin.Context) {
 			ID:              vdc.ID.String(),
 			Name:            vdc.Name,
 			OrganizationID:  vdc.OrganizationID.String(),
+			NamespaceName:   vdc.NamespaceName,
 			AllocationModel: string(vdc.AllocationModel),
 			CPULimit:        vdc.CPULimit,
 			MemoryLimitMB:   vdc.MemoryLimitMB,
@@ -1033,8 +1033,8 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 		vm := &models.VM{
 			Name:      req.Name + "-vm-1", // Default VM name
 			VAppID:    vapp.ID,
-			VMName:    req.Name + "-vm-1",         // OpenShift VM resource name
-			Namespace: vdc.Organization.Namespace, // Use organization's namespace
+			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
+			Namespace: vdc.NamespaceName,  // Use VDC's namespace
 			Status:    vapp.Status,
 			CPUCount:  template.CPUCount,
 			MemoryMB:  template.MemoryMB,

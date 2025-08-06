@@ -67,7 +67,7 @@ curl -k https://$SSVIRT_URL/api/versions
 
 ## Organization and VDC Setup
 
-Organizations in SSVIRT map to OpenShift namespaces with associated metadata stored in PostgreSQL. Each organization can contain multiple Virtual Data Centers (VDCs).
+Organizations in SSVIRT are logical entities stored only in PostgreSQL. Virtual Data Centers (VDCs) within organizations map to Kubernetes namespaces with the naming pattern `vdc-{org-name}-{vdc-name}`.
 
 ### 1. Create an Organization
 
@@ -117,19 +117,22 @@ curl -k -X POST https://$SSVIRT_URL/api/orgs/$ORG_ID/vdcs \
   }'
 ```
 
-### 3. Verify Namespace Creation
+### 3. Verify VDC Namespace Creation
 
-After creating an organization, verify the corresponding OpenShift namespace was created:
+After creating a VDC, verify the corresponding OpenShift namespace was created:
 
 ```bash
-# Check namespace creation
-oc get namespace example-org
+# Check VDC namespace creation (using example names)
+oc get namespace vdc-example-org-example-vdc
 
 # Verify resource quotas are applied
-oc get resourcequota -n example-org
+oc get resourcequota -n vdc-example-org-example-vdc
 
-# Check network policies
-oc get networkpolicy -n example-org
+# Check network policies for VDC isolation
+oc get networkpolicy -n vdc-example-org-example-vdc
+
+# Verify namespace labels for organization tracking
+oc get namespace vdc-example-org-example-vdc -o yaml | grep -A 10 labels
 ```
 
 ## Network Configuration
@@ -141,13 +144,13 @@ SSVIRT uses OpenShift User Defined Networks (UDNs) for VM networking isolation.
 Create network configurations that VMs can use:
 
 ```bash
-# Create a user defined network for the organization
+# Create a user defined network for the VDC
 cat <<EOF | oc apply -f -
 apiVersion: k8s.ovn.org/v1
 kind: UserDefinedNetwork
 metadata:
-  name: example-org-network
-  namespace: example-org
+  name: vdc-network
+  namespace: vdc-example-org-example-vdc
 spec:
   topology: Layer2
   layer2:
@@ -160,11 +163,11 @@ EOF
 ### 2. Verify Network Configuration
 
 ```bash
-# Check UDN status
-oc get userdefinednetwork -n example-org
+# Check UDN status in VDC namespace
+oc get userdefinednetwork -n vdc-example-org-example-vdc
 
 # Verify network is ready
-oc describe userdefinednetwork example-org-network -n example-org
+oc describe userdefinednetwork vdc-network -n vdc-example-org-example-vdc
 ```
 
 ## VM Templates and Instance Types
@@ -357,11 +360,11 @@ rules:
   verbs: ["get", "list", "create", "update", "patch", "delete"]
 EOF
 
-# Bind role to organization service account
+# Bind role to VDC service account
 oc create rolebinding vm-user-binding \
   --role=vm-user \
-  --serviceaccount=example-org:default \
-  -n example-org
+  --serviceaccount=vdc-example-org-example-vdc:default \
+  -n vdc-example-org-example-vdc
 ```
 
 ## Storage Configuration
@@ -387,7 +390,7 @@ Set storage quotas for organizations:
 
 ```bash
 # Update resource quota to include storage limits
-oc patch resourcequota -n example-org compute-quota --type='merge' -p='{
+oc patch resourcequota -n vdc-example-org-example-vdc vdc-quota --type='merge' -p='{
   "spec": {
     "hard": {
       "requests.storage": "500Gi",
@@ -418,8 +421,8 @@ oc top pods -n ssvirt-system
 ### 2. Common Troubleshooting Steps
 
 ```bash
-# Check for failed VM provisioning
-oc get events -n example-org --field-selector type=Warning
+# Check for failed VM provisioning in VDC namespaces
+oc get events -n vdc-example-org-example-vdc --field-selector type=Warning
 
 # Verify OpenShift Virtualization status
 oc get hyperconverged -n openshift-cnv
@@ -445,8 +448,8 @@ oc logs -n ssvirt-system deployment/ssvirt-api-server | grep ERROR
 
 ### 1. Network Security
 
-- Ensure network policies are properly configured to isolate organization namespaces
-- Verify that inter-organization communication is blocked
+- Ensure network policies are properly configured to isolate VDC namespaces
+- Verify that inter-VDC communication is blocked unless explicitly allowed
 - Configure egress policies for VM network access
 
 ### 2. Secrets Management
@@ -481,7 +484,8 @@ After completing the setup, verify the following:
 - [ ] Database connectivity is working
 - [ ] API endpoints respond correctly
 - [ ] At least one organization and VDC are created
-- [ ] Network policies are applied to organization namespaces
+- [ ] VDC namespaces are created with proper naming convention
+- [ ] Network policies are applied to VDC namespaces for isolation
 - [ ] VM instance types are available
 - [ ] VM templates are registered and accessible
 - [ ] Test user can authenticate and access their organization

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/controllers/organization"
+	"github.com/mhrivnak/ssvirt/pkg/controllers/vdc"
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
@@ -66,8 +67,9 @@ func main() {
 
 	// Setup repositories
 	orgRepo := repositories.NewOrganizationRepository(db.DB)
+	vdcRepo := repositories.NewVDCRepository(db.DB)
 
-	// Setup organization controller
+	// Setup organization controller (database-only now)
 	orgController := organization.NewOrganizationReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
@@ -76,6 +78,19 @@ func main() {
 	)
 	if err = orgController.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Organization")
+		os.Exit(1)
+	}
+
+	// Setup VDC controller (manages Kubernetes namespaces)
+	vdcController := vdc.NewVDCReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		ctrl.Log.WithName("controllers").WithName("VDC"),
+		vdcRepo,
+		orgRepo,
+	)
+	if err = vdcController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VDC")
 		os.Exit(1)
 	}
 

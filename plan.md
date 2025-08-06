@@ -18,8 +18,8 @@ https://www.vmware.com/docs/vmw-cloud-director-briefing-paper
 ## Core Architecture Mapping
 
 **VMware VCD → OpenShift Implementation:**
-- **Organizations** → OpenShift Namespaces with RBAC + PostgreSQL metadata
-- **Virtual Data Centers (VDCs)** → Resource Quotas + Network Policies + PostgreSQL configuration
+- **Organizations** → PostgreSQL metadata only (logical entities)
+- **Virtual Data Centers (VDCs)** → Kubernetes Namespaces (`vdc-{org-name}-{vdc-name}`) + Resource Quotas + Network Policies + PostgreSQL metadata
 - **VMs** → OpenShift Virtualization VirtualMachines
 - **vApp Templates** → PostgreSQL metadata + OpenShift Virtualization VirtualMachineClusterInstanceTypes
 - **Catalogs** → PostgreSQL catalog and template metadata store
@@ -127,22 +127,22 @@ https://www.vmware.com/docs/vmw-cloud-director-briefing-paper
 ### Database Requirements (PostgreSQL):
 **Core Schema Design:**
 ```sql
--- Organizations
+-- Organizations (database-only entities)
 CREATE TABLE organizations (
     id UUID PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
     display_name VARCHAR(255),
     description TEXT,
     enabled BOOLEAN DEFAULT true,
-    namespace VARCHAR(255) UNIQUE, -- OpenShift namespace
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Virtual Data Centers
+-- Virtual Data Centers (map to Kubernetes namespaces)
 CREATE TABLE vdcs (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     organization_id UUID REFERENCES organizations(id),
+    namespace_name VARCHAR(253) UNIQUE, -- Kubernetes namespace: vdc-{org-name}-{vdc-name}
     allocation_model VARCHAR(50), -- PayAsYouGo, AllocationPool, ReservationPool
     cpu_limit INTEGER,
     memory_limit_mb INTEGER,
