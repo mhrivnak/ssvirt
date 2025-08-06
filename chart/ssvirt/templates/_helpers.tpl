@@ -207,8 +207,8 @@ JWT Secret generation with persistence across upgrades
 {{- else }}
 {{- $existingSecret := lookup "v1" "Secret" .Release.Namespace (printf "%s-config" (include "ssvirt.fullname" .)) }}
 {{- if and $existingSecret $existingSecret.data }}
-{{- if $existingSecret.data "jwt-secret" }}
-{{- $existingSecret.data "jwt-secret" | b64dec }}
+{{- if hasKey $existingSecret.data "jwt-secret" }}
+{{- index $existingSecret.data "jwt-secret" | b64dec }}
 {{- else }}
 {{- randAlphaNum 32 }}
 {{- end }}
