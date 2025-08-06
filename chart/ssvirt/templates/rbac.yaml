@@ -1,9 +1,9 @@
 {{- if .Values.rbac.create }}
-# Organization Controller RBAC
+# VDC Controller RBAC (manages Kubernetes namespaces)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
+  name: {{ include "ssvirt.fullname" . }}-vdc-controller
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
@@ -15,7 +15,7 @@ metadata:
     {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 rules:
-# Namespace management permissions
+# Namespace management permissions for VDCs
 - apiGroups: [""]
   resources: ["namespaces"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -23,27 +23,27 @@ rules:
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create", "patch"]
-# ServiceAccounts in managed namespaces
+# ServiceAccounts in VDC namespaces
 - apiGroups: [""]
   resources: ["serviceaccounts"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
-# Secrets in managed namespaces
+# Secrets in VDC namespaces
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
-# ConfigMaps in managed namespaces
+# ConfigMaps in VDC namespaces
 - apiGroups: [""]
   resources: ["configmaps"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
-# ResourceQuotas for VDC management
+# ResourceQuotas for VDC resource management
 - apiGroups: [""]
   resources: ["resourcequotas"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# LimitRanges for VDC management
+# LimitRanges for VDC resource management
 - apiGroups: [""]
   resources: ["limitranges"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-# NetworkPolicies for tenant isolation
+# NetworkPolicies for VDC isolation
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -67,7 +67,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
+  name: {{ include "ssvirt.fullname" . }}-vdc-controller
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
@@ -81,7 +81,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
+  name: {{ include "ssvirt.fullname" . }}-vdc-controller
 subjects:
 - kind: ServiceAccount
   name: {{ include "ssvirt.controllerServiceAccountName" . }}

@@ -34,6 +34,19 @@ func (r *OrganizationRepository) GetByID(id uuid.UUID) (*models.Organization, er
 	return &org, nil
 }
 
+// GetByIDWithContext retrieves organization by ID with context support
+func (r *OrganizationRepository) GetByIDWithContext(ctx context.Context, id uuid.UUID) (*models.Organization, error) {
+	var org models.Organization
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&org).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // Return nil org for not found
+		}
+		return nil, err
+	}
+	return &org, nil
+}
+
 func (r *OrganizationRepository) GetByName(name string) (*models.Organization, error) {
 	var org models.Organization
 	err := r.db.Where("name = ?", name).First(&org).Error
@@ -64,18 +77,6 @@ func (r *OrganizationRepository) GetWithVDCs(id uuid.UUID) (*models.Organization
 	var org models.Organization
 	err := r.db.Preload("VDCs").Where("id = ?", id).First(&org).Error
 	if err != nil {
-		return nil, err
-	}
-	return &org, nil
-}
-
-func (r *OrganizationRepository) GetByNamespace(ctx context.Context, namespace string) (*models.Organization, error) {
-	var org models.Organization
-	err := r.db.WithContext(ctx).Where("namespace = ?", namespace).First(&org).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil // Return nil org for not found
-		}
 		return nil, err
 	}
 	return &org, nil

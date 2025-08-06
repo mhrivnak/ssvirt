@@ -28,8 +28,8 @@ This guide explains how end users can interact with the SSVIRT system to provisi
 
 SSVIRT provides a VMware Cloud Director-compatible API for managing virtual machines on OpenShift. Key concepts:
 
-- **Organization**: Your isolated tenant space
-- **Virtual Data Center (VDC)**: Resource pool within your organization
+- **Organization**: Your logical tenant space (database entity)
+- **Virtual Data Center (VDC)**: Physical resource pool with dedicated Kubernetes namespace (`vdc-{org-name}-{vdc-name}`)
 - **vApp**: Group of related VMs (logical container)
 - **VM**: Individual virtual machine instance
 - **Template**: Pre-configured VM image with OS and software already installed, ready for deployment

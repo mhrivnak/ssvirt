@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 
 	"github.com/google/uuid"
@@ -69,6 +70,46 @@ func (r *VDCRepository) GetWithOrganization(id uuid.UUID) (*models.VDC, error) {
 	var vdc models.VDC
 	err := r.db.Preload("Organization").Where("id = ?", id).First(&vdc).Error
 	if err != nil {
+		return nil, err
+	}
+	return &vdc, nil
+}
+
+// GetAll retrieves all VDCs from the database
+func (r *VDCRepository) GetAll(ctx context.Context) ([]models.VDC, error) {
+	var vdcs []models.VDC
+	err := r.db.WithContext(ctx).Find(&vdcs).Error
+	return vdcs, err
+}
+
+// GetByIDString retrieves a VDC by its ID string.
+// Returns (nil, nil) when the record is not found.
+func (r *VDCRepository) GetByIDString(ctx context.Context, idStr string) (*models.VDC, error) {
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return nil, err
+	}
+
+	var vdc models.VDC
+	err = r.db.WithContext(ctx).Where("id = ?", id).First(&vdc).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &vdc, nil
+}
+
+// GetByNamespace retrieves a VDC by its namespace name.
+// Returns (nil, nil) when the record is not found.
+func (r *VDCRepository) GetByNamespace(ctx context.Context, namespaceName string) (*models.VDC, error) {
+	var vdc models.VDC
+	err := r.db.WithContext(ctx).Where("namespace = ?", namespaceName).First(&vdc).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &vdc, nil
