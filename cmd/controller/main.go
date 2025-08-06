@@ -1,17 +1,97 @@
 package main
 
 import (
-	"log"
+	"os"
+
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
+	"github.com/mhrivnak/ssvirt/pkg/controllers/organization"
+	"github.com/mhrivnak/ssvirt/pkg/database"
+	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+)
+
+var (
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 func main() {
+	var enableLeaderElection bool
+
+	// Setup logging
+	opts := zap.Options{
+		Development: true,
+	}
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		setupLog.Error(err, "unable to load configuration")
+		os.Exit(1)
 	}
 
-	log.Printf("Starting controller manager in namespace %s", cfg.Kubernetes.Namespace)
-	// TODO: Initialize controller manager
+	// Initialize database connection
+	db, err := database.NewConnection(cfg)
+	if err != nil {
+		setupLog.Error(err, "unable to connect to database")
+		os.Exit(1)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			setupLog.Error(err, "failed to close database connection")
+		}
+	}()
+
+	// Create runtime scheme
+	runtimeScheme := runtime.NewScheme()
+	if err := scheme.AddToScheme(runtimeScheme); err != nil {
+		setupLog.Error(err, "unable to add core resources to scheme")
+		os.Exit(1)
+	}
+
+	// Setup manager
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Scheme:           runtimeScheme,
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: "organization-controller-leader-election",
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+
+	// Setup repositories
+	orgRepo := repositories.NewOrganizationRepository(db.DB)
+
+	// Setup organization controller
+	orgController := organization.NewOrganizationReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		ctrl.Log.WithName("controllers").WithName("Organization"),
+		orgRepo,
+	)
+	if err = orgController.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Organization")
+		os.Exit(1)
+	}
+
+	// Setup health checks
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		setupLog.Error(err, "problem running manager")
+		os.Exit(1)
+	}
 }
