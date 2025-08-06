@@ -29,10 +29,13 @@ type VDCReconciler struct {
 	VDCRepo  *repositories.VDCRepository
 	OrgRepo  *repositories.OrganizationRepository
 	interval time.Duration
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // NewVDCReconciler creates a new VDCReconciler
 func NewVDCReconciler(client client.Client, scheme *runtime.Scheme, log logr.Logger, vdcRepo *repositories.VDCRepository, orgRepo *repositories.OrganizationRepository) *VDCReconciler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &VDCReconciler{
 		Client:   client,
 		Scheme:   scheme,
@@ -40,6 +43,8 @@ func NewVDCReconciler(client client.Client, scheme *runtime.Scheme, log logr.Log
 		VDCRepo:  vdcRepo,
 		OrgRepo:  orgRepo,
 		interval: 30 * time.Second, // Poll database every 30 seconds
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
@@ -56,35 +61,48 @@ func (r *VDCReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	// Start periodic reconciliation to sync with database
-	go r.startPeriodicReconciliation()
+	go r.startPeriodicReconciliation(r.ctx)
 
 	return nil
 }
 
-// startPeriodicReconciliation runs periodic database sync
-func (r *VDCReconciler) startPeriodicReconciliation() {
+// Stop gracefully stops the VDC reconciler
+func (r *VDCReconciler) Stop() {
+	if r.cancel != nil {
+		r.cancel()
+	}
+}
+
+// startPeriodicReconciliation runs periodic database sync and stops gracefully when context is cancelled
+func (r *VDCReconciler) startPeriodicReconciliation(ctx context.Context) {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		r.Log.V(1).Info("Starting periodic VDC reconciliation")
+	for {
+		select {
+		case <-ctx.Done():
+			r.Log.Info("Stopping periodic VDC reconciliation due to context cancellation")
+			return
+		case <-ticker.C:
+			r.Log.V(1).Info("Starting periodic VDC reconciliation")
 
-		// Get all VDCs from database
-		vdcs, err := r.VDCRepo.GetAll(context.Background())
-		if err != nil {
-			r.Log.Error(err, "Failed to get VDCs from database")
-			continue
-		}
-
-		// Reconcile each VDC
-		for _, vdc := range vdcs {
-			req := reconcile.Request{
-				NamespacedName: client.ObjectKey{
-					Name: fmt.Sprintf("vdc-%s", vdc.ID.String()),
-				},
+			// Get all VDCs from database
+			vdcs, err := r.VDCRepo.GetAll(ctx)
+			if err != nil {
+				r.Log.Error(err, "Failed to get VDCs from database")
+				continue
 			}
-			if _, err := r.Reconcile(context.Background(), req); err != nil {
-				r.Log.Error(err, "Failed to reconcile VDC", "vdc_id", vdc.ID)
+
+			// Reconcile each VDC
+			for _, vdc := range vdcs {
+				req := reconcile.Request{
+					NamespacedName: client.ObjectKey{
+						Name: fmt.Sprintf("vdc-%s", vdc.ID.String()),
+					},
+				}
+				if _, err := r.Reconcile(ctx, req); err != nil {
+					r.Log.Error(err, "Failed to reconcile VDC", "vdc_id", vdc.ID)
+				}
 			}
 		}
 	}
@@ -274,12 +292,12 @@ func (r *VDCReconciler) createNamespace(ctx context.Context, log logr.Logger, vd
 		ObjectMeta: metav1.ObjectMeta{
 			Name: vdc.NamespaceName,
 			Labels: map[string]string{
-				"ssvirt.io/organization":              org.Name,
-				"ssvirt.io/organization-id":           org.ID.String(),
-				"ssvirt.io/vdc":                       vdc.Name,
-				"ssvirt.io/vdc-id":                    vdc.ID.String(),
+				"ssvirt.io/organization":                   org.Name,
+				"ssvirt.io/organization-id":                org.ID.String(),
+				"ssvirt.io/vdc":                            vdc.Name,
+				"ssvirt.io/vdc-id":                         vdc.ID.String(),
 				"k8s.ovn.org/primary-user-defined-network": "",
-				"app.kubernetes.io/managed-by":        "ssvirt",
+				"app.kubernetes.io/managed-by":             "ssvirt",
 			},
 			Annotations: map[string]string{
 				"ssvirt.io/organization-display-name": org.DisplayName,
@@ -322,12 +340,12 @@ func (r *VDCReconciler) updateNamespace(ctx context.Context, log logr.Logger, vd
 	}
 
 	expectedLabels := map[string]string{
-		"ssvirt.io/organization":              org.Name,
-		"ssvirt.io/organization-id":           org.ID.String(),
-		"ssvirt.io/vdc":                       vdc.Name,
-		"ssvirt.io/vdc-id":                    vdc.ID.String(),
+		"ssvirt.io/organization":                   org.Name,
+		"ssvirt.io/organization-id":                org.ID.String(),
+		"ssvirt.io/vdc":                            vdc.Name,
+		"ssvirt.io/vdc-id":                         vdc.ID.String(),
 		"k8s.ovn.org/primary-user-defined-network": "",
-		"app.kubernetes.io/managed-by":        "ssvirt",
+		"app.kubernetes.io/managed-by":             "ssvirt",
 	}
 
 	for key, value := range expectedLabels {
@@ -386,7 +404,7 @@ func (r *VDCReconciler) createResourceQuota(ctx context.Context, log logr.Logger
 			Name:      "vdc-quota",
 			Namespace: namespace.Name,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":         vdc.ID.String(),
+				"ssvirt.io/vdc-id":             vdc.ID.String(),
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},
@@ -482,7 +500,7 @@ func (r *VDCReconciler) createNetworkPolicies(ctx context.Context, log logr.Logg
 			Name:      "vdc-isolation",
 			Namespace: namespace.Name,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":         vdc.ID.String(),
+				"ssvirt.io/vdc-id":             vdc.ID.String(),
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},

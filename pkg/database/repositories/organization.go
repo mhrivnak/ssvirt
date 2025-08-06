@@ -82,7 +82,6 @@ func (r *OrganizationRepository) GetWithVDCs(id uuid.UUID) (*models.Organization
 	return &org, nil
 }
 
-
 func (r *OrganizationRepository) GetByIDString(ctx context.Context, idStr string) (*models.Organization, error) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {

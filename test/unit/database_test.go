@@ -79,7 +79,7 @@ func TestVDCRepository(t *testing.T) {
 
 	// Create organization first
 	org := &models.Organization{
-		Name:      "test-org",
+		Name: "test-org",
 	}
 	err := orgRepo.Create(org)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestCatalogRepository(t *testing.T) {
 
 	// Create organization first
 	org := &models.Organization{
-		Name:      "test-org",
+		Name: "test-org",
 	}
 	err := orgRepo.Create(org)
 	require.NoError(t, err)

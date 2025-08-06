@@ -32,7 +32,7 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 	if v.ID == uuid.Nil {
 		v.ID = uuid.New()
 	}
-	
+
 	// Generate namespace name if not set
 	if v.NamespaceName == "" {
 		// Load organization to get name
@@ -42,7 +42,7 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 		}
 		v.NamespaceName = generateNamespaceName(org.Name, v.Name)
 	}
-	
+
 	return nil
 }
 
@@ -51,11 +51,11 @@ func generateNamespaceName(orgName, vdcName string) string {
 	// Convert to lowercase and replace invalid characters
 	orgSafe := strings.ToLower(strings.ReplaceAll(orgName, "_", "-"))
 	vdcSafe := strings.ToLower(strings.ReplaceAll(vdcName, "_", "-"))
-	
+
 	// Remove any characters that aren't alphanumeric or hyphen
 	orgSafe = sanitizeKubernetesName(orgSafe)
 	vdcSafe = sanitizeKubernetesName(vdcSafe)
-	
+
 	return fmt.Sprintf("vdc-%s-%s", orgSafe, vdcSafe)
 }
 
