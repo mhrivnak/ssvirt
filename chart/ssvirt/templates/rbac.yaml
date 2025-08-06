@@ -7,9 +7,12 @@ metadata:
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
-  {{- with (include "ssvirt.annotations" .) }}
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 rules:
 # Namespace management permissions
@@ -68,9 +71,12 @@ metadata:
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: controller
-  {{- with (include "ssvirt.annotations" .) }}
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -90,9 +96,12 @@ metadata:
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: api-server
-  {{- with (include "ssvirt.annotations" .) }}
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 rules:
 # Read access to OpenShift Virtualization resources for API queries
@@ -119,9 +128,12 @@ metadata:
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
     app.kubernetes.io/component: api-server
-  {{- with (include "ssvirt.annotations" .) }}
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
