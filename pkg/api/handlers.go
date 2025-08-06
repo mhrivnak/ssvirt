@@ -1034,7 +1034,7 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 			Name:      req.Name + "-vm-1", // Default VM name
 			VAppID:    vapp.ID,
 			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
-			Namespace: vdc.Namespace,  // Use VDC's namespace
+			Namespace: vdc.Namespace,      // Use VDC's namespace
 			Status:    vapp.Status,
 			CPUCount:  template.CPUCount,
 			MemoryMB:  template.MemoryMB,

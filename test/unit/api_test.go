@@ -405,7 +405,7 @@ func TestVDCEndpoints(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
-		Namespace:   "vdc-test-org-test-vdc",
+		Namespace:       "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1001,7 +1001,7 @@ func TestVAppTemplateInstantiation(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
-		Namespace:   "vdc-test-org-test-vdc",
+		Namespace:       "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1200,7 +1200,7 @@ func TestVMEndpoints(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
-		Namespace:   "vdc-test-org-test-vdc",
+		Namespace:       "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1607,7 +1607,7 @@ func TestVMPowerOperations(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
-		Namespace:   "vdc-test-org-test-vdc",
+		Namespace:       "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
