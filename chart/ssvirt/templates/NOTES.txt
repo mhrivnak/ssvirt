@@ -34,8 +34,8 @@
   echo http://$SERVICE_IP:{{ .Values.apiServer.service.port }}
 
 {{- else if contains "ClusterIP" .Values.apiServer.service.type }}
-  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "ssvirt.fullname" . }}-api-server {{ .Values.apiServer.service.port }}:{{ .Values.apiServer.service.targetPort }}
-  echo "Visit http://127.0.0.1:{{ .Values.apiServer.service.port }} to use your application"
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ssvirt.fullname" . }}-api-server 8080:{{ .Values.apiServer.service.targetPort }}
+  echo "Visit http://127.0.0.1:8080 to use your application"
 {{- end }}
 
 2. API Endpoints:

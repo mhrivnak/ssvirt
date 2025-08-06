@@ -18,7 +18,7 @@ image:
 apiServer:
   enabled: true
   replicaCount: 2
-  
+
   # Resource limits
   resources:
     limits:
@@ -27,7 +27,7 @@ apiServer:
     requests:
       cpu: 250m
       memory: 256Mi
-  
+
   # Security context for OpenShift
   securityContext:
     runAsNonRoot: true
@@ -38,19 +38,19 @@ apiServer:
         - ALL
     seccompProfile:
       type: RuntimeDefault
-  
+
   # Pod security context
   podSecurityContext:
     runAsNonRoot: true
     fsGroup: 1001
-  
+
   # Service configuration
   service:
     type: ClusterIP
     port: 8080
     targetPort: 8080
     annotations: {}
-  
+
   # Health checks
   livenessProbe:
     httpGet:
@@ -60,7 +60,7 @@ apiServer:
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
-  
+
   readinessProbe:
     httpGet:
       path: /readyz
@@ -69,7 +69,10 @@ apiServer:
     periodSeconds: 5
     timeoutSeconds: 3
     failureThreshold: 1
-  
+
+  # Termination grace period
+  terminationGracePeriodSeconds: 30
+
   # Node selection
   nodeSelector: {}
   tolerations: []
@@ -79,7 +82,7 @@ apiServer:
 controller:
   enabled: true
   replicaCount: 1
-  
+
   # Resource limits
   resources:
     limits:
@@ -88,7 +91,7 @@ controller:
     requests:
       cpu: 100m
       memory: 128Mi
-  
+
   # Security context for OpenShift
   securityContext:
     runAsNonRoot: true
@@ -99,12 +102,12 @@ controller:
         - ALL
     seccompProfile:
       type: RuntimeDefault
-  
+
   # Pod security context
   podSecurityContext:
     runAsNonRoot: true
     fsGroup: 1001
-  
+
   # Health checks
   livenessProbe:
     httpGet:
@@ -114,7 +117,7 @@ controller:
     periodSeconds: 10
     timeoutSeconds: 5
     failureThreshold: 3
-  
+
   readinessProbe:
     httpGet:
       path: /readyz
@@ -123,7 +126,7 @@ controller:
     periodSeconds: 5
     timeoutSeconds: 3
     failureThreshold: 1
-  
+
   # Node selection
   nodeSelector: {}
   tolerations: []
@@ -224,13 +227,13 @@ postgresql:
     username: "ssvirt"
     password: "ssvirt-password"
     database: "ssvirt"
-  
+
   primary:
     persistence:
       enabled: true
       size: 8Gi
       storageClass: ""
-    
+
     resources:
       limits:
         cpu: 500m
@@ -238,12 +241,12 @@ postgresql:
       requests:
         cpu: 250m
         memory: 256Mi
-  
+
   # PostgreSQL configuration for OpenShift
   securityContext:
     enabled: true
     fsGroup: 1001
-  
+
   containerSecurityContext:
     enabled: true
     runAsUser: 1001

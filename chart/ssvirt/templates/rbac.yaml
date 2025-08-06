@@ -24,7 +24,7 @@ rules:
 - apiGroups: [""]
   resources: ["serviceaccounts"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
-# Secrets in managed namespaces  
+# Secrets in managed namespaces
 - apiGroups: [""]
   resources: ["secrets"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]

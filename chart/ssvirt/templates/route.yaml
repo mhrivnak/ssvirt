@@ -6,8 +6,8 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
-  {{- with .Values.route.annotations }}
   annotations:
+  {{- with .Values.route.annotations }}
     {{- toYaml . | nindent 4 }}
   {{- end }}
   {{- with (include "ssvirt.annotations" .) }}

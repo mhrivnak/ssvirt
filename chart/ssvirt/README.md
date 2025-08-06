@@ -137,6 +137,8 @@ Both API server and controller include:
 
 Enable monitoring with Prometheus:
 
+> **Note**: Requires Prometheus Operator/openshift-monitoring stack to be installed; otherwise skip `serviceMonitor.enabled=true`.
+
 ```bash
 helm upgrade my-ssvirt ./chart/ssvirt \
   --set monitoring.enabled=true \
@@ -146,6 +148,8 @@ helm upgrade my-ssvirt ./chart/ssvirt \
 ## High Availability
 
 ### API Server HA
+
+> **Note**: Enabling HPA requires Kubernetes Metrics Server or OpenShift-metrics to be installed for CPU/memory metrics.
 
 ```bash
 helm upgrade my-ssvirt ./chart/ssvirt \
@@ -189,6 +193,16 @@ helm uninstall my-ssvirt --namespace ssvirt-system
 # Clean up namespace (if desired)
 kubectl delete namespace ssvirt-system
 ```
+
+> **Warning**: `helm uninstall` removes the release objects but persistent volumes, PVCs, and Secrets created by the chart may remain. For complete cleanup:
+> 
+> ```bash
+> # Remove PostgreSQL PVCs (if using embedded PostgreSQL)
+> kubectl delete pvc -l app.kubernetes.io/instance=my-ssvirt -n ssvirt-system
+> 
+> # Remove any remaining secrets (optional)
+> kubectl delete secret my-ssvirt-config my-ssvirt-external-db -n ssvirt-system
+> ```
 
 ## Troubleshooting
 
