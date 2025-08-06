@@ -40,7 +40,11 @@ func main() {
 		setupLog.Error(err, "unable to connect to database")
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			setupLog.Error(err, "failed to close database connection")
+		}
+	}()
 
 	// Create runtime scheme
 	runtimeScheme := runtime.NewScheme()
