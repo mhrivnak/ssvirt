@@ -1,0 +1,28 @@
+{{- if and .Values.podDisruptionBudget.enabled .Values.apiServer.enabled (gt (.Values.apiServer.replicaCount | int) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-api-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- $pdbAnnotations := .Values.podDisruptionBudget.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $commonAnnotations $pdbAnnotations }}
+  {{- if $mergedAnnotations }}
+  annotations:
+    {{- toYaml $mergedAnnotations | nindent 4 }}
+  {{- end }}
+{{- if or .Values.podDisruptionBudget.minAvailable .Values.podDisruptionBudget.maxUnavailable }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ssvirt.apiServerSelectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

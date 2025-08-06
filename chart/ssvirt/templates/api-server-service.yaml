@@ -1,0 +1,25 @@
+{{- if .Values.apiServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-api-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- $serviceAnnotations := .Values.apiServer.service.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $commonAnnotations $serviceAnnotations }}
+  {{- if $mergedAnnotations }}
+  annotations:
+    {{- toYaml $mergedAnnotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.apiServer.service.type }}
+  ports:
+    - port: {{ .Values.apiServer.service.port }}
+      targetPort: {{ .Values.apiServer.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "ssvirt.apiServerSelectorLabels" . | nindent 4 }}
+{{- end }}
