@@ -453,7 +453,7 @@ oc logs -n ssvirt-system deployment/ssvirt-api-server | grep ERROR
 
 ```bash
 # Rotate JWT secrets periodically
-oc patch secret ssvirt-secret -n ssvirt-system -p='{"data":{"jwt-secret":"'$(openssl rand -base64 32 | base64 -w 0)'"}}'
+oc patch secret ssvirt-secret -n ssvirt-system -p='{"data":{"jwt-secret":"'$(openssl rand -base64 32)'"}}'
 
 # Restart API server to pick up new secret
 oc rollout restart deployment/ssvirt-api-server -n ssvirt-system
