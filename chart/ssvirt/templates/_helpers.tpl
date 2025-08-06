@@ -136,7 +136,16 @@ Database password
 */}}
 {{- define "ssvirt.databasePassword" -}}
 {{- if .Values.postgresql.enabled }}
+{{- if .Values.postgresql.auth.password }}
 {{- .Values.postgresql.auth.password }}
+{{- else }}
+{{- $postgresSecret := lookup "v1" "Secret" .Release.Namespace (printf "%s-postgresql" .Release.Name) }}
+{{- if and $postgresSecret $postgresSecret.data $postgresSecret.data.password }}
+{{- $postgresSecret.data.password | b64dec }}
+{{- else }}
+{{- randAlphaNum 16 }}
+{{- end }}
+{{- end }}
 {{- else }}
 {{- .Values.externalDatabase.password }}
 {{- end }}
@@ -208,3 +217,4 @@ JWT Secret generation with persistence across upgrades
 {{- end }}
 {{- end }}
 {{- end }}
+

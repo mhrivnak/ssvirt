@@ -191,9 +191,9 @@ config:
 postgresql:
   enabled: true
   auth:
-    postgresPassword: "ssvirt-postgres"
+    postgresPassword: ""  # Auto-generated if empty
     username: "ssvirt"
-    password: "ssvirt-password"
+    password: ""  # Auto-generated if empty
     database: "ssvirt"
 
   primary:

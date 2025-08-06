@@ -90,9 +90,12 @@ helm install my-ssvirt ./chart/ssvirt \
 | `postgresql.enabled` | Use embedded PostgreSQL | `true` |
 | `postgresql.auth.database` | PostgreSQL database name | `ssvirt` |
 | `postgresql.auth.username` | PostgreSQL username | `ssvirt` |
-| `postgresql.auth.password` | PostgreSQL password | `ssvirt-password` |
+| `postgresql.auth.password` | PostgreSQL password | `""` (auto-generated) |
+| `postgresql.auth.postgresPassword` | PostgreSQL admin password | `""` (auto-generated) |
 | `externalDatabase.host` | External database host | `""` |
 | `externalDatabase.port` | External database port | `5432` |
+
+> **Security Note**: PostgreSQL passwords are automatically generated with strong random values when left empty. The generated passwords persist across helm upgrades to prevent service disruption. For production deployments, you may optionally provide explicit passwords, but auto-generation is recommended for better security.
 
 ### OpenShift Route Configuration
 
