@@ -61,6 +61,16 @@ spec:
                 secretKeyRef:
                   name: {{ include "ssvirt.fullname" . }}-config
                   key: database-url
+            - name: SSVIRT_DATABASE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ssvirt.fullname" . }}-config
+                  key: database-username
+            - name: SSVIRT_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ssvirt.fullname" . }}-config
+                  key: database-password
             - name: SSVIRT_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:

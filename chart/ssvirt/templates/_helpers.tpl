@@ -108,15 +108,37 @@ Create the name of the controller service account to use
 {{- end }}
 
 {{/*
-Database URL generation
+Database URL generation (without credentials for security)
 */}}
 {{- define "ssvirt.databaseUrl" -}}
 {{- if .Values.postgresql.enabled }}
-{{- printf "postgresql://%s:%s@%s-postgresql:5432/%s" .Values.postgresql.auth.username .Values.postgresql.auth.password .Release.Name .Values.postgresql.auth.database }}
+{{- printf "postgresql://%s-postgresql:5432/%s" .Release.Name .Values.postgresql.auth.database }}
 {{- else if .Values.database.url }}
 {{- .Values.database.url }}
 {{- else }}
-{{- printf "postgresql://%s:%s@%s:%g/%s" .Values.externalDatabase.username .Values.externalDatabase.password .Values.externalDatabase.host .Values.externalDatabase.port .Values.externalDatabase.database }}
+{{- printf "postgresql://%s:%g/%s" .Values.externalDatabase.host .Values.externalDatabase.port .Values.externalDatabase.database }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database username
+*/}}
+{{- define "ssvirt.databaseUsername" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.username }}
+{{- else }}
+{{- .Values.externalDatabase.username }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database password
+*/}}
+{{- define "ssvirt.databasePassword" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.password }}
+{{- else }}
+{{- .Values.externalDatabase.password }}
 {{- end }}
 {{- end }}
 
