@@ -188,3 +188,23 @@ Common annotations
 {{ toYaml . }}
 {{- end }}
 {{- end }}
+
+{{/*
+JWT Secret generation with persistence across upgrades
+*/}}
+{{- define "ssvirt.jwtSecret" -}}
+{{- if .Values.auth.jwtSecret }}
+{{- .Values.auth.jwtSecret }}
+{{- else }}
+{{- $existingSecret := lookup "v1" "Secret" .Release.Namespace (printf "%s-config" (include "ssvirt.fullname" .)) }}
+{{- if and $existingSecret $existingSecret.data }}
+{{- if $existingSecret.data "jwt-secret" }}
+{{- $existingSecret.data "jwt-secret" | b64dec }}
+{{- else }}
+{{- randAlphaNum 32 }}
+{{- end }}
+{{- else }}
+{{- randAlphaNum 32 }}
+{{- end }}
+{{- end }}
+{{- end }}
