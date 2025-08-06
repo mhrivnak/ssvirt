@@ -137,30 +137,20 @@ oc get namespace vdc-example-org-example-vdc -o yaml | grep -A 10 labels
 
 ## Network Configuration
 
-SSVIRT uses OpenShift User Defined Networks (UDNs) for VM networking isolation.
+SSVIRT automatically creates OpenShift User Defined Networks (UDNs) for VM networking isolation when VDCs are created.
 
-### 1. Configure User Defined Networks
+### 1. Automatic UserDefinedNetwork Creation
 
-Create network configurations that VMs can use:
+When a VDC is created, the SSVIRT controller automatically creates a UserDefinedNetwork resource in the VDC namespace with the following default configuration:
 
-```bash
-# Create a user defined network for the VDC
-cat <<EOF | oc apply -f -
-apiVersion: k8s.ovn.org/v1
-kind: UserDefinedNetwork
-metadata:
-  name: vdc-network
-  namespace: vdc-example-org-example-vdc
-spec:
-  topology: Layer2
-  layer2:
-    role: Primary
-    subnets:
-    - "192.168.100.0/24"
-EOF
-```
+- **Name**: `vdc-network`
+- **Topology**: Layer2
+- **Role**: Primary
+- **Default Subnet**: `192.168.100.0/24`
 
 ### 2. Verify Network Configuration
+
+After creating a VDC, verify that the UserDefinedNetwork was created automatically:
 
 ```bash
 # Check UDN status in VDC namespace
@@ -168,7 +158,21 @@ oc get userdefinednetwork -n vdc-example-org-example-vdc
 
 # Verify network is ready
 oc describe userdefinednetwork vdc-network -n vdc-example-org-example-vdc
+
+# Verify the network configuration
+oc get userdefinednetwork vdc-network -n vdc-example-org-example-vdc -o yaml
 ```
+
+### 3. Custom Network Configuration (Optional)
+
+If you need to customize the network configuration (e.g., different subnets), you can manually edit the UserDefinedNetwork after VDC creation:
+
+```bash
+# Edit the UserDefinedNetwork to customize subnets
+oc edit userdefinednetwork vdc-network -n vdc-example-org-example-vdc
+```
+
+**Note**: The SSVIRT controller will preserve manual modifications to the UserDefinedNetwork spec, but will ensure that the resource continues to exist and maintains proper labels.
 
 ## VM Templates and Instance Types
 

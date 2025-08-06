@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -327,6 +328,12 @@ func (r *VDCReconciler) createNamespace(ctx context.Context, log logr.Logger, vd
 		return ctrl.Result{}, err
 	}
 
+	// Create UserDefinedNetwork for VM networking
+	if err := r.createUserDefinedNetwork(ctx, log, vdc, namespace); err != nil {
+		log.Error(err, "Failed to create UserDefinedNetwork")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -391,6 +398,12 @@ func (r *VDCReconciler) updateNamespace(ctx context.Context, log logr.Logger, vd
 	// Ensure resource quota is up to date
 	if err := r.reconcileResourceQuota(ctx, log, vdc, namespace); err != nil {
 		log.Error(err, "Failed to reconcile resource quota")
+		return ctrl.Result{}, err
+	}
+
+	// Ensure UserDefinedNetwork is up to date
+	if err := r.reconcileUserDefinedNetwork(ctx, log, vdc, namespace); err != nil {
+		log.Error(err, "Failed to reconcile UserDefinedNetwork")
 		return ctrl.Result{}, err
 	}
 
@@ -583,4 +596,79 @@ func (r *VDCReconciler) handleOrphanedNamespace(ctx context.Context, log logr.Lo
 	// In a future iteration, we could delete orphaned namespaces after a grace period
 
 	return ctrl.Result{}, nil
+}
+
+// createUserDefinedNetwork creates a UserDefinedNetwork for the VDC namespace
+func (r *VDCReconciler) createUserDefinedNetwork(ctx context.Context, log logr.Logger, vdc *models.VDC, namespace *corev1.Namespace) error {
+	// Create an unstructured UserDefinedNetwork object
+	udn := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "k8s.ovn.org/v1",
+			"kind":       "UserDefinedNetwork",
+			"metadata": map[string]interface{}{
+				"name":      "vdc-network",
+				"namespace": namespace.Name,
+				"labels": map[string]interface{}{
+					"ssvirt.io/vdc-id":             vdc.ID.String(),
+					"app.kubernetes.io/managed-by": "ssvirt",
+				},
+			},
+			"spec": map[string]interface{}{
+				"topology": "Layer2",
+				"layer2": map[string]interface{}{
+					"role": "Primary",
+					"subnets": []interface{}{
+						"192.168.100.0/24",
+					},
+				},
+			},
+		},
+	}
+
+	log.Info("Creating UserDefinedNetwork for VDC namespace")
+	return r.Create(ctx, udn)
+}
+
+// reconcileUserDefinedNetwork ensures the UserDefinedNetwork exists and is properly configured
+func (r *VDCReconciler) reconcileUserDefinedNetwork(ctx context.Context, log logr.Logger, vdc *models.VDC, namespace *corev1.Namespace) error {
+	// Check if UserDefinedNetwork exists
+	udn := &unstructured.Unstructured{}
+	udn.SetAPIVersion("k8s.ovn.org/v1")
+	udn.SetKind("UserDefinedNetwork")
+
+	err := r.Get(ctx, client.ObjectKey{Name: "vdc-network", Namespace: namespace.Name}, udn)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create the UserDefinedNetwork
+			return r.createUserDefinedNetwork(ctx, log, vdc, namespace)
+		}
+		return err
+	}
+
+	// UserDefinedNetwork exists, ensure it has the correct labels
+	labels := udn.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+
+	updated := false
+	expectedLabels := map[string]string{
+		"ssvirt.io/vdc-id":             vdc.ID.String(),
+		"app.kubernetes.io/managed-by": "ssvirt",
+	}
+
+	for key, value := range expectedLabels {
+		if labels[key] != value {
+			labels[key] = value
+			updated = true
+		}
+	}
+
+	if updated {
+		udn.SetLabels(labels)
+		log.Info("Updating UserDefinedNetwork labels for VDC")
+		return r.Update(ctx, udn)
+	}
+
+	return nil
 }
