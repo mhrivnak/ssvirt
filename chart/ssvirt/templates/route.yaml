@@ -17,7 +17,9 @@ spec:
   {{- if .Values.route.host }}
   host: {{ .Values.route.host }}
   {{- end }}
+  {{- if .Values.route.path }}
   path: {{ .Values.route.path }}
+  {{- end }}
   to:
     kind: Service
     name: {{ include "ssvirt.fullname" . }}-api-server
