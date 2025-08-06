@@ -51,3 +51,4 @@ data:
     # Additional configuration
     {{- toYaml . | nindent 4 }}
     {{- end }}
+

@@ -1,4 +1,7 @@
 {{- if .Values.controller.enabled }}
+{{- if gt (.Values.controller.replicaCount | int) 1 }}
+{{- fail "controller.replicaCount must be 1 when using Recreate strategy to avoid controller conflicts" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

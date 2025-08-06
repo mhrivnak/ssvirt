@@ -132,3 +132,4 @@ subjects:
   name: {{ include "ssvirt.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
+
