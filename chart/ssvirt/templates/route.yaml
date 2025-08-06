@@ -1,0 +1,35 @@
+{{- if and .Values.route.enabled .Values.apiServer.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "ssvirt.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with (include "ssvirt.annotations" .) }}
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  path: {{ .Values.route.path }}
+  to:
+    kind: Service
+    name: {{ include "ssvirt.fullname" . }}-api-server
+    weight: 100
+  port:
+    targetPort: http
+  {{- if .Values.route.tls.enabled }}
+  tls:
+    termination: {{ .Values.route.tls.termination }}
+    {{- if .Values.route.tls.insecureEdgeTerminationPolicy }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.tls.insecureEdgeTerminationPolicy }}
+    {{- end }}
+  {{- end }}
+  wildcardPolicy: None
+{{- end }}

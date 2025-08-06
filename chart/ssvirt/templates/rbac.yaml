@@ -1,0 +1,134 @@
+{{- if .Values.rbac.create }}
+# Organization Controller RBAC
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-organization-controller
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  {{- with (include "ssvirt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+rules:
+# Namespace management permissions
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Events for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# ServiceAccounts in managed namespaces
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# Secrets in managed namespaces  
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# ConfigMaps in managed namespaces
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+# ResourceQuotas for VDC management
+- apiGroups: [""]
+  resources: ["resourcequotas"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# LimitRanges for VDC management
+- apiGroups: [""]
+  resources: ["limitranges"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# NetworkPolicies for tenant isolation
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# RBAC for tenant permissions
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# OpenShift Virtualization resources
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachines", "virtualmachineinstances"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["instancetype.kubevirt.io"]
+  resources: ["virtualmachineinstancetypes", "virtualmachineclusterinstancetypes"]
+  verbs: ["get", "list", "watch"]
+# OpenShift networking
+- apiGroups: ["k8s.ovn.org"]
+  resources: ["userdefinednetworks"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-organization-controller
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  {{- with (include "ssvirt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "ssvirt.fullname" . }}-organization-controller
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ssvirt.controllerServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+
+---
+# API Server RBAC - minimal permissions for API operations
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-api-server
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-server
+  {{- with (include "ssvirt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+rules:
+# Read access to OpenShift Virtualization resources for API queries
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachines", "virtualmachineinstances"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["instancetype.kubevirt.io"]
+  resources: ["virtualmachineinstancetypes", "virtualmachineclusterinstancetypes"]
+  verbs: ["get", "list", "watch"]
+# Read access to namespaces for organization validation
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+# Events for logging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-api-server
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api-server
+  {{- with (include "ssvirt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "ssvirt.fullname" . }}-api-server
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ssvirt.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

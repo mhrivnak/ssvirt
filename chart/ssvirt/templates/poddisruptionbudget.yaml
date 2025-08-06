@@ -1,0 +1,23 @@
+{{- if and .Values.podDisruptionBudget.enabled .Values.apiServer.enabled (gt (.Values.apiServer.replicaCount | int) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-api-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- with (include "ssvirt.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ssvirt.apiServerSelectorLabels" . | nindent 6 }}
+{{- end }}

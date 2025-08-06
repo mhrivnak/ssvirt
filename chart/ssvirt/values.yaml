@@ -1,0 +1,281 @@
+# Default values for ssvirt
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ""
+  storageClass: ""
+
+# Image settings
+image:
+  registry: quay.io
+  repository: ssvirt/ssvirt
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# API Server configuration
+apiServer:
+  enabled: true
+  replicaCount: 2
+  
+  # Resource limits
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+  
+  # Security context for OpenShift
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 1001
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations: {}
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 1
+  
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Controller configuration
+controller:
+  enabled: true
+  replicaCount: 1
+  
+  # Resource limits
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Security context for OpenShift
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 1001
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8081
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: 8081
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 1
+  
+  # Node selection
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Database configuration
+database:
+  # Database connection settings
+  url: ""  # Will be auto-generated if postgresql.enabled is true
+  maxConnections: 25
+  maxIdleConnections: 10
+  connMaxLifetime: "1h"
+  connMaxIdleTime: "10m"
+
+# Authentication configuration
+auth:
+  # JWT secret - MUST be set for production
+  jwtSecret: ""
+  tokenExpiry: "24h"
+
+# Kubernetes configuration
+kubernetes:
+  namespace: "ssvirt-system"
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+
+# OpenShift Route configuration
+route:
+  enabled: true
+  host: ""  # If empty, OpenShift will generate one
+  path: "/"
+  tls:
+    enabled: true
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  annotations: {}
+
+# Ingress configuration (alternative to Route)
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ssvirt.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# ServiceAccount configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# RBAC configuration
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+
+# Network Policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# ConfigMap for application configuration
+config:
+  # Additional configuration that will be mounted as a config file
+  # This can be used to override default configuration
+  extra: {}
+
+# PostgreSQL dependency configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "ssvirt-postgres"
+    username: "ssvirt"
+    password: "ssvirt-password"
+    database: "ssvirt"
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: ""
+    
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+  
+  # PostgreSQL configuration for OpenShift
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+  
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
+
+# External database configuration (when postgresql.enabled is false)
+externalDatabase:
+  host: ""
+  port: 5432
+  username: ""
+  password: ""
+  database: ""
+  existingSecret: ""
+  existingSecretPasswordKey: ""
+
+# Monitoring configuration
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    labels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Additional labels to add to all resources
+commonLabels: {}
+
+# Additional annotations to add to all resources
+commonAnnotations: {}

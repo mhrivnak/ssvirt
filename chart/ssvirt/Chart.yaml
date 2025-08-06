@@ -1,0 +1,28 @@
+apiVersion: v2
+name: ssvirt
+description: A Helm chart for SSVIRT - OpenShift-based VMware Cloud Director implementation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/mhrivnak/ssvirt
+sources:
+  - https://github.com/mhrivnak/ssvirt
+maintainers:
+  - name: mhrivnak
+    email: mhrivnak@users.noreply.github.com
+keywords:
+  - virtualization
+  - openshift
+  - vmware
+  - cloud-director
+  - kubevirt
+annotations:
+  category: Virtualization
+  openshift.io/display-name: "SSVIRT"
+  openshift.io/description: "OpenShift-based VMware Cloud Director implementation"
+  openshift.io/provider-display-name: "SSVIRT Project"
+dependencies:
+  - name: postgresql
+    version: ~12.12.0
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
