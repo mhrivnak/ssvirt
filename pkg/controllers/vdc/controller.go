@@ -7,12 +7,12 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	rbacv1 "k8s.io/api/rbac/authorization/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -477,7 +477,7 @@ func (r *VDCReconciler) reconcileResourceQuota(ctx context.Context, log logr.Log
 func (r *VDCReconciler) createNetworkPolicies(ctx context.Context, log logr.Logger, vdc *models.VDC, namespace *corev1.Namespace) error {
 	// Create a network policy that denies all ingress and egress by default
 	// This provides VDC-level isolation
-	policy := &corev1.NetworkPolicy{
+	policy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "vdc-isolation",
 			Namespace: namespace.Name,
@@ -486,18 +486,18 @@ func (r *VDCReconciler) createNetworkPolicies(ctx context.Context, log logr.Logg
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},
-		Spec: corev1.NetworkPolicySpec{
-			PolicyTypes: []corev1.PolicyType{
-				corev1.PolicyTypeIngress,
-				corev1.PolicyTypeEgress,
+		Spec: networkingv1.NetworkPolicySpec{
+			PolicyTypes: []networkingv1.PolicyType{
+				networkingv1.PolicyTypeIngress,
+				networkingv1.PolicyTypeEgress,
 			},
 			PodSelector: metav1.LabelSelector{}, // Apply to all pods in namespace
 			// Empty ingress and egress rules means deny all by default
-			Ingress: []corev1.NetworkPolicyIngressRule{},
-			Egress: []corev1.NetworkPolicyEgressRule{
+			Ingress: []networkingv1.NetworkPolicyIngressRule{},
+			Egress: []networkingv1.NetworkPolicyEgressRule{
 				{
 					// Allow DNS resolution
-					To: []corev1.NetworkPolicyPeer{
+					To: []networkingv1.NetworkPolicyPeer{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{
@@ -506,14 +506,14 @@ func (r *VDCReconciler) createNetworkPolicies(ctx context.Context, log logr.Logg
 							},
 						},
 					},
-					Ports: []corev1.NetworkPolicyPort{
+					Ports: []networkingv1.NetworkPolicyPort{
 						{
 							Protocol: &[]corev1.Protocol{corev1.ProtocolUDP}[0],
-							Port:     &[]int32{53}[0],
+							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 						},
 						{
 							Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-							Port:     &[]int32{53}[0],
+							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
 						},
 					},
 				},

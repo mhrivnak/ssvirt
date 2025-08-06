@@ -40,7 +40,6 @@ func TestOrganizationRepository(t *testing.T) {
 		Name:        "test-org",
 		DisplayName: "Test Organization",
 		Description: "Test organization for unit tests",
-		Namespace:   "test-org-ns",
 	}
 
 	err := repo.Create(org)
@@ -81,7 +80,6 @@ func TestVDCRepository(t *testing.T) {
 	// Create organization first
 	org := &models.Organization{
 		Name:      "test-org",
-		Namespace: "test-org-ns",
 	}
 	err := orgRepo.Create(org)
 	require.NoError(t, err)
@@ -119,7 +117,6 @@ func TestCatalogRepository(t *testing.T) {
 	// Create organization first
 	org := &models.Organization{
 		Name:      "test-org",
-		Namespace: "test-org-ns",
 	}
 	err := orgRepo.Create(org)
 	require.NoError(t, err)

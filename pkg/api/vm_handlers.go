@@ -332,7 +332,7 @@ func (s *Server) createVMInVAppHandler(c *gin.Context) {
 		Name:      req.Name,
 		VAppID:    vappID,
 		VMName:    vmName,
-		Namespace: vapp.VDC.Organization.Namespace,
+		Namespace: vapp.VDC.NamespaceName,
 		Status:    "UNRESOLVED", // Default status
 		CPUCount:  req.CPUCount,
 		MemoryMB:  req.MemoryMB,

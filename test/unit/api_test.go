@@ -263,14 +263,12 @@ func TestOrganizationEndpoints(t *testing.T) {
 		DisplayName: "Test Organization 1",
 		Description: "Test description 1",
 		Enabled:     true,
-		Namespace:   "test-org-1-ns",
 	}
 	org2 := &models.Organization{
 		Name:        "test-org-2",
 		DisplayName: "Test Organization 2",
 		Description: "Test description 2",
 		Enabled:     false,
-		Namespace:   "test-org-2-ns",
 	}
 	require.NoError(t, db.DB.Create(org1).Error)
 	require.NoError(t, db.DB.Create(org2).Error)
@@ -338,7 +336,6 @@ func TestOrganizationEndpoints(t *testing.T) {
 		assert.Equal(t, "Test Organization 1", data["display_name"])
 		assert.Equal(t, "Test description 1", data["description"])
 		assert.Equal(t, true, data["enabled"])
-		assert.Equal(t, "test-org-1-ns", data["namespace"])
 	})
 
 	t.Run("GET /api/org/{org-id} with invalid ID returns 400", func(t *testing.T) {
@@ -393,7 +390,6 @@ func TestVDCEndpoints(t *testing.T) {
 		DisplayName: "Test Organization",
 		Description: "Test description",
 		Enabled:     true,
-		Namespace:   "test-org-ns",
 	}
 	require.NoError(t, db.DB.Create(org).Error)
 
@@ -409,6 +405,7 @@ func TestVDCEndpoints(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
+		NamespaceName:   "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -777,7 +774,6 @@ func TestCatalogEndpoints(t *testing.T) {
 		DisplayName: "Test Organization",
 		Description: "Test description",
 		Enabled:     true,
-		Namespace:   "test-org-ns",
 	}
 	require.NoError(t, db.DB.Create(org).Error)
 
@@ -990,7 +986,6 @@ func TestVAppTemplateInstantiation(t *testing.T) {
 		DisplayName: "Test Organization",
 		Description: "Test description",
 		Enabled:     true,
-		Namespace:   "test-org-ns",
 	}
 	require.NoError(t, db.DB.Create(org).Error)
 
@@ -1006,6 +1001,7 @@ func TestVAppTemplateInstantiation(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
+		NamespaceName:   "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1109,7 +1105,7 @@ func TestVAppTemplateInstantiation(t *testing.T) {
 		err = db.DB.Where("v_app_id = ?", createdVApp.ID).First(&createdVM).Error
 		require.NoError(t, err)
 		assert.Equal(t, "test-vapp-vm-1", createdVM.Name)
-		assert.Equal(t, org.Namespace, createdVM.Namespace)
+		assert.Equal(t, vdc.NamespaceName, createdVM.Namespace)
 		assert.Equal(t, cpuCount, *createdVM.CPUCount)
 		assert.Equal(t, memoryMB, *createdVM.MemoryMB)
 	})
@@ -1189,7 +1185,6 @@ func TestVMEndpoints(t *testing.T) {
 		DisplayName: "Test Organization",
 		Description: "Test description",
 		Enabled:     true,
-		Namespace:   "test-org-ns",
 	}
 	require.NoError(t, db.DB.Create(org).Error)
 
@@ -1205,6 +1200,7 @@ func TestVMEndpoints(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
+		NamespaceName:   "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1224,7 +1220,7 @@ func TestVMEndpoints(t *testing.T) {
 		Name:      "test-vm-1",
 		VAppID:    vapp.ID,
 		VMName:    "test-vm-1",
-		Namespace: org.Namespace,
+		Namespace: vdc.NamespaceName,
 		Status:    "POWERED_OFF",
 		CPUCount:  &cpuCount,
 		MemoryMB:  &memoryMB,
@@ -1233,7 +1229,7 @@ func TestVMEndpoints(t *testing.T) {
 		Name:      "test-vm-2",
 		VAppID:    vapp.ID,
 		VMName:    "test-vm-2",
-		Namespace: org.Namespace,
+		Namespace: vdc.NamespaceName,
 		Status:    "POWERED_ON",
 		CPUCount:  &cpuCount,
 		MemoryMB:  &memoryMB,
@@ -1383,7 +1379,7 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, vapp.ID.String(), data["vapp_id"])
 		assert.Equal(t, "test-vapp", data["vapp_name"])
 		assert.Equal(t, "test-vm-1", data["vm_name"])
-		assert.Equal(t, org.Namespace, data["namespace"])
+		assert.Equal(t, vdc.NamespaceName, data["namespace"])
 		assert.Equal(t, "POWERED_OFF", data["status"])
 		assert.Equal(t, float64(2), data["cpu_count"])
 		assert.Equal(t, float64(4096), data["memory_mb"])
@@ -1418,7 +1414,7 @@ func TestVMEndpoints(t *testing.T) {
 		assert.Equal(t, vapp.ID.String(), data["vapp_id"])
 		assert.Equal(t, "test-vapp", data["vapp_name"])
 		assert.Equal(t, "new-test-vm", data["vm_name"])
-		assert.Equal(t, org.Namespace, data["namespace"])
+		assert.Equal(t, vdc.NamespaceName, data["namespace"])
 		assert.Equal(t, "UNRESOLVED", data["status"])
 		assert.Equal(t, float64(4), data["cpu_count"])
 		assert.Equal(t, float64(8192), data["memory_mb"])
@@ -1596,7 +1592,6 @@ func TestVMPowerOperations(t *testing.T) {
 		DisplayName: "Test Organization",
 		Description: "Test description",
 		Enabled:     true,
-		Namespace:   "test-org-ns",
 	}
 	require.NoError(t, db.DB.Create(org).Error)
 
@@ -1612,6 +1607,7 @@ func TestVMPowerOperations(t *testing.T) {
 		MemoryLimitMB:   &memoryLimit,
 		StorageLimitMB:  &storageLimit,
 		Enabled:         true,
+		NamespaceName:   "vdc-test-org-test-vdc",
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
@@ -1631,7 +1627,7 @@ func TestVMPowerOperations(t *testing.T) {
 		Name:      "test-vm",
 		VAppID:    vapp.ID,
 		VMName:    "test-vm",
-		Namespace: org.Namespace,
+		Namespace: vdc.NamespaceName,
 		Status:    "POWERED_OFF",
 		CPUCount:  &cpuCount,
 		MemoryMB:  &memoryMB,
