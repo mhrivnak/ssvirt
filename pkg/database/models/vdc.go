@@ -17,7 +17,7 @@ type VDC struct {
 	CPULimit        *int            `gorm:"check:cpu_limit > 0" json:"cpu_limit"`
 	MemoryLimitMB   *int            `gorm:"check:memory_limit_mb > 0" json:"memory_limit_mb"`
 	StorageLimitMB  *int            `gorm:"check:storage_limit_mb > 0" json:"storage_limit_mb"`
-	NamespaceName   string          `gorm:"uniqueIndex;size:253" json:"namespace_name"` // Kubernetes namespace for this VDC
+	Namespace       string          `gorm:"uniqueIndex;size:253" json:"namespace"` // Kubernetes namespace for this VDC
 	Enabled         bool            `gorm:"default:true" json:"enabled"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
@@ -34,13 +34,13 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 	}
 
 	// Generate namespace name if not set
-	if v.NamespaceName == "" {
+	if v.Namespace == "" {
 		// Load organization to get name
 		var org Organization
 		if err := tx.First(&org, v.OrganizationID).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
-		v.NamespaceName = generateNamespaceName(org.Name, v.Name)
+		v.Namespace = generateNamespaceName(org.Name, v.Name)
 	}
 
 	return nil

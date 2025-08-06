@@ -105,7 +105,7 @@ func (r *VDCRepository) GetByIDString(ctx context.Context, idStr string) (*model
 // Returns (nil, nil) when the record is not found.
 func (r *VDCRepository) GetByNamespace(ctx context.Context, namespaceName string) (*models.VDC, error) {
 	var vdc models.VDC
-	err := r.db.WithContext(ctx).Where("namespace_name = ?", namespaceName).First(&vdc).Error
+	err := r.db.WithContext(ctx).Where("namespace = ?", namespaceName).First(&vdc).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

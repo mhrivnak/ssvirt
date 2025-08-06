@@ -180,7 +180,7 @@ func (r *VDCReconciler) reconcileVDC(ctx context.Context, log logr.Logger, vdc *
 		return ctrl.Result{RequeueAfter: r.interval}, nil
 	}
 
-	log = log.WithValues("vdc_id", vdc.ID, "vdc_name", vdc.Name, "org_name", org.Name, "namespace", vdc.NamespaceName)
+	log = log.WithValues("vdc_id", vdc.ID, "vdc_name", vdc.Name, "org_name", org.Name, "namespace", vdc.Namespace)
 
 	if vdc.DeletedAt.Valid {
 		// VDC is marked for deletion
@@ -198,13 +198,13 @@ func (r *VDCReconciler) reconcileVDC(ctx context.Context, log logr.Logger, vdc *
 
 // handleVDCDeletion removes the associated namespace
 func (r *VDCReconciler) handleVDCDeletion(ctx context.Context, log logr.Logger, vdc *models.VDC) (ctrl.Result, error) {
-	if vdc.NamespaceName == "" {
+	if vdc.Namespace == "" {
 		// No namespace to clean up
 		return ctrl.Result{}, nil
 	}
 
 	namespace := &corev1.Namespace{}
-	err := r.Get(ctx, client.ObjectKey{Name: vdc.NamespaceName}, namespace)
+	err := r.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Namespace already deleted
@@ -228,13 +228,13 @@ func (r *VDCReconciler) handleVDCDeletion(ctx context.Context, log logr.Logger, 
 
 // handleVDCDisabled removes or marks the namespace as disabled
 func (r *VDCReconciler) handleVDCDisabled(ctx context.Context, log logr.Logger, vdc *models.VDC) (ctrl.Result, error) {
-	if vdc.NamespaceName == "" {
+	if vdc.Namespace == "" {
 		// No namespace to handle
 		return ctrl.Result{}, nil
 	}
 
 	namespace := &corev1.Namespace{}
-	err := r.Get(ctx, client.ObjectKey{Name: vdc.NamespaceName}, namespace)
+	err := r.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Namespace doesn't exist, which is fine for disabled VDC
@@ -266,13 +266,13 @@ func (r *VDCReconciler) handleVDCDisabled(ctx context.Context, log logr.Logger, 
 
 // ensureNamespaceExists creates or updates the namespace for an enabled VDC
 func (r *VDCReconciler) ensureNamespaceExists(ctx context.Context, log logr.Logger, vdc *models.VDC, org *models.Organization) (ctrl.Result, error) {
-	if vdc.NamespaceName == "" {
+	if vdc.Namespace == "" {
 		log.Error(nil, "VDC has empty namespace_name field")
 		return ctrl.Result{}, fmt.Errorf("VDC %s has empty namespace_name field", vdc.ID)
 	}
 
 	namespace := &corev1.Namespace{}
-	err := r.Get(ctx, client.ObjectKey{Name: vdc.NamespaceName}, namespace)
+	err := r.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Create the namespace
@@ -290,7 +290,7 @@ func (r *VDCReconciler) ensureNamespaceExists(ctx context.Context, log logr.Logg
 func (r *VDCReconciler) createNamespace(ctx context.Context, log logr.Logger, vdc *models.VDC, org *models.Organization) (ctrl.Result, error) {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: vdc.NamespaceName,
+			Name: vdc.Namespace,
 			Labels: map[string]string{
 				"ssvirt.io/organization":                   org.Name,
 				"ssvirt.io/organization-id":                org.ID.String(),

@@ -250,7 +250,7 @@ type VDCResponse struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
 	OrganizationID  string `json:"organization_id"`
-	NamespaceName   string `json:"namespace_name"`
+	Namespace       string `json:"namespace"`
 	AllocationModel string `json:"allocation_model"`
 	CPULimit        *int   `json:"cpu_limit"`
 	MemoryLimitMB   *int   `json:"memory_limit_mb"`
@@ -292,7 +292,7 @@ func (s *Server) vdcHandler(c *gin.Context) {
 		ID:              vdc.ID.String(),
 		Name:            vdc.Name,
 		OrganizationID:  vdc.OrganizationID.String(),
-		NamespaceName:   vdc.NamespaceName,
+		Namespace:       vdc.Namespace,
 		AllocationModel: string(vdc.AllocationModel),
 		CPULimit:        vdc.CPULimit,
 		MemoryLimitMB:   vdc.MemoryLimitMB,
@@ -363,7 +363,7 @@ func (s *Server) vdcQueryHandler(c *gin.Context) {
 			ID:              vdc.ID.String(),
 			Name:            vdc.Name,
 			OrganizationID:  vdc.OrganizationID.String(),
-			NamespaceName:   vdc.NamespaceName,
+			Namespace:       vdc.Namespace,
 			AllocationModel: string(vdc.AllocationModel),
 			CPULimit:        vdc.CPULimit,
 			MemoryLimitMB:   vdc.MemoryLimitMB,
@@ -1034,7 +1034,7 @@ func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
 			Name:      req.Name + "-vm-1", // Default VM name
 			VAppID:    vapp.ID,
 			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
-			Namespace: vdc.NamespaceName,  // Use VDC's namespace
+			Namespace: vdc.Namespace,  // Use VDC's namespace
 			Status:    vapp.Status,
 			CPUCount:  template.CPUCount,
 			MemoryMB:  template.MemoryMB,
