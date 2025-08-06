@@ -6,12 +6,12 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- $routeAnnotations := .Values.route.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $routeAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-  {{- with .Values.route.annotations }}
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{- with (include "ssvirt.annotations" .) }}
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 spec:
   {{- if .Values.route.host }}

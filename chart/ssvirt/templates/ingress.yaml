@@ -6,12 +6,12 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
+  {{- $ingressAnnotations := .Values.ingress.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $ingressAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-  {{- with .Values.ingress.annotations }}
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
-  {{- with (include "ssvirt.annotations" .) }}
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
 spec:
   {{- if .Values.ingress.className }}
