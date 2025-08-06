@@ -8,7 +8,7 @@ metadata:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
   {{- $routeAnnotations := .Values.route.annotations | default dict }}
   {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $routeAnnotations $commonAnnotations }}
+  {{- $mergedAnnotations := merge $commonAnnotations $routeAnnotations }}
   {{- if $mergedAnnotations }}
   annotations:
     {{- toYaml $mergedAnnotations | nindent 4 }}

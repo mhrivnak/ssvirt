@@ -8,7 +8,7 @@ metadata:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
   {{- $pdbAnnotations := .Values.podDisruptionBudget.annotations | default dict }}
   {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $pdbAnnotations $commonAnnotations }}
+  {{- $mergedAnnotations := merge $commonAnnotations $pdbAnnotations }}
   {{- if $mergedAnnotations }}
   annotations:
     {{- toYaml $mergedAnnotations | nindent 4 }}
@@ -21,8 +21,8 @@ spec:
   {{- if .Values.podDisruptionBudget.maxUnavailable }}
   maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
   {{- end }}
-{{- end }}
   selector:
     matchLabels:
       {{- include "ssvirt.apiServerSelectorLabels" . | nindent 6 }}
+{{- end }}
 {{- end }}
