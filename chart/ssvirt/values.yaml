@@ -28,22 +28,6 @@ apiServer:
       cpu: 250m
       memory: 256Mi
 
-  # Security context for OpenShift
-  securityContext:
-    runAsNonRoot: true
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop:
-        - ALL
-    seccompProfile:
-      type: RuntimeDefault
-
-  # Pod security context
-  podSecurityContext:
-    runAsNonRoot: true
-    fsGroup: 1001
-
   # Service configuration
   service:
     type: ClusterIP
@@ -91,22 +75,6 @@ controller:
     requests:
       cpu: 100m
       memory: 128Mi
-
-  # Security context for OpenShift
-  securityContext:
-    runAsNonRoot: true
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop:
-        - ALL
-    seccompProfile:
-      type: RuntimeDefault
-
-  # Pod security context
-  podSecurityContext:
-    runAsNonRoot: true
-    fsGroup: 1001
 
   # Health checks
   livenessProbe:
@@ -241,21 +209,6 @@ postgresql:
       requests:
         cpu: 250m
         memory: 256Mi
-
-  # PostgreSQL configuration for OpenShift
-  securityContext:
-    enabled: true
-    fsGroup: 1001
-
-  containerSecurityContext:
-    enabled: true
-    runAsUser: 1001
-    runAsNonRoot: true
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
-    capabilities:
-      drop:
-        - ALL
 
 # External database configuration (when postgresql.enabled is false)
 externalDatabase:

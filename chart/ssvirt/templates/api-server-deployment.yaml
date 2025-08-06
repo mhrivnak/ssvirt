@@ -38,11 +38,19 @@ spec:
       serviceAccountName: {{ include "ssvirt.serviceAccountName" . }}
       terminationGracePeriodSeconds: {{ .Values.apiServer.terminationGracePeriodSeconds | default 30 }}
       securityContext:
-        {{- toYaml .Values.apiServer.podSecurityContext | nindent 8 }}
+        runAsNonRoot: true
+        fsGroup: 1001
       containers:
         - name: api-server
           securityContext:
-            {{- toYaml .Values.apiServer.securityContext | nindent 12 }}
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           image: {{ include "ssvirt.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:

@@ -4,7 +4,7 @@ This Helm chart deploys SSVIRT (OpenShift-based VMware Cloud Director implementa
 
 ## Prerequisites
 
-- OpenShift 4.10+ or Kubernetes 1.25+
+- OpenShift 4.19+
 - OpenShift Virtualization operator installed
 - Helm 3.8+
 - Persistent storage available (for PostgreSQL)

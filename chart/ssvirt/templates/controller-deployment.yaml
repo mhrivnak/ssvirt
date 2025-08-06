@@ -34,11 +34,19 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "ssvirt.controllerServiceAccountName" . }}
       securityContext:
-        {{- toYaml .Values.controller.podSecurityContext | nindent 8 }}
+        runAsNonRoot: true
+        fsGroup: 1001
       containers:
         - name: controller
           securityContext:
-            {{- toYaml .Values.controller.securityContext | nindent 12 }}
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
           image: {{ include "ssvirt.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
