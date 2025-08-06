@@ -10,7 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
-	"github.com/mhrivnak/ssvirt/pkg/controllers/organization"
 	"github.com/mhrivnak/ssvirt/pkg/controllers/vdc"
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
@@ -58,7 +57,7 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:           runtimeScheme,
 		LeaderElection:   enableLeaderElection,
-		LeaderElectionID: "organization-controller-leader-election",
+		LeaderElectionID: "ssvirt-controller-leader-election",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -68,18 +67,6 @@ func main() {
 	// Setup repositories
 	orgRepo := repositories.NewOrganizationRepository(db.DB)
 	vdcRepo := repositories.NewVDCRepository(db.DB)
-
-	// Setup organization controller (database-only now)
-	orgController := organization.NewOrganizationReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-		ctrl.Log.WithName("controllers").WithName("Organization"),
-		orgRepo,
-	)
-	if err = orgController.SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Organization")
-		os.Exit(1)
-	}
 
 	// Setup VDC controller (manages Kubernetes namespaces)
 	vdcController := vdc.NewVDCReconciler(

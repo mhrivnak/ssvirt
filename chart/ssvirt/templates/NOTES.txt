@@ -67,7 +67,7 @@
    ⚠️  Using embedded PostgreSQL. For production, consider using an external database.
    {{- end }}
    
-   - The organization controller manages Kubernetes namespaces based on organization lifecycle
+   - VDC controller manages Kubernetes namespaces based on VDC lifecycle
    - API server provides VMware Cloud Director compatible API endpoints
    - OpenShift Virtualization is required for VM management functionality
 

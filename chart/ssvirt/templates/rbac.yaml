@@ -1,26 +1,4 @@
 {{- if .Values.rbac.create }}
-# Organization Controller RBAC (database-only operations)
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
-  labels:
-    {{- include "ssvirt.labels" . | nindent 4 }}
-    app.kubernetes.io/component: controller
-  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
-  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
-  {{- if $mergedAnnotations }}
-  annotations:
-    {{- toYaml $mergedAnnotations | nindent 4 }}
-  {{- end }}
-rules:
-# Organizations are database-only, minimal permissions needed
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create", "patch"]
-
----
 # VDC Controller RBAC (manages Kubernetes namespaces)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -84,30 +62,6 @@ rules:
 - apiGroups: ["k8s.ovn.org"]
   resources: ["userdefinednetworks"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
-  labels:
-    {{- include "ssvirt.labels" . | nindent 4 }}
-    app.kubernetes.io/component: controller
-  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
-  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
-  {{- if $mergedAnnotations }}
-  annotations:
-    {{- toYaml $mergedAnnotations | nindent 4 }}
-  {{- end }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "ssvirt.fullname" . }}-organization-controller
-subjects:
-- kind: ServiceAccount
-  name: {{ include "ssvirt.controllerServiceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
