@@ -6,10 +6,14 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "ssvirt.apiServerLabels" . | nindent 4 }}
-  {{- with (include "ssvirt.annotations" .) }}
+  {{- $pdbAnnotations := .Values.podDisruptionBudget.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $pdbAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
   annotations:
-    {{- . | nindent 4 }}
+    {{- toYaml $mergedAnnotations | nindent 4 }}
   {{- end }}
+{{- if or .Values.podDisruptionBudget.minAvailable .Values.podDisruptionBudget.maxUnavailable }}
 spec:
   {{- if .Values.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
@@ -17,6 +21,7 @@ spec:
   {{- if .Values.podDisruptionBudget.maxUnavailable }}
   maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
   {{- end }}
+{{- end }}
   selector:
     matchLabels:
       {{- include "ssvirt.apiServerSelectorLabels" . | nindent 6 }}
