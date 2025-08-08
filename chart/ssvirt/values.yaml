@@ -9,7 +9,7 @@ global:
 # Image settings
 image:
   registry: quay.io
-  repository: ssvirt/ssvirt
+  repository: mhrivnak/ssvirt
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets: []

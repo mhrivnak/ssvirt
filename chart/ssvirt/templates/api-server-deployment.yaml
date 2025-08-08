@@ -39,7 +39,6 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.apiServer.terminationGracePeriodSeconds | default 30 }}
       securityContext:
         runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: api-server
           securityContext:
@@ -54,7 +53,7 @@ spec:
           image: {{ include "ssvirt.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - /usr/local/bin/api-server
+            - /usr/local/bin/ssvirt-api-server
           ports:
             - name: http
               containerPort: {{ .Values.apiServer.service.targetPort }}

@@ -38,7 +38,6 @@ spec:
       serviceAccountName: {{ include "ssvirt.controllerServiceAccountName" . }}
       securityContext:
         runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: controller
           securityContext:
@@ -53,7 +52,7 @@ spec:
           image: {{ include "ssvirt.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - /usr/local/bin/controller
+            - /usr/local/bin/ssvirt-controller
           ports:
             - name: metrics
               containerPort: 8081
