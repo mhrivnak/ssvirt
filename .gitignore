@@ -6,6 +6,11 @@ bin/
 *.so
 *.dylib
 
+# Go compiled binaries (project-specific)
+api-server
+controller
+user-admin
+
 # Test binary, built with go test -c
 *.test
 
