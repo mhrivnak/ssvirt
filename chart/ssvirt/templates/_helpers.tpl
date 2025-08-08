@@ -125,7 +125,7 @@ Database port
 {{- if .Values.postgresql.enabled }}
 {{- print "5432" }}
 {{- else }}
-{{- printf "%g" .Values.externalDatabase.port }}
+{{- printf "%v" .Values.externalDatabase.port }}
 {{- end }}
 {{- end }}
 
