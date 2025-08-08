@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -10,7 +11,12 @@ import (
 
 type Config struct {
 	Database struct {
-		URL             string        `mapstructure:"url"`
+		Host            string        `mapstructure:"host"`
+		Port            string        `mapstructure:"port"`
+		Username        string        `mapstructure:"username"`
+		Password        string        `mapstructure:"password"`
+		Database        string        `mapstructure:"database"`
+		SSLMode         string        `mapstructure:"sslmode"`
 		MaxConnections  int           `mapstructure:"max_connections"`
 		MaxIdleConns    int           `mapstructure:"max_idle_connections"`
 		ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
@@ -39,7 +45,12 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	viper.SetDefault("database.url", "postgresql://localhost:5432/ssvirt")
+	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.port", "5432")
+	viper.SetDefault("database.username", "postgres")
+	viper.SetDefault("database.password", "")
+	viper.SetDefault("database.database", "ssvirt")
+	viper.SetDefault("database.sslmode", "disable")
 	viper.SetDefault("database.max_connections", 25)
 	viper.SetDefault("database.max_idle_connections", 10)
 	viper.SetDefault("database.conn_max_lifetime", "1h")
@@ -56,6 +67,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("log.format", "json")
 
 	viper.SetEnvPrefix("SSVIRT")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	viper.SetConfigName("config")
