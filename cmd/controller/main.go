@@ -89,7 +89,7 @@ func main() {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
-	
+
 	// Custom readiness check that includes database connectivity
 	readinessCheck := func(req *http.Request) error {
 		// Check database connection
@@ -102,7 +102,7 @@ func main() {
 		}
 		return nil
 	}
-	
+
 	if err := mgr.AddReadyzCheck("readyz", readinessCheck); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
