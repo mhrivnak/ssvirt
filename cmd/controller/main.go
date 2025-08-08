@@ -97,7 +97,7 @@ func main() {
 		if err != nil {
 			return fmt.Errorf("failed to get database connection: %w", err)
 		}
-		if err := sqlDB.Ping(); err != nil {
+		if err := sqlDB.PingContext(req.Context()); err != nil {
 			return fmt.Errorf("database ping failed: %w", err)
 		}
 		return nil
