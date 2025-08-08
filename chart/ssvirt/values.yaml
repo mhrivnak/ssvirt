@@ -11,7 +11,7 @@ image:
   registry: quay.io
   repository: mhrivnak/ssvirt
   tag: "latest"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   pullSecrets: []
 
 # API Server configuration
@@ -192,7 +192,7 @@ postgresql:
   enabled: true
   auth:
     postgresPassword: ""  # Auto-generated if empty
-    username: "ssvirt"
+    username: "postgres"  # Use default PostgreSQL superuser
     password: ""  # Auto-generated if empty
     database: "ssvirt"
 

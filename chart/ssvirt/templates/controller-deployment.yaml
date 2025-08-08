@@ -58,11 +58,16 @@ spec:
               containerPort: 8081
               protocol: TCP
           env:
-            - name: SSVIRT_DATABASE_URL
+            - name: SSVIRT_DATABASE_HOST
               valueFrom:
                 secretKeyRef:
                   name: {{ include "ssvirt.fullname" . }}-config
-                  key: database-url
+                  key: database-host
+            - name: SSVIRT_DATABASE_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ssvirt.fullname" . }}-config
+                  key: database-port
             - name: SSVIRT_DATABASE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -71,8 +76,23 @@ spec:
             - name: SSVIRT_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
+                  {{- if .Values.postgresql.enabled }}
+                  name: {{ .Release.Name }}-postgresql
+                  key: postgres-password
+                  {{- else }}
                   name: {{ include "ssvirt.fullname" . }}-config
                   key: database-password
+                  {{- end }}
+            - name: SSVIRT_DATABASE_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ssvirt.fullname" . }}-config
+                  key: database-database
+            - name: SSVIRT_DATABASE_SSLMODE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ssvirt.fullname" . }}-config
+                  key: database-sslmode
             - name: SSVIRT_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
