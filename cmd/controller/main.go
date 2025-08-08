@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,9 +57,10 @@ func main() {
 
 	// Setup manager
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:           runtimeScheme,
-		LeaderElection:   enableLeaderElection,
-		LeaderElectionID: "ssvirt-controller-leader-election",
+		Scheme:                 runtimeScheme,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "ssvirt-controller-leader-election",
+		HealthProbeBindAddress: ":8081",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -86,7 +89,21 @@ func main() {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+
+	// Custom readiness check that includes database connectivity
+	readinessCheck := func(req *http.Request) error {
+		// Check database connection
+		sqlDB, err := db.DB.DB()
+		if err != nil {
+			return fmt.Errorf("failed to get database connection: %w", err)
+		}
+		if err := sqlDB.PingContext(req.Context()); err != nil {
+			return fmt.Errorf("database ping failed: %w", err)
+		}
+		return nil
+	}
+
+	if err := mgr.AddReadyzCheck("readyz", readinessCheck); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
