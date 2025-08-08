@@ -79,7 +79,7 @@ func TestHealthEndpoint(t *testing.T) {
 	router := server.GetRouter()
 
 	t.Run("Health check returns 200", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/health", nil)
+		req, _ := http.NewRequest("GET", "/healthz", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -109,7 +109,7 @@ func TestReadinessEndpoint(t *testing.T) {
 	router := server.GetRouter()
 
 	t.Run("Readiness check returns 200", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/ready", nil)
+		req, _ := http.NewRequest("GET", "/readyz", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -222,7 +222,7 @@ func TestCORSMiddleware(t *testing.T) {
 	router := server.GetRouter()
 
 	t.Run("CORS headers are set", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", "/health", nil)
+		req, _ := http.NewRequest("GET", "/healthz", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -232,7 +232,7 @@ func TestCORSMiddleware(t *testing.T) {
 	})
 
 	t.Run("OPTIONS request returns 204", func(t *testing.T) {
-		req, _ := http.NewRequest("OPTIONS", "/health", nil)
+		req, _ := http.NewRequest("OPTIONS", "/healthz", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

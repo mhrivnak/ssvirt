@@ -71,8 +71,8 @@ func (s *Server) setupRoutes() {
 	s.router.Use(s.errorHandlerMiddleware())
 
 	// Health endpoints
-	s.router.GET("/health", s.healthHandler)
-	s.router.GET("/ready", s.readinessHandler)
+	s.router.GET("/healthz", s.healthHandler)
+	s.router.GET("/readyz", s.readinessHandler)
 
 	// API version 1 routes
 	v1 := s.router.Group("/api/v1")
