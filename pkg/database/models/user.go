@@ -10,17 +10,17 @@ import (
 
 // User represents a user account in the SSVirt system
 type User struct {
-	ID           uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
-	Username     string         `gorm:"unique;not null" json:"username"`
-	Email        string         `gorm:"unique;not null" json:"email"`
-	PasswordHash string         `gorm:"not null" json:"-"`
+	ID            uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	Username      string         `gorm:"unique;not null" json:"username"`
+	Email         string         `gorm:"unique;not null" json:"email"`
+	PasswordHash  string         `gorm:"not null" json:"-"`
 	FirstName     string         `json:"first_name"`
 	LastName      string         `json:"last_name"`
 	IsActive      bool           `gorm:"default:true;not null" json:"is_active"`
 	IsSystemAdmin bool           `gorm:"default:false;not null;index" json:"is_system_admin"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships
 	UserRoles []UserRole `gorm:"foreignKey:UserID" json:"user_roles,omitempty"`

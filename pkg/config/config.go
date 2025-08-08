@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -122,7 +121,7 @@ func loadInitialAdminFromSecret(config *Config) error {
 	}
 
 	secretPath := "/var/run/secrets/initial-admin"
-	
+
 	// Check if the secret mount exists
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
 		return fmt.Errorf("secret mount path does not exist: %s", secretPath)
@@ -131,11 +130,11 @@ func loadInitialAdminFromSecret(config *Config) error {
 	// Helper function to read and decode a secret field
 	readSecretField := func(fieldName string) (string, error) {
 		filePath := filepath.Join(secretPath, fieldName)
-		data, err := ioutil.ReadFile(filePath)
+		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return "", err
 		}
-		
+
 		// Try to decode as base64 first, if that fails, use as plain text
 		decoded, err := base64.StdEncoding.DecodeString(string(data))
 		if err != nil {
@@ -150,22 +149,22 @@ func loadInitialAdminFromSecret(config *Config) error {
 		config.InitialAdmin.Username = username
 		config.InitialAdmin.Enabled = true
 	}
-	
+
 	if password, err := readSecretField("password"); err == nil && password != "" {
 		config.InitialAdmin.Password = password
 	}
-	
+
 	if email, err := readSecretField("email"); err == nil && email != "" {
 		config.InitialAdmin.Email = email
 	}
-	
+
 	// Try both underscore and dash formats for backward compatibility
 	if firstName, err := readSecretField("first_name"); err == nil && firstName != "" {
 		config.InitialAdmin.FirstName = firstName
 	} else if firstName, err := readSecretField("first-name"); err == nil && firstName != "" {
 		config.InitialAdmin.FirstName = firstName
 	}
-	
+
 	if lastName, err := readSecretField("last_name"); err == nil && lastName != "" {
 		config.InitialAdmin.LastName = lastName
 	} else if lastName, err := readSecretField("last-name"); err == nil && lastName != "" {
