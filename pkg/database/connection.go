@@ -23,7 +23,7 @@ func NewConnection(cfg *config.Config) (*DB, error) {
 	}
 
 	// Debug logging to see what database config we're getting
-	log.Printf("Database connection debug - Host: %s, Port: %s, Username: %q, Database: %s, SSLMode: %s, Password length: %d",
+	log.Printf("Database connection debug - Host: %s, Port: %d, Username: %q, Database: %s, SSLMode: %s, Password length: %d",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.Username, cfg.Database.Database, cfg.Database.SSLMode, len(cfg.Database.Password))
 
 	// Build DSN connection string using GORM recommended format
@@ -85,9 +85,9 @@ func (db *DB) Close() error {
 
 // buildDSN constructs a PostgreSQL DSN (Data Source Name) using GORM recommended format
 // DSN format: host=localhost user=gorm password=gorm dbname=gorm port=5432 sslmode=disable
-func buildDSN(host, port, username, password, database, sslmode string) string {
+func buildDSN(host string, port int, username, password, database, sslmode string) string {
 	// Build DSN string with all parameters
-	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=%s",
 		host, username, password, database, port, sslmode)
 
 	return dsn

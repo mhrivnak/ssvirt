@@ -12,7 +12,7 @@ import (
 type Config struct {
 	Database struct {
 		Host            string        `mapstructure:"host"`
-		Port            string        `mapstructure:"port"`
+		Port            int           `mapstructure:"port"`
 		Username        string        `mapstructure:"username"`
 		Password        string        `mapstructure:"password"`
 		Database        string        `mapstructure:"database"`
@@ -46,7 +46,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	viper.SetDefault("database.host", "localhost")
-	viper.SetDefault("database.port", "5432")
+	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.username", "postgres")
 	viper.SetDefault("database.password", "")
 	viper.SetDefault("database.database", "ssvirt")
