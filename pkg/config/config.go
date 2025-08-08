@@ -121,7 +121,7 @@ func loadInitialAdminFromSecret(config *Config) error {
 		return nil
 	}
 
-	secretPath := fmt.Sprintf("/var/run/secrets/initial-admin/%s", secretName)
+	secretPath := "/var/run/secrets/initial-admin"
 	
 	// Check if the secret mount exists
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
@@ -159,11 +159,16 @@ func loadInitialAdminFromSecret(config *Config) error {
 		config.InitialAdmin.Email = email
 	}
 	
-	if firstName, err := readSecretField("first-name"); err == nil && firstName != "" {
+	// Try both underscore and dash formats for backward compatibility
+	if firstName, err := readSecretField("first_name"); err == nil && firstName != "" {
+		config.InitialAdmin.FirstName = firstName
+	} else if firstName, err := readSecretField("first-name"); err == nil && firstName != "" {
 		config.InitialAdmin.FirstName = firstName
 	}
 	
-	if lastName, err := readSecretField("last-name"); err == nil && lastName != "" {
+	if lastName, err := readSecretField("last_name"); err == nil && lastName != "" {
+		config.InitialAdmin.LastName = lastName
+	} else if lastName, err := readSecretField("last-name"); err == nil && lastName != "" {
 		config.InitialAdmin.LastName = lastName
 	}
 

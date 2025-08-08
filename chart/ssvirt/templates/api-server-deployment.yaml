@@ -148,10 +148,6 @@ spec:
             - name: SSVIRT_INITIAL_ADMIN_USERNAME
               value: {{ .Values.initialAdmin.username | quote }}
             {{- end }}
-            {{- if .Values.initialAdmin.password }}
-            - name: SSVIRT_INITIAL_ADMIN_PASSWORD
-              value: {{ .Values.initialAdmin.password | quote }}
-            {{- end }}
             {{- if .Values.initialAdmin.email }}
             - name: SSVIRT_INITIAL_ADMIN_EMAIL
               value: {{ .Values.initialAdmin.email | quote }}

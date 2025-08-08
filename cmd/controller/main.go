@@ -54,11 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Bootstrap initial admin user if configured
-	if err := db.BootstrapInitialAdmin(cfg); err != nil {
-		setupLog.Error(err, "failed to bootstrap initial admin")
-		os.Exit(1)
-	}
+	// Note: Initial admin bootstrap is handled by the API server to avoid conflicts
 
 	// Create runtime scheme
 	runtimeScheme := runtime.NewScheme()
