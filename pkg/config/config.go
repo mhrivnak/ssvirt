@@ -1,8 +1,12 @@
 package config
 
 import (
+	"encoding/base64"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,6 +46,15 @@ type Config struct {
 		Level  string `mapstructure:"level"`
 		Format string `mapstructure:"format"`
 	} `mapstructure:"log"`
+
+	InitialAdmin struct {
+		Enabled   bool   `mapstructure:"enabled"`
+		Username  string `mapstructure:"username"`
+		Password  string `mapstructure:"password"`
+		Email     string `mapstructure:"email"`
+		FirstName string `mapstructure:"first_name"`
+		LastName  string `mapstructure:"last_name"`
+	} `mapstructure:"initial_admin"`
 }
 
 func Load() (*Config, error) {
@@ -65,6 +78,11 @@ func Load() (*Config, error) {
 	viper.SetDefault("kubernetes.namespace", "ssvirt-system")
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
+	viper.SetDefault("initial_admin.enabled", false)
+	viper.SetDefault("initial_admin.username", "admin")
+	viper.SetDefault("initial_admin.email", "admin@example.com")
+	viper.SetDefault("initial_admin.first_name", "System")
+	viper.SetDefault("initial_admin.last_name", "Administrator")
 
 	viper.SetEnvPrefix("SSVIRT")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -86,5 +104,69 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// Load initial admin credentials from Kubernetes secret if specified
+	if err := loadInitialAdminFromSecret(&config); err != nil {
+		log.Printf("Warning: Failed to load initial admin credentials from secret: %v", err)
+	}
+
 	return &config, nil
+}
+
+// loadInitialAdminFromSecret loads initial admin credentials from a Kubernetes secret
+func loadInitialAdminFromSecret(config *Config) error {
+	// Check if we should load from an existing secret
+	secretName := os.Getenv("SSVIRT_INITIAL_ADMIN_SECRET")
+	if secretName == "" {
+		// No secret specified, nothing to load
+		return nil
+	}
+
+	secretPath := fmt.Sprintf("/var/run/secrets/initial-admin/%s", secretName)
+	
+	// Check if the secret mount exists
+	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
+		return fmt.Errorf("secret mount path does not exist: %s", secretPath)
+	}
+
+	// Helper function to read and decode a secret field
+	readSecretField := func(fieldName string) (string, error) {
+		filePath := filepath.Join(secretPath, fieldName)
+		data, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			return "", err
+		}
+		
+		// Try to decode as base64 first, if that fails, use as plain text
+		decoded, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			// Not base64, use as plain text
+			return strings.TrimSpace(string(data)), nil
+		}
+		return strings.TrimSpace(string(decoded)), nil
+	}
+
+	// Load credentials from secret
+	if username, err := readSecretField("username"); err == nil && username != "" {
+		config.InitialAdmin.Username = username
+		config.InitialAdmin.Enabled = true
+	}
+	
+	if password, err := readSecretField("password"); err == nil && password != "" {
+		config.InitialAdmin.Password = password
+	}
+	
+	if email, err := readSecretField("email"); err == nil && email != "" {
+		config.InitialAdmin.Email = email
+	}
+	
+	if firstName, err := readSecretField("first-name"); err == nil && firstName != "" {
+		config.InitialAdmin.FirstName = firstName
+	}
+	
+	if lastName, err := readSecretField("last-name"); err == nil && lastName != "" {
+		config.InitialAdmin.LastName = lastName
+	}
+
+	log.Printf("Loaded initial admin credentials from secret: %s", secretName)
+	return nil
 }

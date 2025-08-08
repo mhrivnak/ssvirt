@@ -141,6 +141,34 @@ spec:
                 configMapKeyRef:
                   name: {{ include "ssvirt.fullname" . }}-config
                   key: kubernetes-namespace
+            {{- if .Values.initialAdmin.enabled }}
+            - name: SSVIRT_INITIAL_ADMIN_ENABLED
+              value: "true"
+            {{- if .Values.initialAdmin.username }}
+            - name: SSVIRT_INITIAL_ADMIN_USERNAME
+              value: {{ .Values.initialAdmin.username | quote }}
+            {{- end }}
+            {{- if .Values.initialAdmin.password }}
+            - name: SSVIRT_INITIAL_ADMIN_PASSWORD
+              value: {{ .Values.initialAdmin.password | quote }}
+            {{- end }}
+            {{- if .Values.initialAdmin.email }}
+            - name: SSVIRT_INITIAL_ADMIN_EMAIL
+              value: {{ .Values.initialAdmin.email | quote }}
+            {{- end }}
+            {{- if .Values.initialAdmin.firstName }}
+            - name: SSVIRT_INITIAL_ADMIN_FIRST_NAME
+              value: {{ .Values.initialAdmin.firstName | quote }}
+            {{- end }}
+            {{- if .Values.initialAdmin.lastName }}
+            - name: SSVIRT_INITIAL_ADMIN_LAST_NAME
+              value: {{ .Values.initialAdmin.lastName | quote }}
+            {{- end }}
+            {{- if or .Values.initialAdmin.existingSecret .Values.initialAdmin.autoGenerate }}
+            - name: SSVIRT_INITIAL_ADMIN_SECRET
+              value: {{ .Values.initialAdmin.existingSecret | default .Values.initialAdmin.secretName | default "ssvirt-initial-admin-generated" | quote }}
+            {{- end }}
+            {{- end }}
           {{- with .Values.apiServer.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
@@ -157,12 +185,22 @@ spec:
             - name: config-dir
               mountPath: /etc/ssvirt
               readOnly: true
+            {{- if and .Values.initialAdmin.enabled (or .Values.initialAdmin.existingSecret .Values.initialAdmin.autoGenerate) }}
+            - name: initial-admin-secret
+              mountPath: /var/run/secrets/initial-admin
+              readOnly: true
+            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
         - name: config-dir
           configMap:
             name: {{ include "ssvirt.fullname" . }}-config
+        {{- if and .Values.initialAdmin.enabled (or .Values.initialAdmin.existingSecret .Values.initialAdmin.autoGenerate) }}
+        - name: initial-admin-secret
+          secret:
+            secretName: {{ .Values.initialAdmin.existingSecret | default .Values.initialAdmin.secretName | default "ssvirt-initial-admin-generated" }}
+        {{- end }}
       {{- with .Values.apiServer.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -48,6 +48,18 @@ func main() {
 		}
 	}()
 
+	// Run database auto-migration
+	if err := db.AutoMigrate(); err != nil {
+		setupLog.Error(err, "failed to auto-migrate database")
+		os.Exit(1)
+	}
+
+	// Bootstrap initial admin user if configured
+	if err := db.BootstrapInitialAdmin(cfg); err != nil {
+		setupLog.Error(err, "failed to bootstrap initial admin")
+		os.Exit(1)
+	}
+
 	// Create runtime scheme
 	runtimeScheme := runtime.NewScheme()
 	if err := scheme.AddToScheme(runtimeScheme); err != nil {

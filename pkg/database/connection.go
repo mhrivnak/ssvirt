@@ -1,6 +1,8 @@
 package database
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"strings"
@@ -73,6 +75,77 @@ func (db *DB) AutoMigrate() error {
 
 	log.Println("Database auto-migration completed successfully")
 	return nil
+}
+
+// BootstrapInitialAdmin creates an initial admin user if configured and no users exist
+func (db *DB) BootstrapInitialAdmin(cfg *config.Config) error {
+	// Only create if no users exist
+	var userCount int64
+	if err := db.DB.Model(&models.User{}).Count(&userCount).Error; err != nil {
+		return fmt.Errorf("failed to count users: %w", err)
+	}
+
+	if userCount > 0 {
+		log.Println("Users already exist, skipping initial admin creation")
+		return nil
+	}
+
+	if !cfg.InitialAdmin.Enabled {
+		log.Println("Initial admin not enabled, skipping creation")
+		return nil
+	}
+
+	if cfg.InitialAdmin.Username == "" {
+		log.Println("Initial admin username not configured, skipping creation")
+		return nil
+	}
+
+	password := cfg.InitialAdmin.Password
+	if password == "" {
+		// Generate a secure random password
+		generatedPassword, err := generateSecurePassword(32)
+		if err != nil {
+			return fmt.Errorf("failed to generate admin password: %w", err)
+		}
+		password = generatedPassword
+		log.Printf("Generated initial admin password: %s", password)
+		log.Println("IMPORTANT: Save this password as it will not be shown again!")
+	}
+
+	// Create initial admin user with system administrator privileges
+	return db.createInitialAdmin(cfg.InitialAdmin.Username, password, cfg.InitialAdmin.Email, cfg.InitialAdmin.FirstName, cfg.InitialAdmin.LastName)
+}
+
+// createInitialAdmin creates the initial admin user
+func (db *DB) createInitialAdmin(username, password, email, firstName, lastName string) error {
+	user := &models.User{
+		Username:      username,
+		Email:         email,
+		FirstName:     firstName,
+		LastName:      lastName,
+		IsActive:      true,
+		IsSystemAdmin: true,
+	}
+
+	if err := user.SetPassword(password); err != nil {
+		return fmt.Errorf("failed to hash admin password: %w", err)
+	}
+
+	if err := db.DB.Create(user).Error; err != nil {
+		return fmt.Errorf("failed to create initial admin user: %w", err)
+	}
+
+	log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
+	return nil
+}
+
+// generateSecurePassword generates a cryptographically secure random password
+func generateSecurePassword(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
 }
 
 func (db *DB) Close() error {
