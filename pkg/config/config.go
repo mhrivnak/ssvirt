@@ -120,7 +120,7 @@ func loadInitialAdminFromSecret(config *Config) error {
 		return nil
 	}
 
-	secretPath := "/var/run/secrets/initial-admin"
+	secretPath := "/var/run/secrets/initial-admin" // #nosec G101 - This is a mount path, not hardcoded credentials
 
 	// Check if the secret mount exists
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
@@ -129,8 +129,13 @@ func loadInitialAdminFromSecret(config *Config) error {
 
 	// Helper function to read and decode a secret field
 	readSecretField := func(fieldName string) (string, error) {
+		// Validate field name to prevent path traversal
+		if strings.Contains(fieldName, "..") || strings.Contains(fieldName, "/") {
+			return "", fmt.Errorf("invalid field name: %s", fieldName)
+		}
+
 		filePath := filepath.Join(secretPath, fieldName)
-		data, err := os.ReadFile(filePath)
+		data, err := os.ReadFile(filePath) // #nosec G304 - Path is validated above to prevent traversal
 		if err != nil {
 			return "", err
 		}
