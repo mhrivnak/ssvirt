@@ -2,7 +2,10 @@
 
 ## Overview
 
-This enhancement implements the VMware Cloud Director (VCD) compliant VDC API to replace the current legacy VDC endpoints. The new API will conform exactly to the VMware Cloud Director API specification and provide full CRUD operations for Virtual Data Centers (VDCs) with proper authorization and data modeling.
+This enhancement implements the VMware Cloud Director (VCD) compliant VDC API to
+replace the current legacy VDC endpoints. The new API will conform exactly to
+the VMware Cloud Director API specification and provide full CRUD operations for
+Virtual Data Centers (VDCs) with proper authorization and data modeling.
 
 ## Goals
 

@@ -14,12 +14,13 @@ const (
 	PayAsYouGo      AllocationModel = "PayAsYouGo"
 	AllocationPool  AllocationModel = "AllocationPool"
 	ReservationPool AllocationModel = "ReservationPool"
+	Flex            AllocationModel = "Flex"
 )
 
 // Valid checks if the allocation model is valid
 func (am AllocationModel) Valid() bool {
 	switch am {
-	case PayAsYouGo, AllocationPool, ReservationPool:
+	case PayAsYouGo, AllocationPool, ReservationPool, Flex:
 		return true
 	default:
 		return false
@@ -37,6 +38,7 @@ const (
 	URNPrefixOrg     = "urn:vcloud:org:"
 	URNPrefixRole    = "urn:vcloud:role:"
 	URNPrefixSession = "urn:vcloud:session:"
+	URNPrefixVDC     = "urn:vcloud:vdc:"
 )
 
 // Role constants
@@ -74,6 +76,10 @@ func GenerateSessionURN() string {
 	return URNPrefixSession + uuid.New().String()
 }
 
+func GenerateVDCURN() string {
+	return URNPrefixVDC + uuid.New().String()
+}
+
 // ParseURN extracts the UUID from a URN
 func ParseURN(urn string) (string, error) {
 	if urn == "" {
@@ -91,6 +97,8 @@ func ParseURN(urn string) (string, error) {
 		prefix = URNPrefixRole
 	case strings.HasPrefix(urn, URNPrefixSession):
 		prefix = URNPrefixSession
+	case strings.HasPrefix(urn, URNPrefixVDC):
+		prefix = URNPrefixVDC
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
@@ -114,6 +122,8 @@ func GetURNType(urn string) (string, error) {
 		return "role", nil
 	case strings.HasPrefix(urn, URNPrefixSession):
 		return "session", nil
+	case strings.HasPrefix(urn, URNPrefixVDC):
+		return "vdc", nil
 	default:
 		return "", fmt.Errorf("unknown URN type: %s", urn)
 	}

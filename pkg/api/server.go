@@ -35,6 +35,7 @@ type Server struct {
 	userHandlers    *handlers.UserHandlers
 	roleHandlers    *handlers.RoleHandlers
 	orgHandlers     *handlers.OrgHandlers
+	vdcHandlers     *handlers.VDCHandlers
 	sessionHandlers *handlers.SessionHandlers
 	router          *gin.Engine
 	httpServer      *http.Server
@@ -59,6 +60,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		userHandlers:    handlers.NewUserHandlers(userRepo),
 		roleHandlers:    handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:     handlers.NewOrgHandlers(orgRepo),
+		vdcHandlers:     handlers.NewVDCHandlers(vdcRepo, orgRepo),
 		sessionHandlers: handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
 	}
 
@@ -129,6 +131,20 @@ func (s *Server) setupRoutes() {
 			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
 			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
 		}
+
+	}
+
+	// Admin API endpoints (System Administrator only)
+	adminAPIRoot := s.router.Group("/api/admin")
+	adminAPIRoot.Use(auth.JWTMiddleware(s.jwtManager))
+	adminAPIRoot.Use(handlers.RequireSystemAdmin())
+	{
+		// VDC Management API (System Administrator only)
+		adminAPIRoot.GET("/org/:orgId/vdcs", s.vdcHandlers.ListVDCs)            // GET /api/admin/org/{orgId}/vdcs - list VDCs in organization
+		adminAPIRoot.POST("/org/:orgId/vdcs", s.vdcHandlers.CreateVDC)          // POST /api/admin/org/{orgId}/vdcs - create VDC
+		adminAPIRoot.GET("/org/:orgId/vdcs/:vdcId", s.vdcHandlers.GetVDC)       // GET /api/admin/org/{orgId}/vdcs/{vdcId} - get VDC
+		adminAPIRoot.PUT("/org/:orgId/vdcs/:vdcId", s.vdcHandlers.UpdateVDC)    // PUT /api/admin/org/{orgId}/vdcs/{vdcId} - update VDC
+		adminAPIRoot.DELETE("/org/:orgId/vdcs/:vdcId", s.vdcHandlers.DeleteVDC) // DELETE /api/admin/org/{orgId}/vdcs/{vdcId} - delete VDC
 	}
 
 	// Legacy API endpoints (DEPRECATED - use CloudAPI endpoints instead)

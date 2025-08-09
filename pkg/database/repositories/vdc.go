@@ -108,3 +108,68 @@ func (r *VDCRepository) GetByNamespace(ctx context.Context, namespaceName string
 	}
 	return &vdc, nil
 }
+
+// VCD-compliant repository methods
+
+// ListByOrgWithPagination retrieves VDCs for an organization with pagination
+func (r *VDCRepository) ListByOrgWithPagination(orgID string, limit, offset int) ([]models.VDC, error) {
+	var vdcs []models.VDC
+	err := r.db.Where("organization_id = ?", orgID).
+		Limit(limit).
+		Offset(offset).
+		Order("created_at DESC").
+		Find(&vdcs).Error
+	return vdcs, err
+}
+
+// CountByOrganization returns the total count of VDCs in an organization
+func (r *VDCRepository) CountByOrganization(orgID string) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.VDC{}).Where("organization_id = ?", orgID).Count(&count).Error
+	return count, err
+}
+
+// GetByURN retrieves a VDC by its URN ID
+func (r *VDCRepository) GetByURN(urn string) (*models.VDC, error) {
+	var vdc models.VDC
+	err := r.db.Where("id = ?", urn).First(&vdc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vdc, nil
+}
+
+// GetByOrgAndVDCURN retrieves a VDC by organization URN and VDC URN
+func (r *VDCRepository) GetByOrgAndVDCURN(orgURN, vdcURN string) (*models.VDC, error) {
+	var vdc models.VDC
+	err := r.db.Where("organization_id = ? AND id = ?", orgURN, vdcURN).First(&vdc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vdc, nil
+}
+
+// HasDependentVApps checks if a VDC has dependent vApps
+func (r *VDCRepository) HasDependentVApps(vdcID string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.VApp{}).Where("vdc_id = ?", vdcID).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// DeleteWithValidation deletes a VDC after checking for dependencies
+func (r *VDCRepository) DeleteWithValidation(id string) error {
+	// Check for dependent vApps first
+	hasDependents, err := r.HasDependentVApps(id)
+	if err != nil {
+		return err
+	}
+
+	if hasDependents {
+		return errors.New("cannot delete VDC with dependent vApps")
+	}
+
+	return r.Delete(id)
+}
