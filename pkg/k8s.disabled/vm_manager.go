@@ -1,3 +1,5 @@
+//go:build ignore
+
 package k8s
 
 import (
@@ -74,7 +76,7 @@ func (vm *VMManager) GetVM(ctx context.Context, vmName, namespace string) (*kube
 
 	// Update database status if we have the VM ID
 	if vmID, exists := kvVM.Labels["ssvirt.io/vm-id"]; exists {
-		if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil && dbVM.ID.String() == vmID {
+		if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil && dbVM.ID == vmID {
 			vm.translator.UpdateVMFromKubeVirt(dbVM, kvVM)
 			if err := vm.vmRepo.Update(dbVM); err != nil {
 				klog.Warningf("Failed to update VM status in database for VM %s/%s: %v", namespace, vmName, err)

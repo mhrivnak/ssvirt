@@ -3,14 +3,13 @@ package models
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type VAppTemplate struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	ID             string         `gorm:"type:varchar(255);primary_key" json:"id"`
 	Name           string         `gorm:"not null" json:"name"`
-	CatalogID      uuid.UUID      `gorm:"type:uuid;not null" json:"catalog_id"`
+	CatalogID      string         `gorm:"type:varchar(255);not null;index" json:"catalog_id"`
 	Description    string         `json:"description"`
 	VMInstanceType string         `json:"vm_instance_type"` // OpenShift VirtualMachineInstanceType
 	OSType         string         `json:"os_type"`
@@ -23,13 +22,13 @@ type VAppTemplate struct {
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships
-	Catalog *Catalog `gorm:"foreignKey:CatalogID" json:"catalog,omitempty"`
-	VApps   []VApp   `gorm:"foreignKey:TemplateID" json:"vapps,omitempty"`
+	Catalog *Catalog `gorm:"foreignKey:CatalogID;references:ID" json:"catalog,omitempty"`
+	VApps   []VApp   `gorm:"foreignKey:TemplateID;references:ID" json:"vapps,omitempty"`
 }
 
 func (vt *VAppTemplate) BeforeCreate(tx *gorm.DB) error {
-	if vt.ID == uuid.Nil {
-		vt.ID = uuid.New()
+	if vt.ID == "" {
+		vt.ID = GenerateOrgURN() // Reuse org URN format for templates
 	}
 	return nil
 }

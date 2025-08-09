@@ -47,12 +47,24 @@ log:
 // Initialize dependencies
 cfg, _ := config.Load()
 db, _ := database.NewConnection(cfg)
+
+// Initialize repositories
 userRepo := repositories.NewUserRepository(db.DB)
+roleRepo := repositories.NewRoleRepository(db.DB)
+orgRepo := repositories.NewOrganizationRepository(db.DB)
+vdcRepo := repositories.NewVDCRepository(db.DB)
+catalogRepo := repositories.NewCatalogRepository(db.DB)
+templateRepo := repositories.NewVAppTemplateRepository(db.DB)
+vappRepo := repositories.NewVAppRepository(db.DB)
+vmRepo := repositories.NewVMRepository(db.DB)
+
+// Initialize authentication services
 jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 authSvc := auth.NewService(userRepo, jwtManager)
 
 // Create and start server
-server := api.NewServer(cfg, db, authSvc, jwtManager)
+server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, 
+    orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
 server.Start()
 ```
 

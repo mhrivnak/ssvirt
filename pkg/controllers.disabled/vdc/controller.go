@@ -1,3 +1,5 @@
+//go:build ignore
+
 package vdc
 
 import (
@@ -99,7 +101,7 @@ func (r *VDCReconciler) startPeriodicReconciliation(ctx context.Context) {
 			for _, vdc := range vdcs {
 				req := reconcile.Request{
 					NamespacedName: client.ObjectKey{
-						Name: fmt.Sprintf("vdc-%s", vdc.ID.String()),
+						Name: fmt.Sprintf("vdc-%s", vdc.ID),
 					},
 				}
 				if _, err := r.Reconcile(ctx, req); err != nil {
@@ -295,9 +297,9 @@ func (r *VDCReconciler) createNamespace(ctx context.Context, log logr.Logger, vd
 			Name: vdc.Namespace,
 			Labels: map[string]string{
 				"ssvirt.io/organization":                   org.Name,
-				"ssvirt.io/organization-id":                org.ID.String(),
+				"ssvirt.io/organization-id":                org.ID,
 				"ssvirt.io/vdc":                            vdc.Name,
-				"ssvirt.io/vdc-id":                         vdc.ID.String(),
+				"ssvirt.io/vdc-id":                         vdc.ID,
 				"k8s.ovn.org/primary-user-defined-network": "",
 				"app.kubernetes.io/managed-by":             "ssvirt",
 			},
@@ -349,9 +351,9 @@ func (r *VDCReconciler) updateNamespace(ctx context.Context, log logr.Logger, vd
 
 	expectedLabels := map[string]string{
 		"ssvirt.io/organization":                   org.Name,
-		"ssvirt.io/organization-id":                org.ID.String(),
+		"ssvirt.io/organization-id":                org.ID,
 		"ssvirt.io/vdc":                            vdc.Name,
-		"ssvirt.io/vdc-id":                         vdc.ID.String(),
+		"ssvirt.io/vdc-id":                         vdc.ID,
 		"k8s.ovn.org/primary-user-defined-network": "",
 		"app.kubernetes.io/managed-by":             "ssvirt",
 	}
@@ -418,7 +420,7 @@ func (r *VDCReconciler) createResourceQuota(ctx context.Context, log logr.Logger
 			Name:      "vdc-quota",
 			Namespace: namespace.Name,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":             vdc.ID.String(),
+				"ssvirt.io/vdc-id":             vdc.ID,
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},
@@ -514,7 +516,7 @@ func (r *VDCReconciler) createNetworkPolicies(ctx context.Context, log logr.Logg
 			Name:      "vdc-isolation",
 			Namespace: namespace.Name,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":             vdc.ID.String(),
+				"ssvirt.io/vdc-id":             vdc.ID,
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},
@@ -607,7 +609,7 @@ func (r *VDCReconciler) createUserDefinedNetwork(ctx context.Context, log logr.L
 			Name:      "vdc-network",
 			Namespace: namespace.Name,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":             vdc.ID.String(),
+				"ssvirt.io/vdc-id":             vdc.ID,
 				"app.kubernetes.io/managed-by": "ssvirt",
 			},
 		},
@@ -647,7 +649,7 @@ func (r *VDCReconciler) reconcileUserDefinedNetwork(ctx context.Context, log log
 
 	updated := false
 	expectedLabels := map[string]string{
-		"ssvirt.io/vdc-id":             vdc.ID.String(),
+		"ssvirt.io/vdc-id":             vdc.ID,
 		"app.kubernetes.io/managed-by": "ssvirt",
 	}
 

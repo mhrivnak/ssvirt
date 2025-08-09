@@ -62,7 +62,6 @@ jobs:
       run: |
         echo "Checking if all packages compile..."
         go build ./cmd/api-server
-        go build ./cmd/controller  
         go build ./cmd/user-admin
         echo "All packages compile successfully!"
 

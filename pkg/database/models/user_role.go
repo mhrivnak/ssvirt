@@ -3,27 +3,27 @@ package models
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type UserRole struct {
-	ID             uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
-	UserID         uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
-	OrganizationID uuid.UUID      `gorm:"type:uuid;not null" json:"organization_id"`
-	Role           string         `gorm:"not null" json:"role"` // OrgAdmin, VAppUser, VAppAuthor, etc.
+	ID             string         `gorm:"type:varchar(255);primaryKey" json:"id"`
+	UserID         string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"user_id"`
+	OrganizationID string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"organization_id"`
+	RoleID         string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"role_id"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
-	// Relationships
-	User         *User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
+	// Relationships with cascading deletes
+	User         *User         `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID;constraint:OnDelete:CASCADE" json:"organization,omitempty"`
+	Role         *Role         `gorm:"foreignKey:RoleID;references:ID;constraint:OnDelete:CASCADE" json:"role,omitempty"`
 }
 
 func (ur *UserRole) BeforeCreate(tx *gorm.DB) error {
-	if ur.ID == uuid.Nil {
-		ur.ID = uuid.New()
+	if ur.ID == "" {
+		ur.ID = GenerateUserURN() // Reuse user URN format for simplicity
 	}
 	return nil
 }

@@ -7,10 +7,12 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
 
 type DB struct {
@@ -60,6 +62,7 @@ func (db *DB) AutoMigrate() error {
 	err := db.DB.AutoMigrate(
 		&models.User{},
 		&models.Organization{},
+		&models.Role{},
 		&models.VDC{},
 		&models.Catalog{},
 		&models.VAppTemplate{},
@@ -73,6 +76,36 @@ func (db *DB) AutoMigrate() error {
 
 	log.Println("Database auto-migration completed successfully")
 	return nil
+}
+
+// BootstrapDefaultData creates default roles and Provider organization
+func (db *DB) BootstrapDefaultData() error {
+	log.Println("Bootstrapping default data...")
+
+	// Use single transaction to ensure atomicity
+	return db.DB.Transaction(func(tx *gorm.DB) error {
+		// Create role repository with transaction
+		roleRepo := repositories.NewRoleRepository(tx)
+
+		// Create default roles
+		if err := roleRepo.CreateDefaultRoles(); err != nil {
+			return fmt.Errorf("failed to create default roles: %w", err)
+		}
+		log.Println("Default roles created successfully")
+
+		// Create organization repository with transaction
+		orgRepo := repositories.NewOrganizationRepository(tx)
+
+		// Create default Provider organization
+		_, err := orgRepo.CreateDefaultOrganization()
+		if err != nil {
+			return fmt.Errorf("failed to create default organization: %w", err)
+		}
+		log.Println("Default Provider organization created successfully")
+
+		log.Println("Default data bootstrap completed successfully")
+		return nil
+	})
 }
 
 // BootstrapInitialAdmin creates an initial admin user if configured, using a concurrency-safe approach
@@ -93,18 +126,21 @@ func (db *DB) BootstrapInitialAdmin(cfg *config.Config) error {
 	}
 
 	// Use a concurrency-safe upsert approach - create only if no admin exists
-	return db.createInitialAdminIdempotent(cfg.InitialAdmin.Username, password, cfg.InitialAdmin.Email, cfg.InitialAdmin.FirstName, cfg.InitialAdmin.LastName)
+	fullName := cfg.InitialAdmin.FirstName
+	if cfg.InitialAdmin.LastName != "" {
+		fullName = fullName + " " + cfg.InitialAdmin.LastName
+	}
+	return db.createInitialAdminIdempotent(cfg.InitialAdmin.Username, password, cfg.InitialAdmin.Email, fullName)
 }
 
 // createInitialAdminIdempotent creates the initial admin user using a concurrency-safe approach
-func (db *DB) createInitialAdminIdempotent(username, password, email, firstName, lastName string) error {
+func (db *DB) createInitialAdminIdempotent(username, password, email, fullName string) error {
 	user := &models.User{
-		Username:      username,
-		Email:         email,
-		FirstName:     firstName,
-		LastName:      lastName,
-		IsActive:      true,
-		IsSystemAdmin: true,
+		Username:    username,
+		Email:       email,
+		FullName:    fullName,
+		Description: "Initial System Administrator",
+		Enabled:     true,
 	}
 
 	if err := user.SetPassword(password); err != nil {
@@ -113,9 +149,12 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, firstName,
 
 	// Use a transaction to ensure atomicity and check if any system admin already exists
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
-		// Check if any system admin already exists
+		// Check if any user with System Administrator role already exists
 		var existingAdminCount int64
-		if err := tx.Model(&models.User{}).Where("is_system_admin = ?", true).Count(&existingAdminCount).Error; err != nil {
+		if err := tx.Table("user_roles").
+			Joins("JOIN roles ON user_roles.role_id = roles.id").
+			Where("roles.name = ?", models.RoleSystemAdmin).
+			Count(&existingAdminCount).Error; err != nil {
 			return fmt.Errorf("failed to count existing system admins: %w", err)
 		}
 
@@ -124,28 +163,51 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, firstName,
 			return nil
 		}
 
+		// Get the Provider organization
+		var providerOrg models.Organization
+		if err := tx.Where("name = ?", models.DefaultOrgName).First(&providerOrg).Error; err != nil {
+			return fmt.Errorf("failed to find Provider organization: %w", err)
+		}
+
+		// Get the System Administrator role
+		var sysAdminRole models.Role
+		if err := tx.Where("name = ?", models.RoleSystemAdmin).First(&sysAdminRole).Error; err != nil {
+			return fmt.Errorf("failed to find System Administrator role: %w", err)
+		}
+
 		// Create the user with ON CONFLICT DO NOTHING behavior for username uniqueness
 		result := tx.Where("username = ?", user.Username).FirstOrCreate(user)
 		if result.Error != nil {
 			return fmt.Errorf("failed to create initial admin user: %w", result.Error)
 		}
 
-		// If user was found (not created), check if it's already a system admin
+		// If user was found (not created), check if it already has system admin role
 		if result.RowsAffected == 0 {
-			// User exists, check if it's already a system admin
-			if user.IsSystemAdmin {
-				log.Printf("User %s already exists and is a system admin", username)
+			// User exists, check if it already has the system admin role
+			var existingUserRole models.UserRole
+			err := tx.Where("user_id = ? AND role_id = ?", user.ID, sysAdminRole.ID).First(&existingUserRole).Error
+			if err == nil {
+				log.Printf("User %s already exists and has system admin role", username)
 				return nil
 			}
-			// Upgrade existing user to system admin
-			if err := tx.Model(user).Update("is_system_admin", true).Error; err != nil {
-				return fmt.Errorf("failed to upgrade existing user to system admin: %w", err)
-			}
-			log.Printf("Upgraded existing user %s to system admin", username)
 		} else {
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
 
+		// Create UserRole assignment for System Administrator role using upsert to avoid duplicates
+		userRole := &models.UserRole{
+			UserID:         user.ID,
+			RoleID:         sysAdminRole.ID,
+			OrganizationID: providerOrg.ID,
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "role_id"}, {Name: "organization_id"}},
+			DoNothing: true,
+		}).Create(userRole).Error; err != nil {
+			return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
+		}
+
+		log.Printf("Assigned System Administrator role to user %s", username)
 		return nil
 	})
 

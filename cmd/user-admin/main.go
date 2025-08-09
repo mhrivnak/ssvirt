@@ -16,7 +16,7 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: user-admin <command> [args...]")
 		fmt.Println("Commands:")
-		fmt.Println("  create-user <username> <email> <password> [first_name] [last_name]")
+		fmt.Println("  create-user <username> <email> <password> [full_name] [description]")
 		fmt.Println("  list-users")
 		os.Exit(1)
 	}
@@ -46,7 +46,7 @@ func main() {
 	switch command {
 	case "create-user":
 		if len(os.Args) < 5 {
-			fmt.Println("Usage: user-admin create-user <username> <email> <password> [first_name] [last_name]")
+			fmt.Println("Usage: user-admin create-user <username> <email> <password> [full_name] [description]")
 			os.Exit(1)
 		}
 
@@ -57,10 +57,13 @@ func main() {
 		}
 
 		if len(os.Args) > 5 {
-			req.FirstName = os.Args[5]
+			req.FullName = os.Args[5]
+		} else {
+			// Set default FullName to username to avoid NOT NULL constraint violation
+			req.FullName = os.Args[2] // username
 		}
 		if len(os.Args) > 6 {
-			req.LastName = os.Args[6]
+			req.Description = os.Args[6]
 		}
 
 		// We don't have the full auth service here, so create user directly
@@ -82,7 +85,7 @@ func main() {
 
 		fmt.Printf("Found %d users:\n", len(users))
 		for _, user := range users {
-			fmt.Printf("- %s (%s) - %s %s\n", user.Username, user.Email, user.FirstName, user.LastName)
+			fmt.Printf("- %s (%s) - %s\n", user.Username, user.Email, user.FullName)
 		}
 
 	default:
@@ -102,11 +105,11 @@ func createUserDirect(userRepo *repositories.UserRepository, req *auth.CreateUse
 	}
 
 	user := &models.User{
-		Username:  req.Username,
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		IsActive:  true,
+		Username:    req.Username,
+		Email:       req.Email,
+		FullName:    req.FullName,
+		Description: req.Description,
+		Enabled:     true,
 	}
 
 	if err := user.SetPassword(req.Password); err != nil {

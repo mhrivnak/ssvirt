@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -19,7 +18,7 @@ func setupTestAuthDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = db.AutoMigrate(&models.User{}, &models.Organization{}, &models.UserRole{})
+	err = db.AutoMigrate(&models.User{}, &models.Organization{}, &models.Role{}, &models.UserRole{})
 	require.NoError(t, err)
 
 	return db
@@ -31,7 +30,7 @@ func TestJWTManager(t *testing.T) {
 
 	jwtManager := auth.NewJWTManager(secretKey, tokenDuration)
 
-	userID := uuid.New()
+	userID := models.GenerateUserURN()
 	username := "testuser"
 
 	t.Run("Generate and verify token", func(t *testing.T) {
@@ -48,7 +47,7 @@ func TestJWTManager(t *testing.T) {
 	})
 
 	t.Run("Generate and verify token with role", func(t *testing.T) {
-		orgID := uuid.New()
+		orgID := models.GenerateOrgURN()
 		role := "OrgAdmin"
 
 		token, err := jwtManager.GenerateWithRole(userID, username, orgID, role)
@@ -85,10 +84,9 @@ func TestJWTManager(t *testing.T) {
 
 func TestUserModel(t *testing.T) {
 	user := &models.User{
-		Username:  "testuser",
-		Email:     "test@example.com",
-		FirstName: "Test",
-		LastName:  "User",
+		Username: "testuser",
+		Email:    "test@example.com",
+		FullName: "Test User",
 	}
 
 	t.Run("Set and check password", func(t *testing.T) {
@@ -109,18 +107,18 @@ func TestUserRepository(t *testing.T) {
 	userRepo := repositories.NewUserRepository(db)
 
 	user := &models.User{
-		Username:  "testuser",
-		Email:     "test@example.com",
-		FirstName: "Test",
-		LastName:  "User",
-		IsActive:  true,
+		Username: "testuser",
+		Email:    "test@example.com",
+		FullName: "Test User",
+		Enabled:  true,
 	}
 	require.NoError(t, user.SetPassword("password123"))
 
 	t.Run("Create user", func(t *testing.T) {
 		err := userRepo.Create(user)
 		require.NoError(t, err)
-		assert.NotEqual(t, uuid.Nil, user.ID)
+		assert.NotEmpty(t, user.ID)
+		assert.Contains(t, user.ID, "urn:vcloud:user:")
 	})
 
 	t.Run("Get user by ID", func(t *testing.T) {
@@ -143,13 +141,13 @@ func TestUserRepository(t *testing.T) {
 	})
 
 	t.Run("Update user", func(t *testing.T) {
-		user.FirstName = "Updated"
+		user.FullName = "Updated User"
 		err := userRepo.Update(user)
 		require.NoError(t, err)
 
 		foundUser, err := userRepo.GetByID(user.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "Updated", foundUser.FirstName)
+		assert.Equal(t, "Updated User", foundUser.FullName)
 	})
 
 	t.Run("List users", func(t *testing.T) {
@@ -173,18 +171,17 @@ func TestAuthService(t *testing.T) {
 
 	t.Run("Create user", func(t *testing.T) {
 		req := &auth.CreateUserRequest{
-			Username:  "testuser",
-			Email:     "test@example.com",
-			Password:  "password123",
-			FirstName: "Test",
-			LastName:  "User",
+			Username: "testuser",
+			Email:    "test@example.com",
+			Password: "password123",
+			FullName: "Test User",
 		}
 
 		user, err := authService.CreateUser(req)
 		require.NoError(t, err)
 		assert.Equal(t, req.Username, user.Username)
 		assert.Equal(t, req.Email, user.Email)
-		assert.True(t, user.IsActive)
+		assert.True(t, user.Enabled)
 	})
 
 	t.Run("Login with valid credentials", func(t *testing.T) {

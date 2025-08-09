@@ -36,6 +36,14 @@ func main() {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
+	// Bootstrap default data (roles and organizations)
+	if err := db.BootstrapDefaultData(); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Failed to close database connection: %v", closeErr)
+		}
+		log.Fatalf("Failed to bootstrap default data: %v", err)
+	}
+
 	// Bootstrap initial admin user if configured
 	if err := db.BootstrapInitialAdmin(cfg); err != nil {
 		if closeErr := db.Close(); closeErr != nil {
@@ -51,6 +59,7 @@ func main() {
 
 	// Initialize repositories
 	userRepo := repositories.NewUserRepository(db.DB)
+	roleRepo := repositories.NewRoleRepository(db.DB)
 	orgRepo := repositories.NewOrganizationRepository(db.DB)
 	vdcRepo := repositories.NewVDCRepository(db.DB)
 	catalogRepo := repositories.NewCatalogRepository(db.DB)
@@ -63,7 +72,7 @@ func main() {
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Initialize API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
 
 	// Start server in a goroutine
 	go func() {

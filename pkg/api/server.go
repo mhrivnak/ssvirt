@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
@@ -23,30 +24,40 @@ type Server struct {
 	authSvc      *auth.Service
 	jwtManager   *auth.JWTManager
 	userRepo     *repositories.UserRepository
+	roleRepo     *repositories.RoleRepository
 	orgRepo      *repositories.OrganizationRepository
 	vdcRepo      *repositories.VDCRepository
 	catalogRepo  *repositories.CatalogRepository
 	templateRepo *repositories.VAppTemplateRepository
 	vappRepo     *repositories.VAppRepository
 	vmRepo       *repositories.VMRepository
+	// CloudAPI handlers
+	userHandlers *handlers.UserHandlers
+	roleHandlers *handlers.RoleHandlers
+	orgHandlers  *handlers.OrgHandlers
 	router       *gin.Engine
 	httpServer   *http.Server
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository) *Server {
 	server := &Server{
 		config:       cfg,
 		db:           db,
 		authSvc:      authSvc,
 		jwtManager:   jwtManager,
 		userRepo:     userRepo,
+		roleRepo:     roleRepo,
 		orgRepo:      orgRepo,
 		vdcRepo:      vdcRepo,
 		catalogRepo:  catalogRepo,
 		templateRepo: templateRepo,
 		vappRepo:     vappRepo,
 		vmRepo:       vmRepo,
+		// Initialize CloudAPI handlers
+		userHandlers: handlers.NewUserHandlers(userRepo),
+		roleHandlers: handlers.NewRoleHandlers(roleRepo),
+		orgHandlers:  handlers.NewOrgHandlers(orgRepo),
 	}
 
 	// Configure gin mode based on log level
@@ -90,7 +101,24 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
-	// Authentication endpoints (at root level for VMware Cloud Director compatibility)
+	// CloudAPI endpoints (VMware Cloud Director compatible)
+	cloudAPI := s.router.Group("/cloudapi/1.0.0")
+	cloudAPI.Use(auth.JWTMiddleware(s.jwtManager))
+	{
+		// Users API
+		cloudAPI.GET("/users", s.userHandlers.ListUsers)   // GET /cloudapi/1.0.0/users - list users
+		cloudAPI.GET("/users/:id", s.userHandlers.GetUser) // GET /cloudapi/1.0.0/users/{id} - get user
+
+		// Roles API
+		cloudAPI.GET("/roles", s.roleHandlers.ListRoles)   // GET /cloudapi/1.0.0/roles - list roles
+		cloudAPI.GET("/roles/:id", s.roleHandlers.GetRole) // GET /cloudapi/1.0.0/roles/{id} - get role
+
+		// Organizations API
+		cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
+		cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+	}
+
+	// Legacy authentication endpoints (at root level for VMware Cloud Director compatibility)
 	apiRoot := s.router.Group("/api")
 	{
 		// Public authentication endpoint (no JWT middleware)
@@ -104,38 +132,43 @@ func (s *Server) setupRoutes() {
 			protected.DELETE("/sessions", s.deleteSessionHandler) // DELETE /api/sessions - logout
 			protected.GET("/session", s.getSessionHandler)        // GET /api/session - get current session
 
+			// Legacy endpoints (DEPRECATED - use CloudAPI endpoints instead)
+			// TODO: These legacy endpoints have been temporarily commented out during
+			// the migration to VMware Cloud Director API spec with URN-based IDs.
+			// They will be updated or permanently removed in future iterations.
+
 			// Organization endpoints
-			protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations
-			protected.GET("/org/:org-id", s.organizationHandler)                 // GET /api/org/{org-id} - get organization
-			protected.GET("/org/:org-id/vdcs/query", s.vdcQueryHandler)          // GET /api/org/{org-id}/vdcs/query - list VDCs in organization
-			protected.GET("/org/:org-id/catalogs/query", s.catalogsQueryHandler) // GET /api/org/{org-id}/catalogs/query - list catalogs in organization
+			// protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations
+			// protected.GET("/org/:org-id", s.organizationHandler)                 // GET /api/org/{org-id} - get organization
+			// protected.GET("/org/:org-id/vdcs/query", s.vdcQueryHandler)          // GET /api/org/{org-id}/vdcs/query - list VDCs in organization
+			// protected.GET("/org/:org-id/catalogs/query", s.catalogsQueryHandler) // GET /api/org/{org-id}/catalogs/query - list catalogs in organization
 
 			// VDC endpoints
-			protected.GET("/vdc/:vdc-id", s.vdcHandler)                                                     // GET /api/vdc/{vdc-id} - get VDC
-			protected.GET("/vdc/:vdc-id/vApps/query", s.vAppsQueryHandler)                                  // GET /api/vdc/{vdc-id}/vApps/query - list vApps in VDC
-			protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
+			// protected.GET("/vdc/:vdc-id", s.vdcHandler)                                                     // GET /api/vdc/{vdc-id} - get VDC
+			// protected.GET("/vdc/:vdc-id/vApps/query", s.vAppsQueryHandler)                                  // GET /api/vdc/{vdc-id}/vApps/query - list vApps in VDC
+			// protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
 
 			// Catalog endpoints
-			protected.GET("/catalog/:catalog-id", s.catalogHandler)                              // GET /api/catalog/{catalog-id} - get catalog
-			protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
-			protected.GET("/catalogItem/:item-id", s.catalogItemHandler)                         // GET /api/catalogItem/{item-id} - get catalog item
+			// protected.GET("/catalog/:catalog-id", s.catalogHandler)                              // GET /api/catalog/{catalog-id} - get catalog
+			// protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
+			// protected.GET("/catalogItem/:item-id", s.catalogItemHandler)                         // GET /api/catalogItem/{item-id} - get catalog item
 
 			// vApp endpoints
-			protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
-			protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler) // DELETE /api/vApp/{vapp-id} - delete vApp
+			// protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
+			// protected.DELETE("/vApp/:vapp-id", s.deleteVAppHandler) // DELETE /api/vApp/{vapp-id} - delete vApp
 
 			// VM endpoints (vApp-centric following VMware Cloud Director API spec)
-			protected.GET("/vApp/:vapp-id/vms/query", s.vappVMsQueryHandler) // GET /api/vApp/{vapp-id}/vms/query - list VMs in vApp
-			protected.POST("/vApp/:vapp-id/vms", s.createVMInVAppHandler)    // POST /api/vApp/{vapp-id}/vms - create VM in vApp
-			protected.GET("/vm/:vm-id", s.vmHandler)                         // GET /api/vm/{vm-id} - get VM
-			protected.PUT("/vm/:vm-id", s.updateVMHandler)                   // PUT /api/vm/{vm-id} - update VM
-			protected.DELETE("/vm/:vm-id", s.deleteVMHandler)                // DELETE /api/vm/{vm-id} - delete VM
+			// protected.GET("/vApp/:vapp-id/vms/query", s.vappVMsQueryHandler) // GET /api/vApp/{vapp-id}/vms/query - list VMs in vApp
+			// protected.POST("/vApp/:vapp-id/vms", s.createVMInVAppHandler)    // POST /api/vApp/{vapp-id}/vms - create VM in vApp
+			// protected.GET("/vm/:vm-id", s.vmHandler)                         // GET /api/vm/{vm-id} - get VM
+			// protected.PUT("/vm/:vm-id", s.updateVMHandler)                   // PUT /api/vm/{vm-id} - update VM
+			// protected.DELETE("/vm/:vm-id", s.deleteVMHandler)                // DELETE /api/vm/{vm-id} - delete VM
 
 			// VM power operation endpoints
-			protected.POST("/vm/:vm-id/power/action/powerOn", s.powerOnVMHandler)   // POST /api/vm/{vm-id}/power/action/powerOn - power on VM
-			protected.POST("/vm/:vm-id/power/action/powerOff", s.powerOffVMHandler) // POST /api/vm/{vm-id}/power/action/powerOff - power off VM
-			protected.POST("/vm/:vm-id/power/action/suspend", s.suspendVMHandler)   // POST /api/vm/{vm-id}/power/action/suspend - suspend VM
-			protected.POST("/vm/:vm-id/power/action/reset", s.resetVMHandler)       // POST /api/vm/{vm-id}/power/action/reset - reset VM
+			// protected.POST("/vm/:vm-id/power/action/powerOn", s.powerOnVMHandler)   // POST /api/vm/{vm-id}/power/action/powerOn - power on VM
+			// protected.POST("/vm/:vm-id/power/action/powerOff", s.powerOffVMHandler) // POST /api/vm/{vm-id}/power/action/powerOff - power off VM
+			// protected.POST("/vm/:vm-id/power/action/suspend", s.suspendVMHandler)   // POST /api/vm/{vm-id}/power/action/suspend - suspend VM
+			// protected.POST("/vm/:vm-id/power/action/reset", s.resetVMHandler)       // POST /api/vm/{vm-id}/power/action/reset - reset VM
 		}
 	}
 }

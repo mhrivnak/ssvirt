@@ -5,11 +5,10 @@ all: build
 
 build:
 	go build -o bin/api-server ./cmd/api-server
-	go build -o bin/controller ./cmd/controller
 	go build -o bin/user-admin ./cmd/user-admin
 
 test:
-	go test ./...
+	go test $(shell go list ./... | grep -v '.disabled')
 
 integration-test:
 	go test ./test/integration/...

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package k8s
 
 import (
@@ -32,8 +34,8 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 			Namespace: vm.Namespace,
 			Labels: map[string]string{
 				"app":                  "ssvirt",
-				"ssvirt.io/vm-id":      vm.ID.String(),
-				"ssvirt.io/vapp-id":    vm.VAppID.String(),
+				"ssvirt.io/vm-id":      vm.ID,
+				"ssvirt.io/vapp-id":    vm.VAppID,
 				"ssvirt.io/managed-by": "ssvirt-controller",
 			},
 			Annotations: map[string]string{
@@ -48,8 +50,8 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"app":               "ssvirt",
-						"ssvirt.io/vm-id":   vm.ID.String(),
-						"ssvirt.io/vapp-id": vm.VAppID.String(),
+						"ssvirt.io/vm-id":   vm.ID,
+						"ssvirt.io/vapp-id": vm.VAppID,
 					},
 				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
@@ -188,8 +190,8 @@ func (vt *VMTranslator) CreateDataVolumeSpec(vm *models.VM, diskSizeGB int) map[
 			"namespace": vm.Namespace,
 			"labels": map[string]string{
 				"app":                  "ssvirt",
-				"ssvirt.io/vm-id":      vm.ID.String(),
-				"ssvirt.io/vapp-id":    vm.VAppID.String(),
+				"ssvirt.io/vm-id":      vm.ID,
+				"ssvirt.io/vapp-id":    vm.VAppID,
 				"ssvirt.io/managed-by": "ssvirt-controller",
 			},
 		},

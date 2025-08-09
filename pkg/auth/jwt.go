@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 var (
@@ -17,10 +16,10 @@ var (
 
 // Claims represents the JWT claims structure for SSVirt authentication
 type Claims struct {
-	UserID         uuid.UUID  `json:"user_id"`
-	Username       string     `json:"username"`
-	OrganizationID *uuid.UUID `json:"organization_id,omitempty"`
-	Role           *string    `json:"role,omitempty"`
+	UserID         string  `json:"user_id"`
+	Username       string  `json:"username"`
+	OrganizationID *string `json:"organization_id,omitempty"`
+	Role           *string `json:"role,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -39,7 +38,7 @@ func NewJWTManager(secretKey string, tokenDuration time.Duration) *JWTManager {
 }
 
 // Generate creates a new JWT token for the specified user without organization context
-func (manager *JWTManager) Generate(userID uuid.UUID, username string) (string, error) {
+func (manager *JWTManager) Generate(userID string, username string) (string, error) {
 	claims := &Claims{
 		UserID:   userID,
 		Username: username,
@@ -55,7 +54,7 @@ func (manager *JWTManager) Generate(userID uuid.UUID, username string) (string, 
 }
 
 // GenerateWithRole creates a new JWT token for the specified user with organization and role context
-func (manager *JWTManager) GenerateWithRole(userID uuid.UUID, username string, organizationID uuid.UUID, role string) (string, error) {
+func (manager *JWTManager) GenerateWithRole(userID string, username string, organizationID string, role string) (string, error) {
 	claims := &Claims{
 		UserID:         userID,
 		Username:       username,
