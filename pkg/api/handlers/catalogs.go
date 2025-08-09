@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -258,7 +259,7 @@ func (h *CatalogHandlers) DeleteCatalog(c *gin.Context) {
 
 	// Delete catalog with validation (checks for dependent templates)
 	if err := h.catalogRepo.DeleteWithValidation(catalogURN); err != nil {
-		if strings.Contains(err.Error(), "dependent vApp templates") {
+		if errors.Is(err, repositories.ErrCatalogHasDependencies) {
 			c.JSON(http.StatusConflict, NewAPIError(
 				http.StatusConflict,
 				"Conflict",

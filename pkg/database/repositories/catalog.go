@@ -8,6 +8,9 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
+// ErrCatalogHasDependencies is returned when attempting to delete a catalog that has dependent vApp templates
+var ErrCatalogHasDependencies = errors.New("catalog has dependent vApp templates")
+
 type CatalogRepository struct {
 	db *gorm.DB
 }
@@ -34,7 +37,7 @@ func (r *CatalogRepository) GetByID(id string) (*models.Catalog, error) {
 
 func (r *CatalogRepository) GetByOrganizationID(orgID string) ([]models.Catalog, error) {
 	var catalogs []models.Catalog
-	err := r.db.Where("organization_id = ? OR is_published = true", orgID).Find(&catalogs).Error
+	err := r.db.Where("(organization_id = ? OR is_published = true)", orgID).Find(&catalogs).Error
 	return catalogs, err
 }
 
@@ -45,7 +48,7 @@ func (r *CatalogRepository) GetByOrganizationIDs(orgIDs []string) ([]models.Cata
 		err := r.db.Where("is_published = true").Find(&catalogs).Error
 		return catalogs, err
 	}
-	err := r.db.Where("organization_id IN ? OR is_published = true", orgIDs).Find(&catalogs).Error
+	err := r.db.Where("(organization_id IN ? OR is_published = true)", orgIDs).Find(&catalogs).Error
 	return catalogs, err
 }
 
@@ -137,7 +140,7 @@ func (r *CatalogRepository) DeleteWithValidation(urn string) error {
 		}
 
 		if count > 0 {
-			return errors.New("cannot delete catalog with dependent vApp templates")
+			return ErrCatalogHasDependencies
 		}
 
 		// Delete the catalog within the same transaction
