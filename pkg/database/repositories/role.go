@@ -123,3 +123,10 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 
 	return nil
 }
+
+// Count returns the total number of roles
+func (r *RoleRepository) Count() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Role{}).Count(&count).Error
+	return count, err
+}

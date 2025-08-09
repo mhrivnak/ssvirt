@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
@@ -44,6 +45,13 @@ func (h *OrgHandlers) ListOrgs(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
+	// Get total count of organizations
+	totalCount, err := h.orgRepo.Count()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count organizations"})
+		return
+	}
+
 	// Get organizations with entity references populated
 	orgs, err := h.orgRepo.ListWithEntityRefs(limit, offset)
 	if err != nil {
@@ -51,7 +59,10 @@ func (h *OrgHandlers) ListOrgs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, orgs)
+	// Create paginated response
+	response := types.NewPage(orgs, page, limit, int(totalCount))
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetOrg handles GET /cloudapi/1.0.0/orgs/{id}

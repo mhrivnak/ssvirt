@@ -174,3 +174,10 @@ func (r *OrganizationRepository) CreateDefaultOrganization() (*models.Organizati
 
 	return org, nil
 }
+
+// Count returns the total number of organizations
+func (r *OrganizationRepository) Count() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Organization{}).Count(&count).Error
+	return count, err
+}

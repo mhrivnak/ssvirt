@@ -159,3 +159,10 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 
 	return users, nil
 }
+
+// Count returns the total number of users
+func (r *UserRepository) Count() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.User{}).Count(&count).Error
+	return count, err
+}

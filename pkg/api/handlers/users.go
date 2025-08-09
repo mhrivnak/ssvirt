@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
@@ -44,6 +45,13 @@ func (h *UserHandlers) ListUsers(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
+	// Get total count of users
+	totalCount, err := h.userRepo.Count()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count users"})
+		return
+	}
+
 	// Get users with entity references populated
 	users, err := h.userRepo.ListWithEntityRefs(limit, offset)
 	if err != nil {
@@ -56,7 +64,10 @@ func (h *UserHandlers) ListUsers(c *gin.Context) {
 		users[i].Password = ""
 	}
 
-	c.JSON(http.StatusOK, users)
+	// Create paginated response
+	response := types.NewPage(users, page, limit, int(totalCount))
+
+	c.JSON(http.StatusOK, response)
 }
 
 // GetUser handles GET /cloudapi/1.0.0/users/{id}
