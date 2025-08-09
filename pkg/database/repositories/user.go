@@ -58,7 +58,14 @@ func (r *UserRepository) Update(user *models.User) error {
 }
 
 func (r *UserRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&models.User{}).Error
+	result := r.db.Where("id = ?", id).Delete(&models.User{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
