@@ -85,7 +85,7 @@ func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
 
 func (r *UserRepository) GetWithRoles(id string) (*models.User, error) {
 	var user models.User
-	err := r.db.Preload("Role").Preload("Organization").Where("id = ?", id).First(&user).Error
+	err := r.db.Preload("UserRoles").Preload("UserRoles.Role").Preload("UserRoles.Organization").Preload("Organization").Where("id = ?", id).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -99,16 +99,18 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 		return nil, err
 	}
 
-	// Populate role entity reference
+	// Populate role entity references from all user roles
 	user.RoleEntityRefs = make([]models.EntityRef, 0)
-	if user.Role != nil {
-		user.RoleEntityRefs = append(user.RoleEntityRefs, models.EntityRef{
-			Name: user.Role.Name,
-			ID:   user.Role.ID,
-		})
+	for _, userRole := range user.UserRoles {
+		if userRole.Role != nil {
+			user.RoleEntityRefs = append(user.RoleEntityRefs, models.EntityRef{
+				Name: userRole.Role.Name,
+				ID:   userRole.Role.ID,
+			})
+		}
 	}
 
-	// Populate organization entity reference
+	// Populate organization entity reference from user's primary organization
 	if user.Organization != nil {
 		user.OrgEntityRef = &models.EntityRef{
 			Name: user.Organization.Name,
@@ -132,7 +134,7 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 	}
 
 	var users []models.User
-	err := r.db.Preload("Role").Preload("Organization").Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error
+	err := r.db.Preload("UserRoles").Preload("UserRoles.Role").Preload("UserRoles.Organization").Preload("Organization").Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error
 	if err != nil {
 		return nil, err
 	}
@@ -141,16 +143,18 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 	for i := range users {
 		user := &users[i]
 
-		// Populate role entity reference
+		// Populate role entity references from all user roles
 		user.RoleEntityRefs = make([]models.EntityRef, 0)
-		if user.Role != nil {
-			user.RoleEntityRefs = append(user.RoleEntityRefs, models.EntityRef{
-				Name: user.Role.Name,
-				ID:   user.Role.ID,
-			})
+		for _, userRole := range user.UserRoles {
+			if userRole.Role != nil {
+				user.RoleEntityRefs = append(user.RoleEntityRefs, models.EntityRef{
+					Name: userRole.Role.Name,
+					ID:   userRole.Role.ID,
+				})
+			}
 		}
 
-		// Populate organization entity reference
+		// Populate organization entity reference from user's primary organization
 		if user.Organization != nil {
 			user.OrgEntityRef = &models.EntityRef{
 				Name: user.Organization.Name,

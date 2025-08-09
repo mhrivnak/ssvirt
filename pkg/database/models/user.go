@@ -9,34 +9,34 @@ import (
 
 // User represents a user account following VMware Cloud Director API spec
 type User struct {
-	ID              string         `gorm:"type:varchar(255);primaryKey" json:"id"`
-	Username        string         `gorm:"unique;not null;size:255" json:"username"`
-	FullName        string         `gorm:"not null;size:255" json:"fullName"`
-	Description     string         `json:"description"`
-	Email           string         `gorm:"unique;not null;size:255" json:"email"`
-	PasswordHash    string         `gorm:"not null" json:"-"`
-	Password        string         `gorm:"-" json:"-"` // Only for input, never serialized to JSON
-	DeployedVmQuota int            `gorm:"default:0;not null" json:"deployedVmQuota"`
-	StoredVmQuota   int            `gorm:"default:0;not null" json:"storedVmQuota"`
-	NameInSource    string         `json:"nameInSource"`
-	Enabled         bool           `gorm:"default:true;not null" json:"enabled"`
-	IsGroupRole     bool           `gorm:"default:false;not null" json:"isGroupRole"`
-	ProviderType    string         `gorm:"default:'LOCAL';not null;size:50" json:"providerType"`
-	Locked          bool           `gorm:"default:false;not null" json:"locked"`
-	Stranded        bool           `gorm:"default:false;not null" json:"stranded"`
-	RoleID          string         `gorm:"type:varchar(255)" json:"roleId,omitempty"`
-	OrganizationID  string         `gorm:"type:varchar(255)" json:"organizationId,omitempty"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
+	ID               string         `gorm:"type:varchar(255);primaryKey" json:"id"`
+	Username         string         `gorm:"unique;not null;size:255" json:"username"`
+	FullName         string         `gorm:"not null;size:255" json:"fullName"`
+	Description      string         `json:"description"`
+	Email            string         `gorm:"unique;not null;size:255" json:"email"`
+	PasswordHash     string         `gorm:"not null" json:"-"`
+	Password         string         `gorm:"-" json:"-"` // Only for input, never serialized to JSON
+	DeployedVmQuota  int            `gorm:"default:0;not null" json:"deployedVmQuota"`
+	StoredVmQuota    int            `gorm:"default:0;not null" json:"storedVmQuota"`
+	NameInSource     string         `json:"nameInSource"`
+	Enabled          bool           `gorm:"default:true;not null" json:"enabled"`
+	IsGroupRole      bool           `gorm:"default:false;not null" json:"isGroupRole"`
+	ProviderType     string         `gorm:"default:'LOCAL';not null;size:50" json:"providerType"`
+	Locked           bool           `gorm:"default:false;not null" json:"locked"`
+	Stranded         bool           `gorm:"default:false;not null" json:"stranded"`
+	OrganizationID   string         `gorm:"type:varchar(255)" json:"organizationId,omitempty"`
+	OrganizationName string         `gorm:"size:255" json:"organizationName,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Entity references (populated in API responses)
 	RoleEntityRefs []EntityRef `gorm:"-" json:"roleEntityRefs,omitempty"`
 	OrgEntityRef   *EntityRef  `gorm:"-" json:"orgEntityRef,omitempty"`
 
 	// Relationships
-	Role         *Role         `gorm:"foreignKey:RoleID;references:ID" json:"role,omitempty"`
 	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
+	UserRoles    []UserRole    `gorm:"foreignKey:UserID;references:ID" json:"userRoles,omitempty"`
 }
 
 // BeforeCreate sets the URN ID if not already set

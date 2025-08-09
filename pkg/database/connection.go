@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -67,6 +68,7 @@ func (db *DB) AutoMigrate() error {
 		&models.VAppTemplate{},
 		&models.VApp{},
 		&models.VM{},
+		&models.UserRole{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to auto-migrate database: %w", err)
@@ -149,7 +151,8 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
 		// Check if any user with System Administrator role already exists
 		var existingAdminCount int64
-		if err := tx.Model(&models.User{}).Joins("JOIN roles ON users.role_id = roles.id").
+		if err := tx.Table("user_roles").
+			Joins("JOIN roles ON user_roles.role_id = roles.id").
 			Where("roles.name = ?", models.RoleSystemAdmin).
 			Count(&existingAdminCount).Error; err != nil {
 			return fmt.Errorf("failed to count existing system admins: %w", err)
@@ -172,9 +175,9 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			return fmt.Errorf("failed to find System Administrator role: %w", err)
 		}
 
-		// Set role and organization for the user
-		user.RoleID = sysAdminRole.ID
+		// Set organization for the user and populate OrganizationName
 		user.OrganizationID = providerOrg.ID
+		user.OrganizationName = providerOrg.Name
 
 		// Create the user with ON CONFLICT DO NOTHING behavior for username uniqueness
 		result := tx.Where("username = ?", user.Username).FirstOrCreate(user)
@@ -185,18 +188,38 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 		// If user was found (not created), check if it already has the system admin role
 		if result.RowsAffected == 0 {
 			log.Printf("User %s already exists", username)
-			// Update existing user's role if needed
+			// Update existing user's organization if needed
 			if err := tx.Model(user).Updates(map[string]interface{}{
-				"role_id":         sysAdminRole.ID,
-				"organization_id": providerOrg.ID,
+				"organization_id":   providerOrg.ID,
+				"organization_name": providerOrg.Name,
 			}).Error; err != nil {
-				return fmt.Errorf("failed to update user role: %w", err)
+				return fmt.Errorf("failed to update user organization: %w", err)
 			}
 		} else {
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
 
-		log.Printf("Assigned System Administrator role to user %s", username)
+		// Create UserRole assignment for System Administrator role using upsert to avoid duplicates
+		userRole := &models.UserRole{
+			UserID:         user.ID,
+			RoleID:         sysAdminRole.ID,
+			OrganizationID: providerOrg.ID,
+		}
+		// Check if the role assignment already exists
+		var existingUserRole models.UserRole
+		err := tx.Where("user_id = ? AND role_id = ? AND organization_id = ?", user.ID, sysAdminRole.ID, providerOrg.ID).First(&existingUserRole).Error
+		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
+			// Create the role assignment
+			if err := tx.Create(userRole).Error; err != nil {
+				return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
+			}
+			log.Printf("Assigned System Administrator role to user %s", username)
+		} else if err != nil {
+			return fmt.Errorf("failed to check existing user role: %w", err)
+		} else {
+			log.Printf("User %s already has System Administrator role", username)
+		}
+
 		return nil
 	})
 
