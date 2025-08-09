@@ -169,6 +169,7 @@ func (h *VDCHandlers) GetVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid organization URN format",
+			"Organization ID must be a valid URN with prefix 'urn:vcloud:org:'",
 		))
 		return
 	}
@@ -178,6 +179,7 @@ func (h *VDCHandlers) GetVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid VDC URN format",
+			"VDC ID must be a valid URN with prefix 'urn:vcloud:vdc:'",
 		))
 		return
 	}
@@ -215,6 +217,7 @@ func (h *VDCHandlers) CreateVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid organization URN format",
+			"Organization ID must be a valid URN with prefix 'urn:vcloud:org:'",
 		))
 		return
 	}
@@ -312,6 +315,7 @@ func (h *VDCHandlers) UpdateVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid organization URN format",
+			"Organization ID must be a valid URN with prefix 'urn:vcloud:org:'",
 		))
 		return
 	}
@@ -321,6 +325,7 @@ func (h *VDCHandlers) UpdateVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid VDC URN format",
+			"VDC ID must be a valid URN with prefix 'urn:vcloud:vdc:'",
 		))
 		return
 	}
@@ -418,6 +423,7 @@ func (h *VDCHandlers) DeleteVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid organization URN format",
+			"Organization ID must be a valid URN with prefix 'urn:vcloud:org:'",
 		))
 		return
 	}
@@ -427,6 +433,7 @@ func (h *VDCHandlers) DeleteVDC(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid VDC URN format",
+			"VDC ID must be a valid URN with prefix 'urn:vcloud:vdc:'",
 		))
 		return
 	}

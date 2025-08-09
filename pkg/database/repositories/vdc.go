@@ -117,7 +117,7 @@ func (r *VDCRepository) ListByOrgWithPagination(orgID string, limit, offset int)
 	err := r.db.Where("organization_id = ?", orgID).
 		Limit(limit).
 		Offset(offset).
-		Order("created_at DESC").
+		Order("created_at DESC, id DESC").
 		Find(&vdcs).Error
 	return vdcs, err
 }
@@ -159,17 +159,22 @@ func (r *VDCRepository) HasDependentVApps(vdcID string) (bool, error) {
 	return count > 0, nil
 }
 
-// DeleteWithValidation deletes a VDC after checking for dependencies
+// DeleteWithValidation deletes a VDC after checking for dependencies atomically
 func (r *VDCRepository) DeleteWithValidation(id string) error {
-	// Check for dependent vApps first
-	hasDependents, err := r.HasDependentVApps(id)
-	if err != nil {
-		return err
-	}
+	// Use a transaction to ensure atomicity
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Check for dependent vApps within the transaction
+		var count int64
+		err := tx.Model(&models.VApp{}).Where("vdc_id = ?", id).Count(&count).Error
+		if err != nil {
+			return err
+		}
 
-	if hasDependents {
-		return errors.New("cannot delete VDC with dependent vApps")
-	}
+		if count > 0 {
+			return errors.New("cannot delete VDC with dependent vApps")
+		}
 
-	return r.Delete(id)
+		// Delete the VDC within the same transaction
+		return tx.Where("id = ?", id).Delete(&models.VDC{}).Error
+	})
 }

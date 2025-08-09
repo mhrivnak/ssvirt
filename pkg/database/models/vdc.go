@@ -91,10 +91,14 @@ func (v *VDC) ComputeCapacity() ComputeCapacity {
 func (v *VDC) SetComputeCapacity(cc ComputeCapacity) {
 	v.CPUAllocated = cc.CPU.Allocated
 	v.CPULimit = cc.CPU.Limit
-	v.CPUUnits = cc.CPU.Units
+	if cc.CPU.Units != "" {
+		v.CPUUnits = cc.CPU.Units
+	}
 	v.MemoryAllocated = cc.Memory.Allocated
 	v.MemoryLimit = cc.Memory.Limit
-	v.MemoryUnits = cc.Memory.Units
+	if cc.Memory.Units != "" {
+		v.MemoryUnits = cc.Memory.Units
+	}
 }
 
 // ProviderVdc returns the provider VDC reference
