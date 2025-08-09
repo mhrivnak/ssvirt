@@ -181,7 +181,7 @@ spec:
             - name: config-dir
               mountPath: /etc/ssvirt
               readOnly: true
-            {{- if and .Values.initialAdmin.enabled (or .Values.initialAdmin.existingSecret .Values.initialAdmin.autoGenerate) }}
+            {{- if .Values.initialAdmin.enabled }}
             - name: initial-admin-secret
               mountPath: /var/run/secrets/initial-admin
               readOnly: true
@@ -192,10 +192,10 @@ spec:
         - name: config-dir
           configMap:
             name: {{ include "ssvirt.fullname" . }}-config
-        {{- if and .Values.initialAdmin.enabled (or .Values.initialAdmin.existingSecret .Values.initialAdmin.autoGenerate) }}
+        {{- if .Values.initialAdmin.enabled }}
         - name: initial-admin-secret
           secret:
-            secretName: {{ .Values.initialAdmin.existingSecret | default .Values.initialAdmin.secretName | default "ssvirt-initial-admin-generated" }}
+            secretName: {{ include "ssvirt.fullname" . }}-initial-admin
         {{- end }}
       {{- with .Values.apiServer.nodeSelector }}
       nodeSelector:

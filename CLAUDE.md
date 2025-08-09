@@ -4,3 +4,4 @@
 - Don't move on to the next task until I explicitly tell you to.
 - Do not push changes to the main branch without confirmation.
 - Run tests and linters before committing changes.
+- Do not push code directly to the main branch.

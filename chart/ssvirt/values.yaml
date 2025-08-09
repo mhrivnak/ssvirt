@@ -127,19 +127,12 @@ logging:
 # Initial admin account configuration
 initialAdmin:
   enabled: false
-  # Option 1: Direct configuration (not recommended for production)
-  username: ""
-  password: ""
-  email: ""
-  firstName: ""
-  lastName: ""
-  
-  # Option 2: Existing secret reference (recommended)
-  existingSecret: ""
-  
-  # Option 3: Auto-generate password and store in secret
-  autoGenerate: false
-  secretName: "ssvirt-initial-admin-generated"
+  # Admin account details (required when enabled)
+  username: "admin"
+  password: ""  # Required: must be provided when enabled
+  email: "admin@example.com"
+  firstName: "System"
+  lastName: "Administrator"
 
 # OpenShift Route configuration
 route:
