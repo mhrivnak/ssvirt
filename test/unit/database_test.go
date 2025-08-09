@@ -3,7 +3,6 @@ package unit
 import (
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -44,7 +43,8 @@ func TestOrganizationRepository(t *testing.T) {
 
 	err := repo.Create(org)
 	require.NoError(t, err)
-	assert.NotEqual(t, uuid.Nil, org.ID)
+	assert.NotEmpty(t, org.ID)
+	assert.Contains(t, org.ID, "urn:vcloud:org:")
 
 	// Test GetByID
 	retrieved, err := repo.GetByID(org.ID)
@@ -95,7 +95,7 @@ func TestVDCRepository(t *testing.T) {
 
 	err = vdcRepo.Create(vdc)
 	require.NoError(t, err)
-	assert.NotEqual(t, uuid.Nil, vdc.ID)
+	assert.NotEmpty(t, vdc.ID)
 
 	// Test GetByID
 	retrieved, err := vdcRepo.GetByID(vdc.ID)
@@ -131,7 +131,7 @@ func TestCatalogRepository(t *testing.T) {
 
 	err = catalogRepo.Create(catalog)
 	require.NoError(t, err)
-	assert.NotEqual(t, uuid.Nil, catalog.ID)
+	assert.NotEmpty(t, catalog.ID)
 
 	// Test GetByID
 	retrieved, err := catalogRepo.GetByID(catalog.ID)

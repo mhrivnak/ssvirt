@@ -68,6 +68,12 @@ issues:
         - funlen
         - gocyclo
         - dupl
+    # Skip disabled directories
+    - path: \.disabled/
+      linters:
+        - typecheck
+        - unused
+        - staticcheck
     # https://github.com/go-critic/go-critic/issues/926
     - linters:
         - gocritic

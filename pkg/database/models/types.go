@@ -74,7 +74,7 @@ func ParseURN(urn string) (string, error) {
 	if urn == "" {
 		return "", fmt.Errorf("empty URN")
 	}
-	
+
 	// Check for valid URN prefixes
 	var prefix string
 	switch {
@@ -87,12 +87,12 @@ func ParseURN(urn string) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
-	
+
 	uuidStr := strings.TrimPrefix(urn, prefix)
 	if _, err := uuid.Parse(uuidStr); err != nil {
 		return "", fmt.Errorf("invalid UUID in URN: %s", uuidStr)
 	}
-	
+
 	return uuidStr, nil
 }
 

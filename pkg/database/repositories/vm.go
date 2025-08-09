@@ -1,7 +1,6 @@
 package repositories
 
 import (
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
@@ -19,7 +18,7 @@ func (r *VMRepository) Create(vm *models.VM) error {
 	return r.db.Create(vm).Error
 }
 
-func (r *VMRepository) GetByID(id uuid.UUID) (*models.VM, error) {
+func (r *VMRepository) GetByID(id string) (*models.VM, error) {
 	var vm models.VM
 	err := r.db.Where("id = ?", id).First(&vm).Error
 	if err != nil {
@@ -28,7 +27,7 @@ func (r *VMRepository) GetByID(id uuid.UUID) (*models.VM, error) {
 	return &vm, nil
 }
 
-func (r *VMRepository) GetByVAppID(vappID uuid.UUID) ([]models.VM, error) {
+func (r *VMRepository) GetByVAppID(vappID string) ([]models.VM, error) {
 	var vms []models.VM
 	err := r.db.Where("vapp_id = ?", vappID).Find(&vms).Error
 	return vms, err
@@ -53,11 +52,11 @@ func (r *VMRepository) Update(vm *models.VM) error {
 	return r.db.Save(vm).Error
 }
 
-func (r *VMRepository) Delete(id uuid.UUID) error {
-	return r.db.Delete(&models.VM{}, id).Error
+func (r *VMRepository) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&models.VM{}).Error
 }
 
-func (r *VMRepository) GetWithVApp(id uuid.UUID) (*models.VM, error) {
+func (r *VMRepository) GetWithVApp(id string) (*models.VM, error) {
 	var vm models.VM
 	err := r.db.Preload("VApp").Where("id = ?", id).First(&vm).Error
 	if err != nil {
@@ -66,7 +65,7 @@ func (r *VMRepository) GetWithVApp(id uuid.UUID) (*models.VM, error) {
 	return &vm, nil
 }
 
-func (r *VMRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.VM, error) {
+func (r *VMRepository) GetByOrganizationIDs(orgIDs []string) ([]models.VM, error) {
 	if len(orgIDs) == 0 {
 		return []models.VM{}, nil
 	}
@@ -80,7 +79,7 @@ func (r *VMRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.VM, er
 	return vms, err
 }
 
-func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []uuid.UUID, vappID *uuid.UUID, status string, limit, offset int) ([]models.VM, int64, error) {
+func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []string, vappID *string, status string, limit, offset int) ([]models.VM, int64, error) {
 	if len(orgIDs) == 0 {
 		return []models.VM{}, 0, nil
 	}
@@ -130,7 +129,7 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []uuid.UUID, vappI
 	return vms, total, err
 }
 
-func (r *VMRepository) GetByVAppIDWithFilters(vappID uuid.UUID, status string, limit, offset int) ([]models.VM, int64, error) {
+func (r *VMRepository) GetByVAppIDWithFilters(vappID string, status string, limit, offset int) ([]models.VM, int64, error) {
 	// Build the base query for specific vApp
 	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
 		Where("v_app_id = ?", vappID)

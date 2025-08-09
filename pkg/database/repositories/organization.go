@@ -93,19 +93,19 @@ func (r *OrganizationRepository) GetWithEntityRefs(id string) (*models.Organizat
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Populate computed count fields - for now set to 0, can be enhanced later
 	org.OrgVdcCount = 0
-	org.CatalogCount = 0  
+	org.CatalogCount = 0
 	org.VappCount = 0
 	org.RunningVMCount = 0
 	org.UserCount = 0
 	org.DiskCount = 0
 	org.DirectlyManagedOrgCount = 0
-	
+
 	// Set managedBy to nil for now - can be enhanced later
 	org.ManagedBy = nil
-	
+
 	return org, nil
 }
 
@@ -120,18 +120,18 @@ func (r *OrganizationRepository) ListWithEntityRefs(limit, offset int) ([]models
 	if limit > 1000 { // reasonable maximum
 		limit = 1000
 	}
-	
+
 	var orgs []models.Organization
 	err := r.db.Limit(limit).Offset(offset).Find(&orgs).Error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Populate computed fields for each organization
 	for i := range orgs {
 		org := &orgs[i]
-		
-		// Populate computed count fields - for now set to 0, can be enhanced later  
+
+		// Populate computed count fields - for now set to 0, can be enhanced later
 		org.OrgVdcCount = 0
 		org.CatalogCount = 0
 		org.VappCount = 0
@@ -139,11 +139,11 @@ func (r *OrganizationRepository) ListWithEntityRefs(limit, offset int) ([]models
 		org.UserCount = 0
 		org.DiskCount = 0
 		org.DirectlyManagedOrgCount = 0
-		
+
 		// Set managedBy to nil for now - can be enhanced later
 		org.ManagedBy = nil
 	}
-	
+
 	return orgs, nil
 }
 
@@ -157,20 +157,20 @@ func (r *OrganizationRepository) CreateDefaultOrganization() (*models.Organizati
 	if existing != nil {
 		return existing, nil // Already exists
 	}
-	
+
 	// Create the Provider organization
 	org := &models.Organization{
-		Name:              models.DefaultOrgName,
-		DisplayName:       "Provider Organization", 
-		Description:       "Default provider organization",
-		IsEnabled:         true,
-		CanManageOrgs:     true,
-		CanPublish:        false,
+		Name:          models.DefaultOrgName,
+		DisplayName:   "Provider Organization",
+		Description:   "Default provider organization",
+		IsEnabled:     true,
+		CanManageOrgs: true,
+		CanPublish:    false,
 	}
-	
+
 	if err := r.Create(org); err != nil {
 		return nil, err
 	}
-	
+
 	return org, nil
 }

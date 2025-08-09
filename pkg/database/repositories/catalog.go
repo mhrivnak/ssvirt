@@ -1,7 +1,6 @@
 package repositories
 
 import (
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
@@ -19,7 +18,7 @@ func (r *CatalogRepository) Create(catalog *models.Catalog) error {
 	return r.db.Create(catalog).Error
 }
 
-func (r *CatalogRepository) GetByID(id uuid.UUID) (*models.Catalog, error) {
+func (r *CatalogRepository) GetByID(id string) (*models.Catalog, error) {
 	var catalog models.Catalog
 	err := r.db.Where("id = ?", id).First(&catalog).Error
 	if err != nil {
@@ -28,13 +27,13 @@ func (r *CatalogRepository) GetByID(id uuid.UUID) (*models.Catalog, error) {
 	return &catalog, nil
 }
 
-func (r *CatalogRepository) GetByOrganizationID(orgID uuid.UUID) ([]models.Catalog, error) {
+func (r *CatalogRepository) GetByOrganizationID(orgID string) ([]models.Catalog, error) {
 	var catalogs []models.Catalog
 	err := r.db.Where("organization_id = ? OR is_shared = true", orgID).Find(&catalogs).Error
 	return catalogs, err
 }
 
-func (r *CatalogRepository) GetByOrganizationIDs(orgIDs []uuid.UUID) ([]models.Catalog, error) {
+func (r *CatalogRepository) GetByOrganizationIDs(orgIDs []string) ([]models.Catalog, error) {
 	var catalogs []models.Catalog
 	if len(orgIDs) == 0 {
 		// If user has no organization access, only return shared catalogs
@@ -55,11 +54,11 @@ func (r *CatalogRepository) Update(catalog *models.Catalog) error {
 	return r.db.Save(catalog).Error
 }
 
-func (r *CatalogRepository) Delete(id uuid.UUID) error {
+func (r *CatalogRepository) Delete(id string) error {
 	return r.db.Delete(&models.Catalog{}, id).Error
 }
 
-func (r *CatalogRepository) GetWithTemplates(id uuid.UUID) (*models.Catalog, error) {
+func (r *CatalogRepository) GetWithTemplates(id string) (*models.Catalog, error) {
 	var catalog models.Catalog
 	err := r.db.Preload("VAppTemplates").Where("id = ?", id).First(&catalog).Error
 	if err != nil {

@@ -97,16 +97,16 @@ func (s *Server) setupRoutes() {
 	cloudAPI.Use(auth.JWTMiddleware(s.jwtManager))
 	{
 		// Users API
-		cloudAPI.GET("/users", s.listUsersHandler)     // GET /cloudapi/1.0.0/users - list users
-		cloudAPI.GET("/users/:id", s.getUserHandler)   // GET /cloudapi/1.0.0/users/{id} - get user
+		cloudAPI.GET("/users", s.listUsersHandler)   // GET /cloudapi/1.0.0/users - list users
+		cloudAPI.GET("/users/:id", s.getUserHandler) // GET /cloudapi/1.0.0/users/{id} - get user
 
 		// Roles API
-		cloudAPI.GET("/roles", s.listRolesHandler)     // GET /cloudapi/1.0.0/roles - list roles
-		cloudAPI.GET("/roles/:id", s.getRoleHandler)   // GET /cloudapi/1.0.0/roles/{id} - get role
+		cloudAPI.GET("/roles", s.listRolesHandler)   // GET /cloudapi/1.0.0/roles - list roles
+		cloudAPI.GET("/roles/:id", s.getRoleHandler) // GET /cloudapi/1.0.0/roles/{id} - get role
 
 		// Organizations API
-		cloudAPI.GET("/orgs", s.listOrgsHandler)       // GET /cloudapi/1.0.0/orgs - list organizations
-		cloudAPI.GET("/orgs/:id", s.getOrgHandler)     // GET /cloudapi/1.0.0/orgs/{id} - get organization
+		cloudAPI.GET("/orgs", s.listOrgsHandler)   // GET /cloudapi/1.0.0/orgs - list organizations
+		cloudAPI.GET("/orgs/:id", s.getOrgHandler) // GET /cloudapi/1.0.0/orgs/{id} - get organization
 	}
 
 	// Legacy authentication endpoints (at root level for VMware Cloud Director compatibility)
@@ -127,9 +127,9 @@ func (s *Server) setupRoutes() {
 			// TODO: These legacy endpoints have been temporarily commented out during
 			// the migration to VMware Cloud Director API spec with URN-based IDs.
 			// They will be updated or permanently removed in future iterations.
-			
+
 			// Organization endpoints
-			// protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations  
+			// protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations
 			// protected.GET("/org/:org-id", s.organizationHandler)                 // GET /api/org/{org-id} - get organization
 			// protected.GET("/org/:org-id/vdcs/query", s.vdcQueryHandler)          // GET /api/org/{org-id}/vdcs/query - list VDCs in organization
 			// protected.GET("/org/:org-id/catalogs/query", s.catalogsQueryHandler) // GET /api/org/{org-id}/catalogs/query - list catalogs in organization

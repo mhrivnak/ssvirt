@@ -80,26 +80,26 @@ func (db *DB) AutoMigrate() error {
 // BootstrapDefaultData creates default roles and Provider organization
 func (db *DB) BootstrapDefaultData() error {
 	log.Println("Bootstrapping default data...")
-	
+
 	// Create role repository
 	roleRepo := repositories.NewRoleRepository(db.DB)
-	
+
 	// Create default roles
 	if err := roleRepo.CreateDefaultRoles(); err != nil {
 		return fmt.Errorf("failed to create default roles: %w", err)
 	}
 	log.Println("Default roles created successfully")
-	
+
 	// Create organization repository
 	orgRepo := repositories.NewOrganizationRepository(db.DB)
-	
+
 	// Create default Provider organization
 	_, err := orgRepo.CreateDefaultOrganization()
 	if err != nil {
 		return fmt.Errorf("failed to create default organization: %w", err)
 	}
 	log.Println("Default Provider organization created successfully")
-	
+
 	log.Println("Default data bootstrap completed successfully")
 	return nil
 }

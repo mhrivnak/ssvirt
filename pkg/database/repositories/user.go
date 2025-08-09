@@ -91,7 +91,7 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Populate role entity references
 	user.RoleEntityRefs = make([]models.EntityRef, 0)
 	for _, userRole := range user.UserRoles {
@@ -102,7 +102,7 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 			})
 		}
 	}
-	
+
 	// Populate organization entity reference (assuming user belongs to one org)
 	if len(user.UserRoles) > 0 && user.UserRoles[0].Organization != nil {
 		user.OrgEntityRef = &models.EntityRef{
@@ -110,7 +110,7 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 			ID:   user.UserRoles[0].Organization.ID,
 		}
 	}
-	
+
 	return user, nil
 }
 
@@ -125,18 +125,18 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 	if limit > 1000 { // reasonable maximum
 		limit = 1000
 	}
-	
+
 	var users []models.User
 	err := r.db.Preload("UserRoles").Preload("UserRoles.Organization").Preload("UserRoles.Role").
 		Limit(limit).Offset(offset).Find(&users).Error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Populate entity references for each user
 	for i := range users {
 		user := &users[i]
-		
+
 		// Populate role entity references
 		user.RoleEntityRefs = make([]models.EntityRef, 0)
 		for _, userRole := range user.UserRoles {
@@ -147,7 +147,7 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 				})
 			}
 		}
-		
+
 		// Populate organization entity reference
 		if len(user.UserRoles) > 0 && user.UserRoles[0].Organization != nil {
 			user.OrgEntityRef = &models.EntityRef{
@@ -156,6 +156,6 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 			}
 		}
 	}
-	
+
 	return users, nil
 }

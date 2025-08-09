@@ -104,7 +104,7 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 			ReadOnly:    true,
 		},
 	}
-	
+
 	for _, role := range roles {
 		// Check if role already exists
 		existing, err := r.GetByName(role.Name)
@@ -114,12 +114,12 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 		if existing != nil {
 			continue // Role already exists
 		}
-		
+
 		// Create the role
 		if err := r.Create(&role); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
