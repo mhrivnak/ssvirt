@@ -36,6 +36,7 @@ type Server struct {
 	roleHandlers    *handlers.RoleHandlers
 	orgHandlers     *handlers.OrgHandlers
 	vdcHandlers     *handlers.VDCHandlers
+	catalogHandlers *handlers.CatalogHandlers
 	sessionHandlers *handlers.SessionHandlers
 	router          *gin.Engine
 	httpServer      *http.Server
@@ -61,6 +62,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		roleHandlers:    handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:     handlers.NewOrgHandlers(orgRepo),
 		vdcHandlers:     handlers.NewVDCHandlers(vdcRepo, orgRepo),
+		catalogHandlers: handlers.NewCatalogHandlers(catalogRepo, orgRepo),
 		sessionHandlers: handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
 	}
 
@@ -130,6 +132,12 @@ func (s *Server) setupRoutes() {
 			// Organizations API
 			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
 			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+
+			// Catalogs API
+			cloudAPI.GET("/catalogs", s.catalogHandlers.ListCatalogs)                 // GET /cloudapi/1.0.0/catalogs - list catalogs
+			cloudAPI.POST("/catalogs", s.catalogHandlers.CreateCatalog)               // POST /cloudapi/1.0.0/catalogs - create catalog
+			cloudAPI.GET("/catalogs/:catalogUrn", s.catalogHandlers.GetCatalog)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn} - get catalog
+			cloudAPI.DELETE("/catalogs/:catalogUrn", s.catalogHandlers.DeleteCatalog) // DELETE /cloudapi/1.0.0/catalogs/{catalogUrn} - delete catalog
 		}
 
 	}
@@ -163,17 +171,11 @@ func (s *Server) setupRoutes() {
 			// protected.GET("/org", s.organizationsHandler)                        // GET /api/org - list organizations
 			// protected.GET("/org/:org-id", s.organizationHandler)                 // GET /api/org/{org-id} - get organization
 			// protected.GET("/org/:org-id/vdcs/query", s.vdcQueryHandler)          // GET /api/org/{org-id}/vdcs/query - list VDCs in organization
-			// protected.GET("/org/:org-id/catalogs/query", s.catalogsQueryHandler) // GET /api/org/{org-id}/catalogs/query - list catalogs in organization
 
 			// VDC endpoints
 			// protected.GET("/vdc/:vdc-id", s.vdcHandler)                                                     // GET /api/vdc/{vdc-id} - get VDC
 			// protected.GET("/vdc/:vdc-id/vApps/query", s.vAppsQueryHandler)                                  // GET /api/vdc/{vdc-id}/vApps/query - list vApps in VDC
 			// protected.POST("/vdc/:vdc-id/action/instantiateVAppTemplate", s.instantiateVAppTemplateHandler) // POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
-
-			// Catalog endpoints
-			// protected.GET("/catalog/:catalog-id", s.catalogHandler)                              // GET /api/catalog/{catalog-id} - get catalog
-			// protected.GET("/catalog/:catalog-id/catalogItems/query", s.catalogItemsQueryHandler) // GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
-			// protected.GET("/catalogItem/:item-id", s.catalogItemHandler)                         // GET /api/catalogItem/{item-id} - get catalog item
 
 			// vApp endpoints
 			// protected.GET("/vApp/:vapp-id", s.vAppHandler)          // GET /api/vApp/{vapp-id} - get vApp
