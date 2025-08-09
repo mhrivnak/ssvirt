@@ -5,14 +5,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type VDC struct {
-	ID              uuid.UUID       `gorm:"type:uuid;primary_key" json:"id"`
+	ID              string          `gorm:"type:varchar(255);primary_key" json:"id"`
 	Name            string          `gorm:"not null" json:"name"`
-	OrganizationID  uuid.UUID       `gorm:"type:uuid;not null" json:"organization_id"`
+	OrganizationID  string          `gorm:"type:varchar(255);not null;index" json:"organization_id"`
 	AllocationModel AllocationModel `gorm:"type:varchar(20);check:allocation_model IN ('PayAsYouGo', 'AllocationPool', 'ReservationPool')" json:"allocation_model"`
 	CPULimit        *int            `gorm:"check:cpu_limit > 0" json:"cpu_limit"`
 	MemoryLimitMB   *int            `gorm:"check:memory_limit_mb > 0" json:"memory_limit_mb"`
@@ -24,20 +23,20 @@ type VDC struct {
 	DeletedAt       gorm.DeletedAt  `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships
-	Organization *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
-	VApps        []VApp        `gorm:"foreignKey:VDCID" json:"vapps,omitempty"`
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
+	VApps        []VApp        `gorm:"foreignKey:VDCID;references:ID" json:"vapps,omitempty"`
 }
 
 func (v *VDC) BeforeCreate(tx *gorm.DB) error {
-	if v.ID == uuid.Nil {
-		v.ID = uuid.New()
+	if v.ID == "" {
+		v.ID = GenerateOrgURN() // Reuse org URN format for VDCs
 	}
 
 	// Generate namespace name if not set
 	if v.Namespace == "" {
 		// Load organization to get name
 		var org Organization
-		if err := tx.First(&org, v.OrganizationID).Error; err != nil {
+		if err := tx.Where("id = ?", v.OrganizationID).First(&org).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
 		v.Namespace = generateNamespaceName(org.Name, v.Name)

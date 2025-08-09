@@ -6,11 +6,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/auth"
-	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
 // HealthResponse represents the health check response
@@ -115,11 +113,10 @@ func (s *Server) versionHandler(c *gin.Context) {
 
 // UserProfileResponse represents the user profile response
 type UserProfileResponse struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	FullName string `json:"full_name"`
 }
 
 // userProfileHandler handles user profile requests (example authenticated endpoint)
@@ -139,253 +136,13 @@ func (s *Server) userProfileHandler(c *gin.Context) {
 	}
 
 	response := UserProfileResponse{
-		ID:        user.ID.String(),
-		Username:  user.Username,
-		Email:     user.Email,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
+		ID:       user.ID,
+		Username: user.Username,
+		Email:    user.Email,
+		FullName: user.FullName,
 	}
 
 	SendSuccess(c, http.StatusOK, response)
-}
-
-// OrganizationResponse represents an organization response
-type OrganizationResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name"`
-	Description string `json:"description"`
-	Enabled     bool   `json:"enabled"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
-}
-
-// OrganizationListResponse represents a list of organizations
-type OrganizationListResponse struct {
-	Organizations []OrganizationResponse `json:"organizations"`
-	Total         int                    `json:"total"`
-}
-
-// organizationsHandler handles GET /api/org - list all organizations
-func (s *Server) organizationsHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	_, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Get organizations from database
-	orgs, err := s.orgRepo.List()
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve organizations"))
-		return
-	}
-
-	// Convert to response format
-	orgResponses := make([]OrganizationResponse, len(orgs))
-	for i, org := range orgs {
-		orgResponses[i] = OrganizationResponse{
-			ID:          org.ID.String(),
-			Name:        org.Name,
-			DisplayName: org.DisplayName,
-			Description: org.Description,
-			Enabled:     org.Enabled,
-			CreatedAt:   org.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
-		}
-	}
-
-	response := OrganizationListResponse{
-		Organizations: orgResponses,
-		Total:         len(orgResponses),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// organizationHandler handles GET /api/org/{org-id} - get specific organization
-func (s *Server) organizationHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	_, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse organization ID
-	orgIDStr := c.Param("org-id")
-	orgID, err := uuid.Parse(orgIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
-		return
-	}
-
-	// Get organization from database
-	org, err := s.orgRepo.GetByID(orgID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Organization not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve organization"))
-		}
-		return
-	}
-
-	response := OrganizationResponse{
-		ID:          org.ID.String(),
-		Name:        org.Name,
-		DisplayName: org.DisplayName,
-		Description: org.Description,
-		Enabled:     org.Enabled,
-		CreatedAt:   org.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   org.UpdatedAt.Format(time.RFC3339),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// VDCResponse represents a VDC response
-type VDCResponse struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	OrganizationID  string `json:"organization_id"`
-	Namespace       string `json:"namespace"`
-	AllocationModel string `json:"allocation_model"`
-	CPULimit        *int   `json:"cpu_limit"`
-	MemoryLimitMB   *int   `json:"memory_limit_mb"`
-	StorageLimitMB  *int   `json:"storage_limit_mb"`
-	Enabled         bool   `json:"enabled"`
-	CreatedAt       string `json:"created_at"`
-	UpdatedAt       string `json:"updated_at"`
-}
-
-// vdcHandler handles GET /api/vdc/{vdc-id} - get specific VDC
-func (s *Server) vdcHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	_, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse VDC ID
-	vdcIDStr := c.Param("vdc-id")
-	vdcID, err := uuid.Parse(vdcIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VDC ID format"))
-		return
-	}
-
-	// Get VDC from database
-	vdc, err := s.vdcRepo.GetByID(vdcID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VDC not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDC"))
-		}
-		return
-	}
-
-	response := VDCResponse{
-		ID:              vdc.ID.String(),
-		Name:            vdc.Name,
-		OrganizationID:  vdc.OrganizationID.String(),
-		Namespace:       vdc.Namespace,
-		AllocationModel: string(vdc.AllocationModel),
-		CPULimit:        vdc.CPULimit,
-		MemoryLimitMB:   vdc.MemoryLimitMB,
-		StorageLimitMB:  vdc.StorageLimitMB,
-		Enabled:         vdc.Enabled,
-		CreatedAt:       vdc.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       vdc.UpdatedAt.Format(time.RFC3339),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// VDCQueryResponse represents a VDC query response
-type VDCQueryResponse struct {
-	VDCs  []VDCResponse `json:"vdcs"`
-	Total int           `json:"total"`
-}
-
-// vdcQueryHandler handles GET /api/org/{org-id}/vdcs/query - list VDCs in organization
-func (s *Server) vdcQueryHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse organization ID
-	orgIDStr := c.Param("org-id")
-	orgID, err := uuid.Parse(orgIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
-		return
-	}
-
-	// Get user with their organization roles
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	// Check if user has access to this organization
-	hasAccess := false
-	for _, role := range user.UserRoles {
-		if role.OrganizationID == orgID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this organization"))
-		return
-	}
-
-	// Get VDCs for the organization
-	vdcs, err := s.vdcRepo.GetByOrganizationID(orgID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDCs"))
-		return
-	}
-
-	// Convert to response format
-	vdcResponses := make([]VDCResponse, len(vdcs))
-	for i, vdc := range vdcs {
-		vdcResponses[i] = VDCResponse{
-			ID:              vdc.ID.String(),
-			Name:            vdc.Name,
-			OrganizationID:  vdc.OrganizationID.String(),
-			Namespace:       vdc.Namespace,
-			AllocationModel: string(vdc.AllocationModel),
-			CPULimit:        vdc.CPULimit,
-			MemoryLimitMB:   vdc.MemoryLimitMB,
-			StorageLimitMB:  vdc.StorageLimitMB,
-			Enabled:         vdc.Enabled,
-			CreatedAt:       vdc.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:       vdc.UpdatedAt.Format(time.RFC3339),
-		}
-	}
-
-	response := VDCQueryResponse{
-		VDCs:  vdcResponses,
-		Total: len(vdcResponses),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// SessionRequest represents a session creation request (login)
-type SessionRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
 }
 
 // SessionResponse represents a successful session creation response
@@ -397,11 +154,10 @@ type SessionResponse struct {
 
 // SessionUserInfo represents user information in session responses
 type SessionUserInfo struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	FullName string `json:"full_name"`
 }
 
 // CurrentSessionResponse represents current session information
@@ -413,20 +169,14 @@ type CurrentSessionResponse struct {
 
 // createSessionHandler handles POST /api/sessions - user login
 func (s *Server) createSessionHandler(c *gin.Context) {
-	var req SessionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", err.Error()))
+	var loginReq auth.LoginRequest
+	if err := c.ShouldBindJSON(&loginReq); err != nil {
+		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body"))
 		return
 	}
 
-	// Convert to auth service request
-	loginReq := &auth.LoginRequest{
-		Username: req.Username,
-		Password: req.Password,
-	}
-
-	// Authenticate user
-	loginResp, err := s.authSvc.Login(loginReq)
+	// Attempt to authenticate the user
+	loginResp, err := s.authSvc.Login(&loginReq)
 	if err != nil {
 		if err == auth.ErrInvalidCredentials {
 			SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid username or password"))
@@ -442,11 +192,10 @@ func (s *Server) createSessionHandler(c *gin.Context) {
 		Token:     loginResp.Token,
 		ExpiresAt: loginResp.ExpiresAt.Format(time.RFC3339),
 		User: SessionUserInfo{
-			ID:        loginResp.User.ID.String(),
-			Username:  loginResp.User.Username,
-			Email:     loginResp.User.Email,
-			FirstName: loginResp.User.FirstName,
-			LastName:  loginResp.User.LastName,
+			ID:       loginResp.User.ID,
+			Username: loginResp.User.Username,
+			Email:    loginResp.User.Email,
+			FullName: loginResp.User.FullName,
 		},
 	}
 
@@ -462,14 +211,15 @@ func (s *Server) deleteSessionHandler(c *gin.Context) {
 		return
 	}
 
-	// NOTE: This is a simplified logout implementation. In production, token blacklisting
+	// NOTE: In a production system, proper JWT invalidation would require maintaining
+	// a blacklist of tokens or using short-lived tokens with refresh tokens. This
 	// should be implemented using Redis or similar cache to store invalidated tokens
 	// until their expiration time. For now, we acknowledge the logout and expect
 	// the client to discard the token.
 
 	response := map[string]interface{}{
 		"message":    "Session terminated successfully",
-		"user_id":    claims.UserID.String(),
+		"user_id":    claims.UserID,
 		"username":   claims.Username,
 		"logged_out": true,
 	}
@@ -477,7 +227,7 @@ func (s *Server) deleteSessionHandler(c *gin.Context) {
 	SendSuccess(c, http.StatusOK, response)
 }
 
-// getSessionHandler handles GET /api/session - get current session info
+// getSessionHandler handles GET /api/session - get current session information
 func (s *Server) getSessionHandler(c *gin.Context) {
 	// Get user claims from JWT middleware
 	claims, exists := auth.GetClaims(c)
@@ -486,7 +236,7 @@ func (s *Server) getSessionHandler(c *gin.Context) {
 		return
 	}
 
-	// Get full user details from database
+	// Get user details from database
 	user, err := s.authSvc.GetUser(claims.UserID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -503,576 +253,13 @@ func (s *Server) getSessionHandler(c *gin.Context) {
 	response := CurrentSessionResponse{
 		Authenticated: true,
 		User: SessionUserInfo{
-			ID:        user.ID.String(),
-			Username:  user.Username,
-			Email:     user.Email,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+			FullName: user.FullName,
 		},
 		ExpiresAt: expiresAt.Format(time.RFC3339),
 	}
 
 	SendSuccess(c, http.StatusOK, response)
-}
-
-// CatalogResponse represents a catalog response
-type CatalogResponse struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Organization string `json:"organization"`
-	Description  string `json:"description"`
-	IsShared     bool   `json:"is_shared"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
-}
-
-// CatalogQueryResponse represents a catalog query response
-type CatalogQueryResponse struct {
-	Catalogs []CatalogResponse `json:"catalogs"`
-	Total    int               `json:"total"`
-}
-
-// catalogsQueryHandler handles GET /api/org/{org-id}/catalogs/query - list catalogs in organization
-func (s *Server) catalogsQueryHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse organization ID
-	orgIDStr := c.Param("org-id")
-	orgID, err := uuid.Parse(orgIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid organization ID format"))
-		return
-	}
-
-	// Get user with their organization roles
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	// Check if user has access to this organization
-	hasAccess := false
-	for _, role := range user.UserRoles {
-		if role.OrganizationID == orgID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this organization"))
-		return
-	}
-
-	// Get catalogs for the specific organization
-	catalogs, err := s.catalogRepo.GetByOrganizationID(orgID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalogs"))
-		return
-	}
-
-	// Convert to response format
-	catalogResponses := make([]CatalogResponse, len(catalogs))
-	for i, catalog := range catalogs {
-		catalogResponses[i] = CatalogResponse{
-			ID:           catalog.ID.String(),
-			Name:         catalog.Name,
-			Organization: catalog.OrganizationID.String(),
-			Description:  catalog.Description,
-			IsShared:     catalog.IsShared,
-			CreatedAt:    catalog.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:    catalog.UpdatedAt.Format(time.RFC3339),
-		}
-	}
-
-	response := CatalogQueryResponse{
-		Catalogs: catalogResponses,
-		Total:    len(catalogResponses),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// CatalogDetailResponse represents a detailed catalog response with templates
-type CatalogDetailResponse struct {
-	ID            string                `json:"id"`
-	Name          string                `json:"name"`
-	Description   string                `json:"description"`
-	IsShared      bool                  `json:"is_shared"`
-	CreatedAt     string                `json:"created_at"`
-	UpdatedAt     string                `json:"updated_at"`
-	Templates     []CatalogItemResponse `json:"catalog_items"`
-	TemplateCount int                   `json:"template_count"`
-}
-
-// CatalogItemResponse represents a catalog item (vApp template) response
-type CatalogItemResponse struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	OSType         string `json:"os_type"`
-	VMInstanceType string `json:"vm_instance_type"`
-	CPUCount       *int   `json:"cpu_count"`
-	MemoryMB       *int   `json:"memory_mb"`
-	DiskSizeGB     *int   `json:"disk_size_gb"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
-}
-
-// catalogHandler handles GET /api/catalog/{catalog-id} - get specific catalog with details
-func (s *Server) catalogHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse catalog ID
-	catalogIDStr := c.Param("catalog-id")
-	catalogID, err := uuid.Parse(catalogIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog ID format"))
-		return
-	}
-
-	// Get catalog with templates from database
-	catalog, err := s.catalogRepo.GetWithTemplates(catalogID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog"))
-		}
-		return
-	}
-
-	// Check if user has access to this catalog
-	// Get user with their organization roles to verify access
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	// Check if catalog is shared (accessible to all users) or if user belongs to catalog's organization
-	hasAccess := catalog.IsShared
-	if !hasAccess {
-		for _, role := range user.UserRoles {
-			if role.OrganizationID == catalog.OrganizationID {
-				hasAccess = true
-				break
-			}
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog"))
-		return
-	}
-
-	// Convert templates to response format
-	templateResponses := make([]CatalogItemResponse, len(catalog.VAppTemplates))
-	for i, template := range catalog.VAppTemplates {
-		templateResponses[i] = CatalogItemResponse{
-			ID:             template.ID.String(),
-			Name:           template.Name,
-			Description:    template.Description,
-			OSType:         template.OSType,
-			VMInstanceType: template.VMInstanceType,
-			CPUCount:       template.CPUCount,
-			MemoryMB:       template.MemoryMB,
-			DiskSizeGB:     template.DiskSizeGB,
-			CreatedAt:      template.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
-		}
-	}
-
-	response := CatalogDetailResponse{
-		ID:            catalog.ID.String(),
-		Name:          catalog.Name,
-		Description:   catalog.Description,
-		IsShared:      catalog.IsShared,
-		CreatedAt:     catalog.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:     catalog.UpdatedAt.Format(time.RFC3339),
-		Templates:     templateResponses,
-		TemplateCount: len(templateResponses),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// CatalogItemsQueryResponse represents a catalog items query response
-type CatalogItemsQueryResponse struct {
-	CatalogItems []CatalogItemResponse `json:"catalog_items"`
-	Total        int                   `json:"total"`
-}
-
-// catalogItemsQueryHandler handles GET /api/catalog/{catalog-id}/catalogItems/query - list catalog items
-func (s *Server) catalogItemsQueryHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse catalog ID
-	catalogIDStr := c.Param("catalog-id")
-	catalogID, err := uuid.Parse(catalogIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog ID format"))
-		return
-	}
-
-	// Verify catalog exists
-	catalog, err := s.catalogRepo.GetByID(catalogID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog"))
-		}
-		return
-	}
-
-	// Check if user has access to this catalog
-	// Get user with their organization roles to verify access
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	// Check if catalog is shared (accessible to all users) or if user belongs to catalog's organization
-	hasAccess := catalog.IsShared
-	if !hasAccess {
-		for _, role := range user.UserRoles {
-			if role.OrganizationID == catalog.OrganizationID {
-				hasAccess = true
-				break
-			}
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog"))
-		return
-	}
-
-	// Get templates for this catalog
-	templates, err := s.templateRepo.GetByCatalogID(catalogID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog items"))
-		return
-	}
-
-	// Convert to response format
-	itemResponses := make([]CatalogItemResponse, len(templates))
-	for i, template := range templates {
-		itemResponses[i] = CatalogItemResponse{
-			ID:             template.ID.String(),
-			Name:           template.Name,
-			Description:    template.Description,
-			OSType:         template.OSType,
-			VMInstanceType: template.VMInstanceType,
-			CPUCount:       template.CPUCount,
-			MemoryMB:       template.MemoryMB,
-			DiskSizeGB:     template.DiskSizeGB,
-			CreatedAt:      template.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
-		}
-	}
-
-	response := CatalogItemsQueryResponse{
-		CatalogItems: itemResponses,
-		Total:        len(itemResponses),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// catalogItemHandler handles GET /api/catalogItem/{item-id} - get specific catalog item (vApp template)
-func (s *Server) catalogItemHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse catalog item ID
-	itemIDStr := c.Param("item-id")
-	itemID, err := uuid.Parse(itemIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid catalog item ID format"))
-		return
-	}
-
-	// Get template from database
-	template, err := s.templateRepo.GetByID(itemID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Catalog item not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog item"))
-		}
-		return
-	}
-
-	// Get catalog to check access permissions
-	catalog, err := s.catalogRepo.GetByID(template.CatalogID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve catalog information"))
-		return
-	}
-
-	// Check if user has access to this catalog
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	// Check if catalog is shared or if user belongs to catalog's organization
-	hasAccess := catalog.IsShared
-	if !hasAccess {
-		for _, role := range user.UserRoles {
-			if role.OrganizationID == catalog.OrganizationID {
-				hasAccess = true
-				break
-			}
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this catalog item"))
-		return
-	}
-
-	// Convert to response format
-	response := CatalogItemResponse{
-		ID:             template.ID.String(),
-		Name:           template.Name,
-		Description:    template.Description,
-		OSType:         template.OSType,
-		VMInstanceType: template.VMInstanceType,
-		CPUCount:       template.CPUCount,
-		MemoryMB:       template.MemoryMB,
-		DiskSizeGB:     template.DiskSizeGB,
-		CreatedAt:      template.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:      template.UpdatedAt.Format(time.RFC3339),
-	}
-
-	SendSuccess(c, http.StatusOK, response)
-}
-
-// InstantiateVAppTemplateRequest represents a vApp template instantiation request
-type InstantiateVAppTemplateRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
-	Source      string `json:"source" binding:"required"` // Template ID or href
-	Deploy      bool   `json:"deploy"`                    // Whether to deploy after creation
-	PowerOn     bool   `json:"power_on"`                  // Whether to power on after deployment
-}
-
-// InstantiateVAppTemplateResponse represents a vApp template instantiation response
-type InstantiateVAppTemplateResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	VDCID       string `json:"vdc_id"`
-	TemplateID  string `json:"template_id"`
-	CreatedAt   string `json:"created_at"`
-	Task        struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-		Type   string `json:"type"`
-	} `json:"task"`
-}
-
-// instantiateVAppTemplateHandler handles POST /api/vdc/{vdc-id}/action/instantiateVAppTemplate - instantiate vApp template
-func (s *Server) instantiateVAppTemplateHandler(c *gin.Context) {
-	// Get user claims from JWT middleware
-	claims, exists := auth.GetClaims(c)
-	if !exists {
-		SendError(c, NewAPIError(http.StatusUnauthorized, "Unauthorized", "Invalid or missing authentication token"))
-		return
-	}
-
-	// Parse VDC ID
-	vdcIDStr := c.Param("vdc-id")
-	vdcID, err := uuid.Parse(vdcIDStr)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid VDC ID format"))
-		return
-	}
-
-	// Parse request body
-	var req InstantiateVAppTemplateRequest
-	if bindErr := c.ShouldBindJSON(&req); bindErr != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid request body", bindErr.Error()))
-		return
-	}
-
-	// Verify VDC exists and user has access
-	vdc, err := s.vdcRepo.GetWithOrganization(vdcID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "VDC not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve VDC"))
-		}
-		return
-	}
-
-	// Check if user has access to this VDC's organization
-	user, err := s.userRepo.GetWithRoles(claims.UserID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve user information"))
-		return
-	}
-
-	hasAccess := false
-	for _, role := range user.UserRoles {
-		if role.OrganizationID == vdc.OrganizationID {
-			hasAccess = true
-			break
-		}
-	}
-
-	if !hasAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this VDC"))
-		return
-	}
-
-	// Parse template ID from source (could be ID or href)
-	templateID, err := uuid.Parse(req.Source)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusBadRequest, "Bad Request", "Invalid template ID format"))
-		return
-	}
-
-	// Verify template exists
-	template, err := s.templateRepo.GetByID(templateID)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			SendError(c, NewAPIError(http.StatusNotFound, "Not Found", "Template not found"))
-		} else {
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve template"))
-		}
-		return
-	}
-
-	// Check if user has access to template's catalog
-	catalog, err := s.catalogRepo.GetByID(template.CatalogID)
-	if err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to retrieve template catalog"))
-		return
-	}
-
-	// Check catalog access (shared or user's organization)
-	catalogAccess := catalog.IsShared
-	if !catalogAccess {
-		for _, role := range user.UserRoles {
-			if role.OrganizationID == catalog.OrganizationID {
-				catalogAccess = true
-				break
-			}
-		}
-	}
-
-	if !catalogAccess {
-		SendError(c, NewAPIError(http.StatusForbidden, "Forbidden", "You do not have permission to access this template"))
-		return
-	}
-
-	// Create vApp from template
-	vapp := &models.VApp{
-		Name:        req.Name,
-		VDCID:       vdcID,
-		TemplateID:  &templateID,
-		Status:      "UNRESOLVED", // Initial status
-		Description: req.Description,
-	}
-
-	// Set status based on request parameters
-	if req.Deploy {
-		if req.PowerOn {
-			vapp.Status = "POWERED_ON"
-		} else {
-			vapp.Status = "POWERED_OFF"
-		}
-	}
-
-	// Use transaction for atomic creation
-	tx := s.db.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-
-	// Create vApp in database
-	if err := tx.Create(vapp).Error; err != nil {
-		tx.Rollback()
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create vApp"))
-		return
-	}
-
-	// Create VMs based on template specifications
-	if template.CPUCount != nil && template.MemoryMB != nil {
-		vm := &models.VM{
-			Name:      req.Name + "-vm-1", // Default VM name
-			VAppID:    vapp.ID,
-			VMName:    req.Name + "-vm-1", // OpenShift VM resource name
-			Namespace: vdc.Namespace,      // Use VDC's namespace
-			Status:    vapp.Status,
-			CPUCount:  template.CPUCount,
-			MemoryMB:  template.MemoryMB,
-		}
-
-		if err := tx.Create(vm).Error; err != nil {
-			tx.Rollback()
-			SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to create VM"))
-			return
-		}
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		SendError(c, NewAPIError(http.StatusInternalServerError, "Internal Server Error", "Failed to commit transaction"))
-		return
-	}
-
-	// Generate mock task ID for VMware Cloud Director compatibility
-	taskID := uuid.New().String()
-
-	response := InstantiateVAppTemplateResponse{
-		ID:          vapp.ID.String(),
-		Name:        vapp.Name,
-		Description: vapp.Description,
-		Status:      vapp.Status,
-		VDCID:       vapp.VDCID.String(),
-		TemplateID:  vapp.TemplateID.String(),
-		CreatedAt:   vapp.CreatedAt.Format(time.RFC3339),
-		Task: struct {
-			ID     string `json:"id"`
-			Status string `json:"status"`
-			Type   string `json:"type"`
-		}{
-			ID:     taskID,
-			Status: "running",
-			Type:   "vappInstantiateFromTemplate",
-		},
-	}
-
-	SendSuccess(c, http.StatusCreated, response)
 }

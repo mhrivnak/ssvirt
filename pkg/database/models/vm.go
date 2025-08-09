@@ -3,14 +3,13 @@ package models
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type VM struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	ID        string         `gorm:"type:varchar(255);primary_key" json:"id"`
 	Name      string         `gorm:"not null" json:"name"`
-	VAppID    uuid.UUID      `gorm:"type:uuid;not null" json:"vapp_id"`
+	VAppID    string         `gorm:"type:varchar(255);not null;index" json:"vapp_id"`
 	VMName    string         `json:"vm_name"`   // OpenShift VM resource name
 	Namespace string         `json:"namespace"` // OpenShift namespace
 	Status    string         `json:"status"`
@@ -21,12 +20,12 @@ type VM struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships
-	VApp *VApp `gorm:"foreignKey:VAppID" json:"vapp,omitempty"`
+	VApp *VApp `gorm:"foreignKey:VAppID;references:ID" json:"vapp,omitempty"`
 }
 
 func (vm *VM) BeforeCreate(tx *gorm.DB) error {
-	if vm.ID == uuid.Nil {
-		vm.ID = uuid.New()
+	if vm.ID == "" {
+		vm.ID = GenerateOrgURN() // Reuse org URN format for VMs
 	}
 	return nil
 }

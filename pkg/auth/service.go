@@ -5,7 +5,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
@@ -52,20 +51,19 @@ type LoginResponse struct {
 
 // UserInfo represents basic user information returned in authentication responses
 type UserInfo struct {
-	ID        uuid.UUID `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	FullName string `json:"full_name"`
 }
 
 // CreateUserRequest represents the data required to create a new user account
 type CreateUserRequest struct {
-	Username  string `json:"username" binding:"required"`
-	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required,min=8"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	Username    string `json:"username" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	Password    string `json:"password" binding:"required,min=8"`
+	FullName    string `json:"full_name"`
+	Description string `json:"description"`
 }
 
 // Login authenticates a user with username/password and returns a JWT token if successful
@@ -84,8 +82,8 @@ func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
 		return nil, err
 	}
 
-	if !user.IsActive {
-		log.Printf("user %s is inactive", req.Username)
+	if !user.Enabled {
+		log.Printf("user %s is disabled", req.Username)
 		return nil, ErrUserInactive
 	}
 
@@ -104,11 +102,10 @@ func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
 		Token:     token,
 		ExpiresAt: time.Now().Add(s.jwtManager.tokenDuration),
 		User: UserInfo{
-			ID:        user.ID,
-			Username:  user.Username,
-			Email:     user.Email,
-			FirstName: user.FirstName,
-			LastName:  user.LastName,
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+			FullName: user.FullName,
 		},
 	}, nil
 }
@@ -128,11 +125,11 @@ func (s *Service) CreateUser(req *CreateUserRequest) (*models.User, error) {
 	}
 
 	user := &models.User{
-		Username:  req.Username,
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		IsActive:  true,
+		Username:    req.Username,
+		Email:       req.Email,
+		FullName:    req.FullName,
+		Description: req.Description,
+		Enabled:     true,
 	}
 
 	if err := user.SetPassword(req.Password); err != nil {
@@ -147,12 +144,12 @@ func (s *Service) CreateUser(req *CreateUserRequest) (*models.User, error) {
 }
 
 // GetUser retrieves a user by their ID
-func (s *Service) GetUser(userID uuid.UUID) (*models.User, error) {
+func (s *Service) GetUser(userID string) (*models.User, error) {
 	return s.userRepo.GetByID(userID)
 }
 
 // GetUserWithRoles retrieves a user by their ID including their organization roles
-func (s *Service) GetUserWithRoles(userID uuid.UUID) (*models.User, error) {
+func (s *Service) GetUserWithRoles(userID string) (*models.User, error) {
 	return s.userRepo.GetWithRoles(userID)
 }
 

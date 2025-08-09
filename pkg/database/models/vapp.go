@@ -3,15 +3,14 @@ package models
 import (
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type VApp struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key" json:"id"`
+	ID          string         `gorm:"type:varchar(255);primary_key" json:"id"`
 	Name        string         `gorm:"not null" json:"name"`
-	VDCID       uuid.UUID      `gorm:"type:uuid;not null" json:"vdc_id"`
-	TemplateID  *uuid.UUID     `gorm:"type:uuid" json:"template_id"`
+	VDCID       string         `gorm:"type:varchar(255);not null;index" json:"vdc_id"`
+	TemplateID  *string        `gorm:"type:varchar(255);index" json:"template_id"`
 	Status      string         `json:"status"` // RESOLVED, DEPLOYED, SUSPENDED, etc.
 	Description string         `json:"description"`
 	CreatedAt   time.Time      `json:"created_at"`
@@ -19,14 +18,14 @@ type VApp struct {
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
 	// Relationships
-	VDC      *VDC          `gorm:"foreignKey:VDCID" json:"vdc,omitempty"`
-	Template *VAppTemplate `gorm:"foreignKey:TemplateID" json:"template,omitempty"`
-	VMs      []VM          `gorm:"foreignKey:VAppID" json:"vms,omitempty"`
+	VDC      *VDC          `gorm:"foreignKey:VDCID;references:ID" json:"vdc,omitempty"`
+	Template *VAppTemplate `gorm:"foreignKey:TemplateID;references:ID" json:"template,omitempty"`
+	VMs      []VM          `gorm:"foreignKey:VAppID;references:ID" json:"vms,omitempty"`
 }
 
 func (va *VApp) BeforeCreate(tx *gorm.DB) error {
-	if va.ID == uuid.Nil {
-		va.ID = uuid.New()
+	if va.ID == "" {
+		va.ID = GenerateOrgURN() // Reuse org URN format for vapps
 	}
 	return nil
 }

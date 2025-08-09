@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
@@ -25,7 +24,7 @@ func (r *VDCRepository) Create(vdc *models.VDC) error {
 	return r.db.Create(vdc).Error
 }
 
-func (r *VDCRepository) GetByID(id uuid.UUID) (*models.VDC, error) {
+func (r *VDCRepository) GetByID(id string) (*models.VDC, error) {
 	var vdc models.VDC
 	err := r.db.Where("id = ?", id).First(&vdc).Error
 	if err != nil {
@@ -34,7 +33,7 @@ func (r *VDCRepository) GetByID(id uuid.UUID) (*models.VDC, error) {
 	return &vdc, nil
 }
 
-func (r *VDCRepository) GetByOrganizationID(orgID uuid.UUID) ([]models.VDC, error) {
+func (r *VDCRepository) GetByOrganizationID(orgID string) ([]models.VDC, error) {
 	var vdcs []models.VDC
 	err := r.db.Where("organization_id = ?", orgID).Find(&vdcs).Error
 	return vdcs, err
@@ -53,11 +52,11 @@ func (r *VDCRepository) Update(vdc *models.VDC) error {
 	return r.db.Save(vdc).Error
 }
 
-func (r *VDCRepository) Delete(id uuid.UUID) error {
-	return r.db.Delete(&models.VDC{}, id).Error
+func (r *VDCRepository) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&models.VDC{}).Error
 }
 
-func (r *VDCRepository) GetWithVApps(id uuid.UUID) (*models.VDC, error) {
+func (r *VDCRepository) GetWithVApps(id string) (*models.VDC, error) {
 	var vdc models.VDC
 	err := r.db.Preload("VApps").Where("id = ?", id).First(&vdc).Error
 	if err != nil {
@@ -66,7 +65,7 @@ func (r *VDCRepository) GetWithVApps(id uuid.UUID) (*models.VDC, error) {
 	return &vdc, nil
 }
 
-func (r *VDCRepository) GetWithOrganization(id uuid.UUID) (*models.VDC, error) {
+func (r *VDCRepository) GetWithOrganization(id string) (*models.VDC, error) {
 	var vdc models.VDC
 	err := r.db.Preload("Organization").Where("id = ?", id).First(&vdc).Error
 	if err != nil {
@@ -85,13 +84,8 @@ func (r *VDCRepository) GetAll(ctx context.Context) ([]models.VDC, error) {
 // GetByIDString retrieves a VDC by its ID string.
 // Returns (nil, nil) when the record is not found.
 func (r *VDCRepository) GetByIDString(ctx context.Context, idStr string) (*models.VDC, error) {
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		return nil, err
-	}
-
 	var vdc models.VDC
-	err = r.db.WithContext(ctx).Where("id = ?", id).First(&vdc).Error
+	err := r.db.WithContext(ctx).Where("id = ?", idStr).First(&vdc).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
