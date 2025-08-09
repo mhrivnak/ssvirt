@@ -65,7 +65,7 @@ func (h *SessionHandlers) CreateSession(c *gin.Context) {
 	// Parse Basic Authentication
 	username, password, err := h.parseBasicAuth(c)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, NewAPIError(401, "Unauthorized", "Invalid or missing Authorization header"))
+		c.JSON(http.StatusUnauthorized, err)
 		return
 	}
 
