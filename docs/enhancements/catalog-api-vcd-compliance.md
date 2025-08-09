@@ -32,6 +32,10 @@ type Catalog struct {
 ### New API Endpoints
 1. `GET /cloudapi/1.0.0/catalogs/{catalogUrn}` - Get single catalog
 2. `GET /cloudapi/1.0.0/catalogs` - List all catalogs with pagination
+3. `POST /cloudapi/1.0.0/catalogs` - Create a new catalog
+4. `DELETE /cloudapi/1.0.0/catalogs/{catalogUrn}` - Delete a catalog
+
+**Note**: The CREATE and DELETE endpoints are not part of the official VMware Cloud Director documentation that we have access to. The implementation for these endpoints represents our best guess at how they would work based on standard REST API patterns and the structure observed in other VCD endpoints.
 
 ### VCD Catalog Data Structure
 Based on VMware Cloud Director API documentation, the catalog object should include:
@@ -64,6 +68,30 @@ Based on VMware Cloud Director API documentation, the catalog object should incl
     "version": 1
 }
 ```
+
+### Additional Endpoints (Best Guess Implementation)
+
+Since the CREATE and DELETE endpoints are not documented in the available VMware Cloud Director API documentation, we will implement them based on standard REST patterns and VCD conventions:
+
+#### POST /cloudapi/1.0.0/catalogs (Create Catalog)
+- **Request Body**:
+  ```json
+  {
+      "name": "My Catalog",
+      "description": "Catalog description",
+      "orgId": "urn:vcloud:org:12345678-1234-1234-1234-123456789012",
+      "isPublished": false
+  }
+  ```
+- **Response**: 201 Created with full catalog object (same as GET response)
+- **Validation**: Name required, organization must exist
+- **Defaults**: isPublished=false, isSubscribed=false, isLocal=true, version=1
+
+#### DELETE /cloudapi/1.0.0/catalogs/{catalogUrn} (Delete Catalog)
+- **Response**: 204 No Content on success
+- **Validation**: Catalog must exist, no dependent vApp templates
+- **Error**: 409 Conflict if catalog has dependent templates
+- **Behavior**: Soft delete using GORM's DeletedAt field
 
 ## Implementation Plan
 
@@ -108,6 +136,9 @@ func GenerateCatalogURN() string {
   - `CountAll() (int64, error)`
   - `GetByURN(urn string) (*models.Catalog, error)`
   - `GetWithCounts(id string) (*models.Catalog, error)` - Preload template counts
+  - `Create(catalog *models.Catalog) error` - Enhanced create with validation
+  - `DeleteWithValidation(urn string) error` - Check for dependent templates
+  - `HasDependentTemplates(catalogID string) (bool, error)` - Template dependency check
 - **Update existing methods**:
   - Modify queries to work with URN-based IDs
   - Add template counting capabilities
@@ -121,6 +152,8 @@ func GenerateCatalogURN() string {
 - **Implement VCD endpoints**:
   - `GetCatalog(c *gin.Context)` - GET `/cloudapi/1.0.0/catalogs/{catalogUrn}`
   - `ListCatalogs(c *gin.Context)` - GET `/cloudapi/1.0.0/catalogs`
+  - `CreateCatalog(c *gin.Context)` - POST `/cloudapi/1.0.0/catalogs`
+  - `DeleteCatalog(c *gin.Context)` - DELETE `/cloudapi/1.0.0/catalogs/{catalogUrn}`
 - **Add VCD response transformation**:
   - `toCatalogResponse(catalog models.Catalog) CatalogResponse`
   - Handle computed fields (numberOfVAppTemplates, etc.)
@@ -134,11 +167,25 @@ func GenerateCatalogURN() string {
   - Return appropriate 400 errors for invalid URNs
 - **Add error handling**:
   - 404 for catalog not found
+  - 400 for invalid request body or URN format
+  - 409 for catalog deletion with dependent templates
   - 500 for database errors
   - Use consistent `NewAPIError` format
+- **Implement CRUD operations**:
+  - Create: Validate organization exists, generate URN, set defaults
+  - Delete: Check for dependent vApp templates, prevent deletion if templates exist
 
-#### 3.2 Response DTOs
+#### 3.2 Request and Response DTOs
 ```go
+// Request DTO for catalog creation
+type CatalogCreateRequest struct {
+    Name        string `json:"name" binding:"required"`
+    Description string `json:"description"`
+    OrgID       string `json:"orgId" binding:"required"` // Organization URN
+    IsPublished bool   `json:"isPublished"`
+}
+
+// Response DTO for catalog operations
 type CatalogResponse struct {
     ID                      string                    `json:"id"`
     Name                    string                    `json:"name"`
@@ -187,7 +234,9 @@ type SubscriptionConfig struct {
   cloudAPIRoot.Use(auth.JWTMiddleware(s.jwtManager))
   {
       cloudAPIRoot.GET("/catalogs", s.catalogHandlers.ListCatalogs)
+      cloudAPIRoot.POST("/catalogs", s.catalogHandlers.CreateCatalog)
       cloudAPIRoot.GET("/catalogs/:catalogUrn", s.catalogHandlers.GetCatalog)
+      cloudAPIRoot.DELETE("/catalogs/:catalogUrn", s.catalogHandlers.DeleteCatalog)
   }
   ```
 - **Remove legacy catalog route comments**
@@ -198,10 +247,13 @@ type SubscriptionConfig struct {
 - **Test coverage**:
   - GET single catalog (success, not found, invalid URN)
   - GET catalog list (empty, with results, pagination)
+  - POST create catalog (success, validation errors, invalid org)
+  - DELETE catalog (success, not found, with dependent templates)
   - Response format validation (all required fields present)
   - URN validation (invalid format returns 400)
   - Pagination parameters (page, pageSize, defaults)
   - Template counting accuracy
+  - CRUD operations and dependency validation
 - **Test data setup**:
   - Create test organizations and catalogs
   - Create test templates to verify counting
