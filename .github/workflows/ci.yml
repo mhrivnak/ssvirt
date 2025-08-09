@@ -99,9 +99,6 @@ jobs:
     - name: Build API server
       run: go build -v ./cmd/api-server
       
-    - name: Build controller
-      run: go build -v ./cmd/controller
-      
     - name: Build user admin
       run: go build -v ./cmd/user-admin
 
