@@ -121,9 +121,13 @@ func loadInitialAdminFromSecret(config *Config) error {
 	secretPath := "/var/run/secrets/initial-admin" // #nosec G101 - This is a mount path, not hardcoded credentials
 
 	// Check if the secret mount exists
-	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
-		// No secret mounted, nothing to load
-		return nil
+	if _, err := os.Stat(secretPath); err != nil {
+		if os.IsNotExist(err) {
+			// No secret mounted, nothing to load
+			return nil
+		}
+		// Return other errors (permission, etc.) instead of silently proceeding
+		return fmt.Errorf("failed to stat secret path %s: %w", secretPath, err)
 	}
 
 	// Helper function to read and decode a secret field
