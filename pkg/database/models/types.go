@@ -33,9 +33,10 @@ func (am AllocationModel) String() string {
 
 // URN constants for VMware Cloud Director compatibility
 const (
-	URNPrefixUser = "urn:vcloud:user:"
-	URNPrefixOrg  = "urn:vcloud:org:"
-	URNPrefixRole = "urn:vcloud:role:"
+	URNPrefixUser    = "urn:vcloud:user:"
+	URNPrefixOrg     = "urn:vcloud:org:"
+	URNPrefixRole    = "urn:vcloud:role:"
+	URNPrefixSession = "urn:vcloud:session:"
 )
 
 // Role constants
@@ -69,6 +70,10 @@ func GenerateRoleURN() string {
 	return URNPrefixRole + uuid.New().String()
 }
 
+func GenerateSessionURN() string {
+	return URNPrefixSession + uuid.New().String()
+}
+
 // ParseURN extracts the UUID from a URN
 func ParseURN(urn string) (string, error) {
 	if urn == "" {
@@ -84,6 +89,8 @@ func ParseURN(urn string) (string, error) {
 		prefix = URNPrefixOrg
 	case strings.HasPrefix(urn, URNPrefixRole):
 		prefix = URNPrefixRole
+	case strings.HasPrefix(urn, URNPrefixSession):
+		prefix = URNPrefixSession
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
@@ -105,6 +112,8 @@ func GetURNType(urn string) (string, error) {
 		return "org", nil
 	case strings.HasPrefix(urn, URNPrefixRole):
 		return "role", nil
+	case strings.HasPrefix(urn, URNPrefixSession):
+		return "session", nil
 	default:
 		return "", fmt.Errorf("unknown URN type: %s", urn)
 	}

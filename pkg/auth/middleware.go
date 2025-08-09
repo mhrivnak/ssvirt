@@ -14,6 +14,8 @@ const (
 	BearerPrefix = "Bearer "
 	// UserContextKey is the Gin context key for storing user ID
 	UserContextKey = "user"
+	// SessionContextKey is the Gin context key for storing session ID  
+	SessionContextKey = "session_id"
 	// ClaimsContextKey is the Gin context key for storing JWT claims
 	ClaimsContextKey = "claims"
 )
@@ -53,6 +55,9 @@ func JWTMiddleware(jwtManager *JWTManager) gin.HandlerFunc {
 
 		c.Set(ClaimsContextKey, claims)
 		c.Set(UserContextKey, claims.UserID)
+		if claims.SessionID != nil {
+			c.Set(SessionContextKey, *claims.SessionID)
+		}
 		c.Next()
 	}
 }
@@ -66,6 +71,9 @@ func OptionalJWTMiddleware(jwtManager *JWTManager) gin.HandlerFunc {
 			if claims, err := jwtManager.Verify(tokenString); err == nil {
 				c.Set(ClaimsContextKey, claims)
 				c.Set(UserContextKey, claims.UserID)
+				if claims.SessionID != nil {
+					c.Set(SessionContextKey, *claims.SessionID)
+				}
 			}
 		}
 		c.Next()

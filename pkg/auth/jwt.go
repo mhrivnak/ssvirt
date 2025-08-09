@@ -18,6 +18,7 @@ var (
 type Claims struct {
 	UserID         string  `json:"user_id"`
 	Username       string  `json:"username"`
+	SessionID      *string `json:"session_id,omitempty"`
 	OrganizationID *string `json:"organization_id,omitempty"`
 	Role           *string `json:"role,omitempty"`
 	jwt.RegisteredClaims
@@ -60,6 +61,23 @@ func (manager *JWTManager) GenerateWithRole(userID string, username string, orga
 		Username:       username,
 		OrganizationID: &organizationID,
 		Role:           &role,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(manager.tokenDuration)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(manager.secretKey))
+}
+
+// GenerateWithSessionID creates a new JWT token for the specified user with session context
+func (manager *JWTManager) GenerateWithSessionID(userID string, username string, sessionID string) (string, error) {
+	claims := &Claims{
+		UserID:    userID,
+		Username:  username,
+		SessionID: &sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(manager.tokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

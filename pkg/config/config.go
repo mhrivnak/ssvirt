@@ -37,6 +37,15 @@ type Config struct {
 		TokenExpiry time.Duration `mapstructure:"token_expiry"`
 	} `mapstructure:"auth"`
 
+	Session struct {
+		IdleTimeoutMinutes int `mapstructure:"idle_timeout_minutes"`
+		Site               struct {
+			Name string `mapstructure:"name"`
+			ID   string `mapstructure:"id"`
+		} `mapstructure:"site"`
+		Location string `mapstructure:"location"`
+	} `mapstructure:"session"`
+
 	Kubernetes struct {
 		Namespace string `mapstructure:"namespace"`
 	} `mapstructure:"kubernetes"`
@@ -74,6 +83,10 @@ func Load() (*Config, error) {
 		viper.SetDefault("auth.jwt_secret", "development-secret-change-in-production")
 	}
 	viper.SetDefault("auth.token_expiry", "24h")
+	viper.SetDefault("session.idle_timeout_minutes", 30)
+	viper.SetDefault("session.site.name", "SSVirt Provider")
+	viper.SetDefault("session.site.id", "urn:vcloud:site:00000000-0000-0000-0000-000000000001")
+	viper.SetDefault("session.location", "us-west-1")
 	viper.SetDefault("kubernetes.namespace", "ssvirt-system")
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
