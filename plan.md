@@ -200,14 +200,6 @@ CREATE TABLE vms (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- User/Role mappings
-CREATE TABLE user_roles (
-    id UUID PRIMARY KEY,
-    user_id VARCHAR(255),
-    organization_id UUID REFERENCES organizations(id),
-    role VARCHAR(100), -- OrgAdmin, VAppUser, VAppAuthor, etc.
-    created_at TIMESTAMP DEFAULT NOW()
-);
 ```
 
 ## Development Phases

@@ -23,7 +23,6 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		&models.VAppTemplate{},
 		&models.VApp{},
 		&models.VM{},
-		&models.UserRole{},
 	)
 	require.NoError(t, err)
 

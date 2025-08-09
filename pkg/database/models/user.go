@@ -31,9 +31,6 @@ type User struct {
 	// Entity references (populated in API responses)
 	RoleEntityRefs []EntityRef `gorm:"-" json:"roleEntityRefs,omitempty"`
 	OrgEntityRef   *EntityRef  `gorm:"-" json:"orgEntityRef,omitempty"`
-
-	// Relationships
-	UserRoles []UserRole `gorm:"foreignKey:UserID;references:ID" json:"user_roles,omitempty"`
 }
 
 // BeforeCreate sets the URN ID if not already set
