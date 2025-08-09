@@ -62,8 +62,8 @@ func (r *UserRepository) Delete(id string) error {
 }
 
 func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
-	if limit < 0 {
-		limit = 0
+	if limit <= 0 {
+		limit = 25 // Default limit to ensure results are returned
 	}
 	if offset < 0 {
 		offset = 0
@@ -72,7 +72,7 @@ func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
 		limit = 1000
 	}
 	var users []models.User
-	err := r.db.Limit(limit).Offset(offset).Find(&users).Error
+	err := r.db.Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error
 	return users, err
 }
 
@@ -116,8 +116,8 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 
 // ListWithEntityRefs gets users and populates entity references for API responses
 func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, error) {
-	if limit < 0 {
-		limit = 0
+	if limit <= 0 {
+		limit = 25 // Default limit to ensure results are returned
 	}
 	if offset < 0 {
 		offset = 0
@@ -128,7 +128,7 @@ func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, e
 
 	var users []models.User
 	err := r.db.Preload("UserRoles").Preload("UserRoles.Organization").Preload("UserRoles.Role").
-		Limit(limit).Offset(offset).Find(&users).Error
+		Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error
 	if err != nil {
 		return nil, err
 	}

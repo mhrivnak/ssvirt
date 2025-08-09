@@ -111,8 +111,8 @@ func (r *OrganizationRepository) GetWithEntityRefs(id string) (*models.Organizat
 
 // ListWithEntityRefs gets organizations and populates entity references for API responses
 func (r *OrganizationRepository) ListWithEntityRefs(limit, offset int) ([]models.Organization, error) {
-	if limit < 0 {
-		limit = 0
+	if limit <= 0 {
+		limit = 25 // Default limit to ensure results are returned
 	}
 	if offset < 0 {
 		offset = 0
@@ -122,7 +122,7 @@ func (r *OrganizationRepository) ListWithEntityRefs(limit, offset int) ([]models
 	}
 
 	var orgs []models.Organization
-	err := r.db.Limit(limit).Offset(offset).Find(&orgs).Error
+	err := r.db.Limit(limit).Offset(offset).Order("name ASC").Find(&orgs).Error
 	if err != nil {
 		return nil, err
 	}
