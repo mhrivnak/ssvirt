@@ -434,7 +434,7 @@ func TestVCDSessionEndpoints(t *testing.T) {
 
 		// Verify session ID matches request
 		assert.Equal(t, sessionID, session["id"])
-		
+
 		// Verify VCD session structure
 		assert.Contains(t, session, "site")
 		assert.Contains(t, session, "user")

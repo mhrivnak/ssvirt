@@ -143,4 +143,3 @@ func (s *Server) userProfileHandler(c *gin.Context) {
 
 	SendSuccess(c, http.StatusOK, response)
 }
-

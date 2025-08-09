@@ -36,8 +36,8 @@ type Server struct {
 	roleHandlers    *handlers.RoleHandlers
 	orgHandlers     *handlers.OrgHandlers
 	sessionHandlers *handlers.SessionHandlers
-	router       *gin.Engine
-	httpServer   *http.Server
+	router          *gin.Engine
+	httpServer      *http.Server
 }
 
 // NewServer creates a new API server instance

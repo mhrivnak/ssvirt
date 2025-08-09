@@ -121,7 +121,7 @@ func (h *SessionHandlers) CreateSession(c *gin.Context) {
 // GetCurrentSession handles GET /cloudapi/1.0.0/sessions/{sessionId}
 func (h *SessionHandlers) GetCurrentSession(c *gin.Context) {
 	sessionId := c.Param("sessionId")
-	
+
 	// Validate session ownership
 	if !h.validateSessionOwnership(c, sessionId) {
 		return
@@ -156,7 +156,7 @@ func (h *SessionHandlers) GetCurrentSession(c *gin.Context) {
 // DeleteSession handles DELETE /cloudapi/1.0.0/sessions/{sessionId}
 func (h *SessionHandlers) DeleteSession(c *gin.Context) {
 	sessionId := c.Param("sessionId")
-	
+
 	// Validate session ownership
 	if !h.validateSessionOwnership(c, sessionId) {
 		return
@@ -247,7 +247,7 @@ func (h *SessionHandlers) buildSessionResponse(user *models.User) (*models.Sessi
 	// Build roles arrays
 	session.Roles = make([]string, 0)
 	session.RoleRefs = make([]models.EntityRef, 0)
-	
+
 	for _, role := range user.Roles {
 		session.Roles = append(session.Roles, role.Name)
 		session.RoleRefs = append(session.RoleRefs, models.EntityRef{

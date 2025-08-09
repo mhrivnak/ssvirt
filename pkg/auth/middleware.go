@@ -14,7 +14,7 @@ const (
 	BearerPrefix = "Bearer "
 	// UserContextKey is the Gin context key for storing user ID
 	UserContextKey = "user"
-	// SessionContextKey is the Gin context key for storing session ID  
+	// SessionContextKey is the Gin context key for storing session ID
 	SessionContextKey = "session_id"
 	// ClaimsContextKey is the Gin context key for storing JWT claims
 	ClaimsContextKey = "claims"
