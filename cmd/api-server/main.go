@@ -35,6 +35,14 @@ func main() {
 		}
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
+
+	// Bootstrap initial admin user if configured
+	if err := db.BootstrapInitialAdmin(cfg); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Failed to close database connection: %v", closeErr)
+		}
+		log.Fatalf("Failed to bootstrap initial admin: %v", err)
+	}
 	defer func() {
 		if err := db.Close(); err != nil {
 			log.Printf("Failed to close database connection: %v", err)

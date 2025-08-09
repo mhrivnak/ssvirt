@@ -128,6 +128,7 @@ spec:
                 configMapKeyRef:
                   name: {{ include "ssvirt.fullname" . }}-config
                   key: kubernetes-namespace
+            # Initial admin bootstrap is handled by the API server component
           {{- with .Values.controller.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}

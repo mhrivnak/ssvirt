@@ -48,6 +48,14 @@ func main() {
 		}
 	}()
 
+	// Run database auto-migration
+	if err := db.AutoMigrate(); err != nil {
+		setupLog.Error(err, "failed to auto-migrate database")
+		os.Exit(1)
+	}
+
+	// Note: Initial admin bootstrap is handled by the API server to avoid conflicts
+
 	// Create runtime scheme
 	runtimeScheme := runtime.NewScheme()
 	if err := scheme.AddToScheme(runtimeScheme); err != nil {

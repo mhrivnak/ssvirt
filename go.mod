@@ -9,6 +9,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
+	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20250806211615-3976dbfac1fe
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.40.0
@@ -68,7 +69,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openshift/api v0.0.0-20231120222239-b86761094ee3 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
-	github.com/ovn-org/ovn-kubernetes/go-controller v0.0.0-20250806211615-3976dbfac1fe // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
