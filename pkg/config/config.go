@@ -105,6 +105,10 @@ func Load() (*Config, error) {
 
 	// Load initial admin credentials from Kubernetes secret if specified
 	if err := loadInitialAdminFromSecret(&config); err != nil {
+		// If initial admin is enabled but we can't load from secret, this is an error
+		if config.InitialAdmin.Enabled && config.InitialAdmin.Password == "" {
+			return nil, fmt.Errorf("initial admin enabled but failed to load credentials from secret: %w", err)
+		}
 		log.Printf("Warning: Failed to load initial admin credentials from secret: %v", err)
 	}
 

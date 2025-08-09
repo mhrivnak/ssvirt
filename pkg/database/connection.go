@@ -1,13 +1,10 @@
 package database
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"strings"
 
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -92,17 +89,7 @@ func (db *DB) BootstrapInitialAdmin(cfg *config.Config) error {
 
 	password := cfg.InitialAdmin.Password
 	if password == "" {
-		// Generate a secure random password
-		generatedPassword, err := generateSecurePassword(32)
-		if err != nil {
-			return fmt.Errorf("failed to generate admin password: %w", err)
-		}
-		password = generatedPassword
-		// Log password hash for verification without exposing the actual password
-		if hashedPassword, err := hashPassword(password); err == nil {
-			log.Printf("Generated initial admin password (hash: %s)", hashedPassword[:16]+"...")
-		}
-		log.Println("IMPORTANT: Auto-generated password is available only during this startup")
+		return fmt.Errorf("initial admin password not configured - check secret loading or environment variables")
 	}
 
 	// Use a concurrency-safe upsert approach - create only if no admin exists
@@ -163,24 +150,6 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, firstName,
 	})
 
 	return err
-}
-
-// generateSecurePassword generates a cryptographically secure random password
-func generateSecurePassword(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return base64.URLEncoding.EncodeToString(bytes)[:length], nil
-}
-
-// hashPassword creates a bcrypt hash of the password for logging purposes
-func hashPassword(password string) (string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedPassword), nil
 }
 
 func (db *DB) Close() error {

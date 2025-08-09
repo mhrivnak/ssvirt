@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,26 +71,32 @@ type CreateUserRequest struct {
 // Login authenticates a user with username/password and returns a JWT token if successful
 func (s *Service) Login(req *LoginRequest) (*LoginResponse, error) {
 	if req == nil {
+		log.Printf("login request cannot be nil")
 		return nil, errors.New("login request cannot be nil")
 	}
 	user, err := s.userRepo.GetByUsername(req.Username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("user %s not found", req.Username)
 			return nil, ErrInvalidCredentials
 		}
+		log.Printf("failed to get user %s: %v", req.Username, err)
 		return nil, err
 	}
 
 	if !user.IsActive {
+		log.Printf("user %s is inactive", req.Username)
 		return nil, ErrUserInactive
 	}
 
 	if !user.CheckPassword(req.Password) {
+		log.Printf("invalid password for user %s", req.Username)
 		return nil, ErrInvalidCredentials
 	}
 
 	token, err := s.jwtManager.Generate(user.ID, user.Username)
 	if err != nil {
+		log.Printf("failed to generate token for user %s: %v", req.Username, err)
 		return nil, err
 	}
 
