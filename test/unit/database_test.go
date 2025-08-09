@@ -122,25 +122,61 @@ func TestCatalogRepository(t *testing.T) {
 	err := orgRepo.Create(org)
 	require.NoError(t, err)
 
-	// Test Create Catalog
+	// Test Create Catalog with VCD-compliant fields
 	catalog := &models.Catalog{
 		Name:           "test-catalog",
 		OrganizationID: org.ID,
 		Description:    "Test catalog",
-		IsShared:       false,
+		IsPublished:    false,
+		IsSubscribed:   false,
+		IsLocal:        true,
+		Version:        1,
 	}
 
 	err = catalogRepo.Create(catalog)
 	require.NoError(t, err)
 	assert.NotEmpty(t, catalog.ID)
+	assert.Contains(t, catalog.ID, "urn:vcloud:catalog:")
 
 	// Test GetByID
 	retrieved, err := catalogRepo.GetByID(catalog.ID)
 	require.NoError(t, err)
 	assert.Equal(t, catalog.Name, retrieved.Name)
+	assert.Equal(t, catalog.IsPublished, retrieved.IsPublished)
+	assert.Equal(t, catalog.IsLocal, retrieved.IsLocal)
+	assert.Equal(t, catalog.Version, retrieved.Version)
+
+	// Test GetByURN
+	retrievedByURN, err := catalogRepo.GetByURN(catalog.ID)
+	require.NoError(t, err)
+	assert.Equal(t, catalog.ID, retrievedByURN.ID)
 
 	// Test GetByOrganizationID
 	catalogs, err := catalogRepo.GetByOrganizationID(org.ID)
 	require.NoError(t, err)
 	assert.Len(t, catalogs, 1)
+
+	// Test VCD-compliant methods
+	// Test ListWithPagination
+	paginatedCatalogs, err := catalogRepo.ListWithPagination(10, 0)
+	require.NoError(t, err)
+	assert.Len(t, paginatedCatalogs, 1)
+
+	// Test CountAll
+	count, err := catalogRepo.CountAll()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+
+	// Test HasDependentTemplates
+	hasTemplates, err := catalogRepo.HasDependentTemplates(catalog.ID)
+	require.NoError(t, err)
+	assert.False(t, hasTemplates)
+
+	// Test DeleteWithValidation (should succeed when no templates)
+	err = catalogRepo.DeleteWithValidation(catalog.ID)
+	require.NoError(t, err)
+
+	// Verify catalog is deleted
+	_, err = catalogRepo.GetByID(catalog.ID)
+	assert.Error(t, err)
 }

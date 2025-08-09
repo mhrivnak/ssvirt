@@ -39,6 +39,7 @@ const (
 	URNPrefixRole    = "urn:vcloud:role:"
 	URNPrefixSession = "urn:vcloud:session:"
 	URNPrefixVDC     = "urn:vcloud:vdc:"
+	URNPrefixCatalog = "urn:vcloud:catalog:"
 )
 
 // Role constants
@@ -80,6 +81,10 @@ func GenerateVDCURN() string {
 	return URNPrefixVDC + uuid.New().String()
 }
 
+func GenerateCatalogURN() string {
+	return URNPrefixCatalog + uuid.New().String()
+}
+
 // ParseURN extracts the UUID from a URN
 func ParseURN(urn string) (string, error) {
 	if urn == "" {
@@ -99,6 +104,8 @@ func ParseURN(urn string) (string, error) {
 		prefix = URNPrefixSession
 	case strings.HasPrefix(urn, URNPrefixVDC):
 		prefix = URNPrefixVDC
+	case strings.HasPrefix(urn, URNPrefixCatalog):
+		prefix = URNPrefixCatalog
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
@@ -124,6 +131,8 @@ func GetURNType(urn string) (string, error) {
 		return "session", nil
 	case strings.HasPrefix(urn, URNPrefixVDC):
 		return "vdc", nil
+	case strings.HasPrefix(urn, URNPrefixCatalog):
+		return "catalog", nil
 	default:
 		return "", fmt.Errorf("unknown URN type: %s", urn)
 	}
