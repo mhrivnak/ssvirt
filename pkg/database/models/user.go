@@ -24,7 +24,7 @@ type User struct {
 	ProviderType     string         `gorm:"default:'LOCAL';not null;size:50" json:"providerType"`
 	Locked           bool           `gorm:"default:false;not null" json:"locked"`
 	Stranded         bool           `gorm:"default:false;not null" json:"stranded"`
-	OrganizationID   string         `gorm:"type:varchar(255)" json:"organizationId,omitempty"`
+	OrganizationID   string         `gorm:"index;type:varchar(255)" json:"organizationId,omitempty"`
 	OrganizationName string         `gorm:"size:255" json:"organizationName,omitempty"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
