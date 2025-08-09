@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
@@ -30,6 +31,10 @@ type Server struct {
 	templateRepo *repositories.VAppTemplateRepository
 	vappRepo     *repositories.VAppRepository
 	vmRepo       *repositories.VMRepository
+	// CloudAPI handlers
+	userHandlers *handlers.UserHandlers
+	roleHandlers *handlers.RoleHandlers
+	orgHandlers  *handlers.OrgHandlers
 	router       *gin.Engine
 	httpServer   *http.Server
 }
@@ -49,6 +54,10 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		templateRepo: templateRepo,
 		vappRepo:     vappRepo,
 		vmRepo:       vmRepo,
+		// Initialize CloudAPI handlers
+		userHandlers: handlers.NewUserHandlers(userRepo),
+		roleHandlers: handlers.NewRoleHandlers(roleRepo),
+		orgHandlers:  handlers.NewOrgHandlers(orgRepo),
 	}
 
 	// Configure gin mode based on log level
@@ -97,16 +106,16 @@ func (s *Server) setupRoutes() {
 	cloudAPI.Use(auth.JWTMiddleware(s.jwtManager))
 	{
 		// Users API
-		cloudAPI.GET("/users", s.listUsersHandler)   // GET /cloudapi/1.0.0/users - list users
-		cloudAPI.GET("/users/:id", s.getUserHandler) // GET /cloudapi/1.0.0/users/{id} - get user
+		cloudAPI.GET("/users", s.userHandlers.ListUsers)   // GET /cloudapi/1.0.0/users - list users
+		cloudAPI.GET("/users/:id", s.userHandlers.GetUser) // GET /cloudapi/1.0.0/users/{id} - get user
 
 		// Roles API
-		cloudAPI.GET("/roles", s.listRolesHandler)   // GET /cloudapi/1.0.0/roles - list roles
-		cloudAPI.GET("/roles/:id", s.getRoleHandler) // GET /cloudapi/1.0.0/roles/{id} - get role
+		cloudAPI.GET("/roles", s.roleHandlers.ListRoles)   // GET /cloudapi/1.0.0/roles - list roles
+		cloudAPI.GET("/roles/:id", s.roleHandlers.GetRole) // GET /cloudapi/1.0.0/roles/{id} - get role
 
 		// Organizations API
-		cloudAPI.GET("/orgs", s.listOrgsHandler)   // GET /cloudapi/1.0.0/orgs - list organizations
-		cloudAPI.GET("/orgs/:id", s.getOrgHandler) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+		cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
+		cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
 	}
 
 	// Legacy authentication endpoints (at root level for VMware Cloud Director compatibility)
