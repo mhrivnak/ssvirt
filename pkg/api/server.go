@@ -32,11 +32,12 @@ type Server struct {
 	vappRepo     *repositories.VAppRepository
 	vmRepo       *repositories.VMRepository
 	// CloudAPI handlers
-	userHandlers *handlers.UserHandlers
-	roleHandlers *handlers.RoleHandlers
-	orgHandlers  *handlers.OrgHandlers
-	router       *gin.Engine
-	httpServer   *http.Server
+	userHandlers    *handlers.UserHandlers
+	roleHandlers    *handlers.RoleHandlers
+	orgHandlers     *handlers.OrgHandlers
+	sessionHandlers *handlers.SessionHandlers
+	router          *gin.Engine
+	httpServer      *http.Server
 }
 
 // NewServer creates a new API server instance
@@ -55,9 +56,10 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		vappRepo:     vappRepo,
 		vmRepo:       vmRepo,
 		// Initialize CloudAPI handlers
-		userHandlers: handlers.NewUserHandlers(userRepo),
-		roleHandlers: handlers.NewRoleHandlers(roleRepo),
-		orgHandlers:  handlers.NewOrgHandlers(orgRepo),
+		userHandlers:    handlers.NewUserHandlers(userRepo),
+		roleHandlers:    handlers.NewRoleHandlers(roleRepo),
+		orgHandlers:     handlers.NewOrgHandlers(orgRepo),
+		sessionHandlers: handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
 	}
 
 	// Configure gin mode based on log level
@@ -102,36 +104,40 @@ func (s *Server) setupRoutes() {
 	}
 
 	// CloudAPI endpoints (VMware Cloud Director compatible)
-	cloudAPI := s.router.Group("/cloudapi/1.0.0")
-	cloudAPI.Use(auth.JWTMiddleware(s.jwtManager))
+	cloudAPIRoot := s.router.Group("/cloudapi/1.0.0")
 	{
-		// Users API
-		cloudAPI.GET("/users", s.userHandlers.ListUsers)   // GET /cloudapi/1.0.0/users - list users
-		cloudAPI.GET("/users/:id", s.userHandlers.GetUser) // GET /cloudapi/1.0.0/users/{id} - get user
+		// Public session endpoint (Basic Auth for login)
+		cloudAPIRoot.POST("/sessions", s.sessionHandlers.CreateSession) // POST /cloudapi/1.0.0/sessions - create session (login)
 
-		// Roles API
-		cloudAPI.GET("/roles", s.roleHandlers.ListRoles)   // GET /cloudapi/1.0.0/roles - list roles
-		cloudAPI.GET("/roles/:id", s.roleHandlers.GetRole) // GET /cloudapi/1.0.0/roles/{id} - get role
+		// Protected CloudAPI endpoints (require JWT middleware)
+		cloudAPI := cloudAPIRoot.Group("/")
+		cloudAPI.Use(auth.JWTMiddleware(s.jwtManager))
+		{
+			// Session management
+			cloudAPI.GET("/sessions/:sessionId", s.sessionHandlers.GetCurrentSession) // GET /cloudapi/1.0.0/sessions/{sessionId} - get session
+			cloudAPI.DELETE("/sessions/:sessionId", s.sessionHandlers.DeleteSession)  // DELETE /cloudapi/1.0.0/sessions/{sessionId} - delete session
 
-		// Organizations API
-		cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
-		cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+			// Users API
+			cloudAPI.GET("/users", s.userHandlers.ListUsers)   // GET /cloudapi/1.0.0/users - list users
+			cloudAPI.GET("/users/:id", s.userHandlers.GetUser) // GET /cloudapi/1.0.0/users/{id} - get user
+
+			// Roles API
+			cloudAPI.GET("/roles", s.roleHandlers.ListRoles)   // GET /cloudapi/1.0.0/roles - list roles
+			cloudAPI.GET("/roles/:id", s.roleHandlers.GetRole) // GET /cloudapi/1.0.0/roles/{id} - get role
+
+			// Organizations API
+			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
+			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+		}
 	}
 
-	// Legacy authentication endpoints (at root level for VMware Cloud Director compatibility)
+	// Legacy API endpoints (DEPRECATED - use CloudAPI endpoints instead)
 	apiRoot := s.router.Group("/api")
 	{
-		// Public authentication endpoint (no JWT middleware)
-		apiRoot.POST("/sessions", s.createSessionHandler) // POST /api/sessions - login
-
-		// Protected authentication endpoints (require JWT middleware)
+		// Protected legacy endpoints (require JWT middleware)
 		protected := apiRoot.Group("/")
 		protected.Use(auth.JWTMiddleware(s.jwtManager))
 		{
-			// Session management
-			protected.DELETE("/sessions", s.deleteSessionHandler) // DELETE /api/sessions - logout
-			protected.GET("/session", s.getSessionHandler)        // GET /api/session - get current session
-
 			// Legacy endpoints (DEPRECATED - use CloudAPI endpoints instead)
 			// TODO: These legacy endpoints have been temporarily commented out during
 			// the migration to VMware Cloud Director API spec with URN-based IDs.

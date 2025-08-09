@@ -37,6 +37,15 @@ type Config struct {
 		TokenExpiry time.Duration `mapstructure:"token_expiry"`
 	} `mapstructure:"auth"`
 
+	Session struct {
+		IdleTimeoutMinutes int `mapstructure:"idle_timeout_minutes"`
+		Site               struct {
+			Name string `mapstructure:"name"`
+			ID   string `mapstructure:"id"`
+		} `mapstructure:"site"`
+		Location string `mapstructure:"location"`
+	} `mapstructure:"session"`
+
 	Kubernetes struct {
 		Namespace string `mapstructure:"namespace"`
 	} `mapstructure:"kubernetes"`
@@ -74,6 +83,10 @@ func Load() (*Config, error) {
 		viper.SetDefault("auth.jwt_secret", "development-secret-change-in-production")
 	}
 	viper.SetDefault("auth.token_expiry", "24h")
+	viper.SetDefault("session.idle_timeout_minutes", 30)
+	viper.SetDefault("session.site.name", "SSVirt Provider")
+	viper.SetDefault("session.site.id", "urn:vcloud:site:00000000-0000-0000-0000-000000000001")
+	viper.SetDefault("session.location", "us-west-1")
 	viper.SetDefault("kubernetes.namespace", "ssvirt-system")
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "json")
@@ -110,6 +123,11 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("initial admin enabled but failed to load credentials from secret: %w", err)
 		}
 		log.Printf("Warning: Failed to load initial admin credentials from secret: %v", err)
+	}
+
+	// Validate configuration values
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	return &config, nil
@@ -180,5 +198,32 @@ func loadInitialAdminFromSecret(config *Config) error {
 	}
 
 	log.Printf("Loaded initial admin credentials from secret")
+	return nil
+}
+
+// validateConfig validates configuration values and sets safe defaults where needed
+func validateConfig(config *Config) error {
+	// Validate session idle timeout
+	if config.Session.IdleTimeoutMinutes <= 0 {
+		log.Printf("Warning: Invalid session idle timeout %d minutes, setting to default 30", config.Session.IdleTimeoutMinutes)
+		config.Session.IdleTimeoutMinutes = 30
+	}
+
+	// Validate session site ID URN format
+	if config.Session.Site.ID != "" {
+		if !strings.HasPrefix(config.Session.Site.ID, "urn:vcloud:site:") {
+			return fmt.Errorf("invalid session site ID '%s': must be a valid site URN (urn:vcloud:site:...)", config.Session.Site.ID)
+		}
+		// Extract UUID part and validate it's a valid UUID format
+		uuidPart := strings.TrimPrefix(config.Session.Site.ID, "urn:vcloud:site:")
+		if len(uuidPart) == 0 {
+			return fmt.Errorf("invalid session site ID '%s': missing UUID part", config.Session.Site.ID)
+		}
+		// Basic UUID format validation (36 characters with hyphens in correct positions)
+		if len(uuidPart) != 36 || uuidPart[8] != '-' || uuidPart[13] != '-' || uuidPart[18] != '-' || uuidPart[23] != '-' {
+			return fmt.Errorf("invalid session site ID '%s': UUID part must be in format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", config.Session.Site.ID)
+		}
+	}
+
 	return nil
 }
