@@ -135,9 +135,12 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 	// Use transaction to ensure atomicity
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		for _, role := range roles {
+			// Rebind role variable to avoid range variable address issue
+			currentRole := role
+			
 			// Check if role already exists using transaction
 			var existing models.Role
-			err := tx.Where("name = ?", role.Name).First(&existing).Error
+			err := tx.Where("name = ?", currentRole.Name).First(&existing).Error
 			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				return err
 			}
@@ -146,10 +149,10 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 			}
 
 			// Generate URN for the role
-			role.ID = models.GenerateRoleURN()
+			currentRole.ID = models.GenerateRoleURN()
 
 			// Create the role using transaction
-			if err := tx.Create(&role).Error; err != nil {
+			if err := tx.Create(&currentRole).Error; err != nil {
 				return err
 			}
 		}

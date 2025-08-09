@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
@@ -193,13 +194,16 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
 
-		// Create UserRole assignment for System Administrator role
+		// Create UserRole assignment for System Administrator role using upsert to avoid duplicates
 		userRole := &models.UserRole{
 			UserID:         user.ID,
 			RoleID:         sysAdminRole.ID,
 			OrganizationID: providerOrg.ID,
 		}
-		if err := tx.Create(userRole).Error; err != nil {
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "role_id"}, {Name: "organization_id"}},
+			DoNothing: true,
+		}).Create(userRole).Error; err != nil {
 			return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
 		}
 

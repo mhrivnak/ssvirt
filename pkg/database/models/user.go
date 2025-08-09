@@ -9,7 +9,7 @@ import (
 
 // User represents a user account following VMware Cloud Director API spec
 type User struct {
-	ID              string         `gorm:"type:varchar(255);primary_key" json:"id"`
+	ID              string         `gorm:"type:varchar(255);primaryKey" json:"id"`
 	Username        string         `gorm:"unique;not null;size:255" json:"username"`
 	FullName        string         `gorm:"not null;size:255" json:"fullName"`
 	Description     string         `json:"description"`
