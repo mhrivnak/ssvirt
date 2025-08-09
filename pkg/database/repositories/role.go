@@ -137,7 +137,7 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 		for _, role := range roles {
 			// Rebind role variable to avoid range variable address issue
 			currentRole := role
-			
+
 			// Check if role already exists using transaction
 			var existing models.Role
 			err := tx.Where("name = ?", currentRole.Name).First(&existing).Error
