@@ -117,18 +117,13 @@ func Load() (*Config, error) {
 
 // loadInitialAdminFromSecret loads initial admin credentials from a Kubernetes secret
 func loadInitialAdminFromSecret(config *Config) error {
-	// Check if we should load from an existing secret
-	secretName := os.Getenv("SSVIRT_INITIAL_ADMIN_SECRET")
-	if secretName == "" {
-		// No secret specified, nothing to load
-		return nil
-	}
-
+	// Always try to load from the standard initial admin secret mount if it exists
 	secretPath := "/var/run/secrets/initial-admin" // #nosec G101 - This is a mount path, not hardcoded credentials
 
 	// Check if the secret mount exists
 	if _, err := os.Stat(secretPath); os.IsNotExist(err) {
-		return fmt.Errorf("secret mount path does not exist: %s", secretPath)
+		// No secret mounted, nothing to load
+		return nil
 	}
 
 	// Helper function to read and decode a secret field
@@ -180,6 +175,6 @@ func loadInitialAdminFromSecret(config *Config) error {
 		config.InitialAdmin.LastName = lastName
 	}
 
-	log.Printf("Loaded initial admin credentials from secret: %s", secretName)
+	log.Printf("Loaded initial admin credentials from secret")
 	return nil
 }
