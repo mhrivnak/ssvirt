@@ -75,6 +75,17 @@ func (h *RoleHandlers) GetRole(c *gin.Context) {
 		return
 	}
 
+	// Validate URN type is "role"
+	urnType, err := models.GetURNType(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role ID format"})
+		return
+	}
+	if urnType != "role" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role ID: expected role URN"})
+		return
+	}
+
 	// Get role
 	role, err := h.roleRepo.GetByID(id)
 	if err != nil {

@@ -75,6 +75,17 @@ func (h *OrgHandlers) GetOrg(c *gin.Context) {
 		return
 	}
 
+	// Validate URN type is "org"
+	urnType, err := models.GetURNType(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid organization ID format"})
+		return
+	}
+	if urnType != "org" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid organization ID: expected org URN"})
+		return
+	}
+
 	// Get organization with entity references populated
 	org, err := h.orgRepo.GetWithEntityRefs(id)
 	if err != nil {

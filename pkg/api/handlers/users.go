@@ -80,6 +80,17 @@ func (h *UserHandlers) GetUser(c *gin.Context) {
 		return
 	}
 
+	// Validate URN type is "user"
+	urnType, err := models.GetURNType(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+	if urnType != "user" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID: expected user URN"})
+		return
+	}
+
 	// Get user with entity references populated
 	user, err := h.userRepo.GetWithEntityRefs(id)
 	if err != nil {
