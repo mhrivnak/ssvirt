@@ -45,16 +45,43 @@ func (r *RoleRepository) Update(role *models.Role) error {
 	if role == nil {
 		return errors.New("role cannot be nil")
 	}
-	return r.db.Updates(role).Error
+	if role.ID == "" {
+		return errors.New("role ID cannot be empty")
+	}
+	return r.db.Save(role).Error
 }
 
 func (r *RoleRepository) Delete(id string) error {
-	return r.db.Where("id = ?", id).Delete(&models.Role{}).Error
+	// First check if the role exists and is not a system role
+	var role models.Role
+	err := r.db.Where("id = ?", id).First(&role).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return gorm.ErrRecordNotFound
+		}
+		return err
+	}
+
+	// Prevent deletion of read-only system roles
+	if role.ReadOnly {
+		return errors.New("cannot delete read-only system role")
+	}
+
+	// Attempt deletion and check if any rows were affected
+	result := r.db.Where("id = ?", id).Delete(&models.Role{})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }
 
 func (r *RoleRepository) List(limit, offset int) ([]models.Role, error) {
-	if limit < 0 {
-		limit = 0
+	if limit <= 0 {
+		limit = 25 // Default limit to ensure results are returned
 	}
 	if offset < 0 {
 		offset = 0
@@ -63,7 +90,7 @@ func (r *RoleRepository) List(limit, offset int) ([]models.Role, error) {
 		limit = 1000
 	}
 	var roles []models.Role
-	err := r.db.Limit(limit).Offset(offset).Find(&roles).Error
+	err := r.db.Limit(limit).Offset(offset).Order("name ASC").Find(&roles).Error
 	return roles, err
 }
 

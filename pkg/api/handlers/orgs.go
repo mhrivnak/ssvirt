@@ -60,7 +60,7 @@ func (h *OrgHandlers) ListOrgs(c *gin.Context) {
 	}
 
 	// Create paginated response
-	response := types.NewPage(orgs, page, limit, int(totalCount))
+	response := types.NewPage(orgs, page, limit, totalCount)
 
 	c.JSON(http.StatusOK, response)
 }

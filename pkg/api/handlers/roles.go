@@ -60,7 +60,7 @@ func (h *RoleHandlers) ListRoles(c *gin.Context) {
 	}
 
 	// Create paginated response
-	response := types.NewPage(roles, page, limit, int(totalCount))
+	response := types.NewPage(roles, page, limit, totalCount)
 
 	c.JSON(http.StatusOK, response)
 }

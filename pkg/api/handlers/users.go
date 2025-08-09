@@ -65,7 +65,7 @@ func (h *UserHandlers) ListUsers(c *gin.Context) {
 	}
 
 	// Create paginated response
-	response := types.NewPage(users, page, limit, int(totalCount))
+	response := types.NewPage(users, page, limit, totalCount)
 
 	c.JSON(http.StatusOK, response)
 }
