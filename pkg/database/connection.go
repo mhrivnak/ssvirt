@@ -147,6 +147,34 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 
 	// Use a transaction to ensure atomicity
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
+		// Check if any user with System Administrator role already exists
+		var existingAdminCount int64
+		if err := tx.Model(&models.User{}).Joins("JOIN roles ON users.role_id = roles.id").
+			Where("roles.name = ?", models.RoleSystemAdmin).
+			Count(&existingAdminCount).Error; err != nil {
+			return fmt.Errorf("failed to count existing system admins: %w", err)
+		}
+
+		if existingAdminCount > 0 {
+			log.Println("System admin already exists, skipping initial admin creation")
+			return nil
+		}
+
+		// Get the Provider organization
+		var providerOrg models.Organization
+		if err := tx.Where("name = ?", models.DefaultOrgName).First(&providerOrg).Error; err != nil {
+			return fmt.Errorf("failed to find Provider organization: %w", err)
+		}
+
+		// Get the System Administrator role
+		var sysAdminRole models.Role
+		if err := tx.Where("name = ?", models.RoleSystemAdmin).First(&sysAdminRole).Error; err != nil {
+			return fmt.Errorf("failed to find System Administrator role: %w", err)
+		}
+
+		// Set role and organization for the user
+		user.RoleID = sysAdminRole.ID
+		user.OrganizationID = providerOrg.ID
 
 		// Create the user with ON CONFLICT DO NOTHING behavior for username uniqueness
 		result := tx.Where("username = ?", user.Username).FirstOrCreate(user)
@@ -154,12 +182,21 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			return fmt.Errorf("failed to create initial admin user: %w", result.Error)
 		}
 
-		// If user was found (not created), log that it already exists
+		// If user was found (not created), check if it already has the system admin role
 		if result.RowsAffected == 0 {
 			log.Printf("User %s already exists", username)
+			// Update existing user's role if needed
+			if err := tx.Model(user).Updates(map[string]interface{}{
+				"role_id":         sysAdminRole.ID,
+				"organization_id": providerOrg.ID,
+			}).Error; err != nil {
+				return fmt.Errorf("failed to update user role: %w", err)
+			}
 		} else {
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
+
+		log.Printf("Assigned System Administrator role to user %s", username)
 		return nil
 	})
 

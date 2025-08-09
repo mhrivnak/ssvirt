@@ -24,6 +24,8 @@ type User struct {
 	ProviderType    string         `gorm:"default:'LOCAL';not null;size:50" json:"providerType"`
 	Locked          bool           `gorm:"default:false;not null" json:"locked"`
 	Stranded        bool           `gorm:"default:false;not null" json:"stranded"`
+	RoleID          string         `gorm:"type:varchar(255)" json:"roleId,omitempty"`
+	OrganizationID  string         `gorm:"type:varchar(255)" json:"organizationId,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
@@ -31,6 +33,10 @@ type User struct {
 	// Entity references (populated in API responses)
 	RoleEntityRefs []EntityRef `gorm:"-" json:"roleEntityRefs,omitempty"`
 	OrgEntityRef   *EntityRef  `gorm:"-" json:"orgEntityRef,omitempty"`
+
+	// Relationships
+	Role         *Role         `gorm:"foreignKey:RoleID;references:ID" json:"role,omitempty"`
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
 }
 
 // BeforeCreate sets the URN ID if not already set
