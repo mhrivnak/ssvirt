@@ -7,7 +7,6 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 
 	"github.com/mhrivnak/ssvirt/pkg/config"
@@ -68,7 +67,6 @@ func (db *DB) AutoMigrate() error {
 		&models.VAppTemplate{},
 		&models.VApp{},
 		&models.VM{},
-		&models.UserRole{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to auto-migrate database: %w", err)
@@ -147,7 +145,7 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 		return fmt.Errorf("failed to hash admin password: %w", err)
 	}
 
-	// Use a transaction to ensure atomicity and check if any system admin already exists
+	// Use a transaction to ensure atomicity
 	err := db.DB.Transaction(func(tx *gorm.DB) error {
 		// Check if any user with System Administrator role already exists
 		var existingAdminCount int64
@@ -175,35 +173,32 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			return fmt.Errorf("failed to find System Administrator role: %w", err)
 		}
 
+		// Set organization for the user and populate OrganizationName
+		user.OrganizationID = providerOrg.ID
+		user.OrganizationName = providerOrg.Name
+
 		// Create the user with ON CONFLICT DO NOTHING behavior for username uniqueness
 		result := tx.Where("username = ?", user.Username).FirstOrCreate(user)
 		if result.Error != nil {
 			return fmt.Errorf("failed to create initial admin user: %w", result.Error)
 		}
 
-		// If user was found (not created), check if it already has system admin role
+		// If user was found (not created), update organization info
 		if result.RowsAffected == 0 {
-			// User exists, check if it already has the system admin role
-			var existingUserRole models.UserRole
-			err := tx.Where("user_id = ? AND role_id = ?", user.ID, sysAdminRole.ID).First(&existingUserRole).Error
-			if err == nil {
-				log.Printf("User %s already exists and has system admin role", username)
-				return nil
+			log.Printf("User %s already exists", username)
+			// Update existing user's organization if needed
+			if err := tx.Model(user).Updates(map[string]interface{}{
+				"organization_id":   providerOrg.ID,
+				"organization_name": providerOrg.Name,
+			}).Error; err != nil {
+				return fmt.Errorf("failed to update user organization: %w", err)
 			}
 		} else {
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
 
-		// Create UserRole assignment for System Administrator role using upsert to avoid duplicates
-		userRole := &models.UserRole{
-			UserID:         user.ID,
-			RoleID:         sysAdminRole.ID,
-			OrganizationID: providerOrg.ID,
-		}
-		if err := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "user_id"}, {Name: "role_id"}, {Name: "organization_id"}},
-			DoNothing: true,
-		}).Create(userRole).Error; err != nil {
+		// Assign System Administrator role using GORM's Association API
+		if err := tx.Model(user).Association("Roles").Append(&sysAdminRole); err != nil {
 			return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
 		}
 

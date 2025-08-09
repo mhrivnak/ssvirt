@@ -30,9 +30,8 @@ type Organization struct {
 	ManagedBy *EntityRef `gorm:"-" json:"managedBy,omitempty"`
 
 	// Relationships
-	VDCs      []VDC      `gorm:"foreignKey:OrganizationID;references:ID" json:"vdcs,omitempty"`
-	Catalogs  []Catalog  `gorm:"foreignKey:OrganizationID;references:ID" json:"catalogs,omitempty"`
-	UserRoles []UserRole `gorm:"foreignKey:OrganizationID;references:ID" json:"user_roles,omitempty"`
+	VDCs     []VDC     `gorm:"foreignKey:OrganizationID;references:ID" json:"vdcs,omitempty"`
+	Catalogs []Catalog `gorm:"foreignKey:OrganizationID;references:ID" json:"catalogs,omitempty"`
 }
 
 func (o *Organization) BeforeCreate(tx *gorm.DB) error {
