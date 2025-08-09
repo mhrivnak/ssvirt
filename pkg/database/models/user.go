@@ -15,7 +15,7 @@ type User struct {
 	Description     string         `json:"description"`
 	Email           string         `gorm:"unique;not null;size:255" json:"email"`
 	PasswordHash    string         `gorm:"not null" json:"-"`
-	Password        string         `gorm:"-" json:"password,omitempty"` // Only for input, never stored
+	Password        string         `gorm:"-" json:"-"` // Only for input, never serialized to JSON
 	DeployedVmQuota int            `gorm:"default:0;not null" json:"deployedVmQuota"`
 	StoredVmQuota   int            `gorm:"default:0;not null" json:"storedVmQuota"`
 	NameInSource    string         `json:"nameInSource"`

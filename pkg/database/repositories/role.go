@@ -105,23 +105,29 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 		},
 	}
 
-	for _, role := range roles {
-		// Check if role already exists
-		existing, err := r.GetByName(role.Name)
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-		if existing != nil {
-			continue // Role already exists
-		}
+	// Use transaction to ensure atomicity
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for _, role := range roles {
+			// Check if role already exists using transaction
+			var existing models.Role
+			err := tx.Where("name = ?", role.Name).First(&existing).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if existing.ID != "" {
+				continue // Role already exists
+			}
 
-		// Create the role
-		if err := r.Create(&role); err != nil {
-			return err
-		}
-	}
+			// Generate URN for the role
+			role.ID = models.GenerateRoleURN()
 
-	return nil
+			// Create the role using transaction
+			if err := tx.Create(&role).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // Count returns the total number of roles

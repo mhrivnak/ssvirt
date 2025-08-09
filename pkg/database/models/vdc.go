@@ -9,7 +9,7 @@ import (
 )
 
 type VDC struct {
-	ID              string          `gorm:"type:varchar(255);primary_key" json:"id"`
+	ID              string          `gorm:"type:varchar(255);primaryKey" json:"id"`
 	Name            string          `gorm:"not null" json:"name"`
 	OrganizationID  string          `gorm:"type:varchar(255);not null;index" json:"organization_id"`
 	AllocationModel AllocationModel `gorm:"type:varchar(20);check:allocation_model IN ('PayAsYouGo', 'AllocationPool', 'ReservationPool')" json:"allocation_model"`
@@ -22,9 +22,9 @@ type VDC struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt  `gorm:"index" json:"deleted_at,omitempty"`
 
-	// Relationships
-	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
-	VApps        []VApp        `gorm:"foreignKey:VDCID;references:ID" json:"vapps,omitempty"`
+	// Relationships with cascading deletes
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID;constraint:OnDelete:CASCADE" json:"organization,omitempty"`
+	VApps        []VApp        `gorm:"foreignKey:VDCID;references:ID;constraint:OnDelete:CASCADE" json:"vapps,omitempty"`
 }
 
 func (v *VDC) BeforeCreate(tx *gorm.DB) error {

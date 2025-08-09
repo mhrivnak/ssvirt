@@ -177,7 +177,6 @@ func GenerateRoleURN(uuid string) string {
         "name": "string", 
         "id": "string"
     },
-    "password": "string",
     "deployedVmQuota": 0,
     "storedVmQuota": 0,
     "email": "string",
@@ -194,7 +193,7 @@ func GenerateRoleURN(uuid string) string {
 - `fullName` replaces existing `firstName` + `lastName` fields
 - `roleEntityRefs` contains the roles assigned to the user (correcting the documentation: these are Role references, not Organization)
 - `orgEntityRef` contains the organization the user belongs to
-- `password` field should be omitted in GET responses for security
+- `password` field is only accepted in create/update requests and never returned in GET responses for security
 - `nameInSource` can default to same as `username`
 - `providerType` can default to "LOCAL"
 
@@ -329,9 +328,44 @@ const (
 ### Response Format
 All endpoints should return:
 - Single entities: Direct object
-- Collections: Array of objects
+- Collections: Paginated response with metadata
 - Proper HTTP status codes (200, 404, 500)
 - Content-Type: application/json
+
+#### Collection Endpoints (Paging/Filtering)
+Collection endpoints support the following query parameters:
+
+**Pagination Parameters:**
+- `page` (integer, default: 1) - Page number to retrieve
+- `pageSize` (integer, default: 25, max: 100) - Number of items per page
+
+**Filtering Parameters:**
+- `filter` (string) - FIQL-style filter expression
+- `sortAsc` (string) - Field name to sort ascending
+- `sortDesc` (string) - Field name to sort descending
+
+**Response Structure:**
+All collection responses use the CloudAPI pagination envelope format:
+```json
+{
+  "resultTotal": 150,
+  "pageCount": 6,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
+  "values": [
+    // Array of entities
+  ]
+}
+```
+
+**Metadata Fields:**
+- `resultTotal`: Total number of items matching the query
+- `pageCount`: Total number of pages available
+- `page`: Current page number (1-based)
+- `pageSize`: Number of items per page
+- `associations`: Related entity links (empty for basic endpoints)
+- `values`: Array containing the actual entity data
 
 ### Error Handling
 - 404 for non-existent entities

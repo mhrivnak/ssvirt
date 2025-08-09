@@ -81,27 +81,30 @@ func (db *DB) AutoMigrate() error {
 func (db *DB) BootstrapDefaultData() error {
 	log.Println("Bootstrapping default data...")
 
-	// Create role repository
-	roleRepo := repositories.NewRoleRepository(db.DB)
+	// Use single transaction to ensure atomicity
+	return db.DB.Transaction(func(tx *gorm.DB) error {
+		// Create role repository with transaction
+		roleRepo := repositories.NewRoleRepository(tx)
 
-	// Create default roles
-	if err := roleRepo.CreateDefaultRoles(); err != nil {
-		return fmt.Errorf("failed to create default roles: %w", err)
-	}
-	log.Println("Default roles created successfully")
+		// Create default roles
+		if err := roleRepo.CreateDefaultRoles(); err != nil {
+			return fmt.Errorf("failed to create default roles: %w", err)
+		}
+		log.Println("Default roles created successfully")
 
-	// Create organization repository
-	orgRepo := repositories.NewOrganizationRepository(db.DB)
+		// Create organization repository with transaction
+		orgRepo := repositories.NewOrganizationRepository(tx)
 
-	// Create default Provider organization
-	_, err := orgRepo.CreateDefaultOrganization()
-	if err != nil {
-		return fmt.Errorf("failed to create default organization: %w", err)
-	}
-	log.Println("Default Provider organization created successfully")
+		// Create default Provider organization
+		_, err := orgRepo.CreateDefaultOrganization()
+		if err != nil {
+			return fmt.Errorf("failed to create default organization: %w", err)
+		}
+		log.Println("Default Provider organization created successfully")
 
-	log.Println("Default data bootstrap completed successfully")
-	return nil
+		log.Println("Default data bootstrap completed successfully")
+		return nil
+	})
 }
 
 // BootstrapInitialAdmin creates an initial admin user if configured, using a concurrency-safe approach

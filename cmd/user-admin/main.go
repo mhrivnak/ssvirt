@@ -58,6 +58,9 @@ func main() {
 
 		if len(os.Args) > 5 {
 			req.FullName = os.Args[5]
+		} else {
+			// Set default FullName to username to avoid NOT NULL constraint violation
+			req.FullName = os.Args[2] // username
 		}
 		if len(os.Args) > 6 {
 			req.Description = os.Args[6]

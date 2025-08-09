@@ -7,18 +7,18 @@ import (
 )
 
 type UserRole struct {
-	ID             string         `gorm:"type:varchar(255);primary_key" json:"id"`
-	UserID         string         `gorm:"type:varchar(255);not null;index" json:"user_id"`
-	OrganizationID string         `gorm:"type:varchar(255);not null;index" json:"organization_id"`
-	RoleID         string         `gorm:"type:varchar(255);not null;index" json:"role_id"`
+	ID             string         `gorm:"type:varchar(255);primaryKey" json:"id"`
+	UserID         string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"user_id"`
+	OrganizationID string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"organization_id"`
+	RoleID         string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_user_org_role" json:"role_id"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 
-	// Relationships
-	User         *User         `gorm:"foreignKey:UserID;references:ID" json:"user,omitempty"`
-	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
-	Role         *Role         `gorm:"foreignKey:RoleID;references:ID" json:"role,omitempty"`
+	// Relationships with cascading deletes
+	User         *User         `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE" json:"user,omitempty"`
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID;constraint:OnDelete:CASCADE" json:"organization,omitempty"`
+	Role         *Role         `gorm:"foreignKey:RoleID;references:ID;constraint:OnDelete:CASCADE" json:"role,omitempty"`
 }
 
 func (ur *UserRole) BeforeCreate(tx *gorm.DB) error {

@@ -118,10 +118,14 @@ func (s *Service) CreateUser(req *CreateUserRequest) (*models.User, error) {
 	// Check if user already exists
 	if _, err := s.userRepo.GetByUsername(req.Username); err == nil {
 		return nil, ErrUserExists
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
 	}
 
 	if _, err := s.userRepo.GetByEmail(req.Email); err == nil {
 		return nil, ErrUserExists
+	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
 	}
 
 	user := &models.User{
