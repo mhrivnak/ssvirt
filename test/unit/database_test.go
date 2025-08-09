@@ -89,9 +89,9 @@ func TestVDCRepository(t *testing.T) {
 	vdc := &models.VDC{
 		Name:            "test-vdc",
 		OrganizationID:  org.ID,
-		AllocationModel: "PayAsYouGo",
-		CPULimit:        intPtr(100),
-		MemoryLimitMB:   intPtr(8192),
+		AllocationModel: models.PayAsYouGo,
+		CPULimit:        100,
+		MemoryLimit:     8192,
 	}
 
 	err = vdcRepo.Create(vdc)
@@ -143,8 +143,4 @@ func TestCatalogRepository(t *testing.T) {
 	catalogs, err := catalogRepo.GetByOrganizationID(org.ID)
 	require.NoError(t, err)
 	assert.Len(t, catalogs, 1)
-}
-
-func intPtr(i int) *int {
-	return &i
 }
