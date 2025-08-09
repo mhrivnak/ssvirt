@@ -28,7 +28,7 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	require.NoError(t, err)
 
 	// Auto-migrate the schema
-	err = gormDB.AutoMigrate(&models.User{}, &models.Organization{}, &models.Role{}, &models.UserRole{}, &models.VDC{}, &models.Catalog{}, &models.VAppTemplate{}, &models.VApp{}, &models.VM{})
+	err = gormDB.AutoMigrate(&models.User{}, &models.Organization{}, &models.Role{}, &models.VDC{}, &models.Catalog{}, &models.VAppTemplate{}, &models.VApp{}, &models.VM{})
 	require.NoError(t, err)
 
 	db := &database.DB{DB: gormDB}

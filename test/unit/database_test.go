@@ -17,13 +17,14 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	err = db.AutoMigrate(
+		&models.User{},
 		&models.Organization{},
+		&models.Role{},
 		&models.VDC{},
 		&models.Catalog{},
 		&models.VAppTemplate{},
 		&models.VApp{},
 		&models.VM{},
-		&models.UserRole{},
 	)
 	require.NoError(t, err)
 

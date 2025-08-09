@@ -1,7 +1,6 @@
 package database
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -68,7 +67,6 @@ func (db *DB) AutoMigrate() error {
 		&models.VAppTemplate{},
 		&models.VApp{},
 		&models.VM{},
-		&models.UserRole{},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to auto-migrate database: %w", err)
@@ -185,7 +183,7 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			return fmt.Errorf("failed to create initial admin user: %w", result.Error)
 		}
 
-		// If user was found (not created), check if it already has the system admin role
+		// If user was found (not created), update organization info
 		if result.RowsAffected == 0 {
 			log.Printf("User %s already exists", username)
 			// Update existing user's organization if needed
@@ -199,27 +197,12 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 			log.Printf("Initial admin user created successfully: %s (ID: %s)", user.Username, user.ID)
 		}
 
-		// Create UserRole assignment for System Administrator role using upsert to avoid duplicates
-		userRole := &models.UserRole{
-			UserID:         user.ID,
-			RoleID:         sysAdminRole.ID,
-			OrganizationID: providerOrg.ID,
-		}
-		// Check if the role assignment already exists
-		var existingUserRole models.UserRole
-		err := tx.Where("user_id = ? AND role_id = ? AND organization_id = ?", user.ID, sysAdminRole.ID, providerOrg.ID).First(&existingUserRole).Error
-		if err != nil && errors.Is(err, gorm.ErrRecordNotFound) {
-			// Create the role assignment
-			if err := tx.Create(userRole).Error; err != nil {
-				return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
-			}
-			log.Printf("Assigned System Administrator role to user %s", username)
-		} else if err != nil {
-			return fmt.Errorf("failed to check existing user role: %w", err)
-		} else {
-			log.Printf("User %s already has System Administrator role", username)
+		// Assign System Administrator role using GORM's Association API
+		if err := tx.Model(user).Association("Roles").Append(&sysAdminRole); err != nil {
+			return fmt.Errorf("failed to assign System Administrator role to user: %w", err)
 		}
 
+		log.Printf("Assigned System Administrator role to user %s", username)
 		return nil
 	})
 

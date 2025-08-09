@@ -36,7 +36,7 @@ type User struct {
 
 	// Relationships
 	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
-	UserRoles    []UserRole    `gorm:"foreignKey:UserID;references:ID" json:"userRoles,omitempty"`
+	Roles        []Role        `gorm:"many2many:user_roles;" json:"roles,omitempty"`
 }
 
 // BeforeCreate sets the URN ID if not already set
