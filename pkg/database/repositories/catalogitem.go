@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"gorm.io/gorm"
 
@@ -70,7 +69,7 @@ func (r *CatalogItemRepository) GetByID(ctx context.Context, catalogID, itemID s
 	// Get catalog item from template service
 	catalogItem, err := r.templateService.GetCatalogItem(ctx, catalogID, itemID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, domainerrors.ErrNotFound) {
 			return nil, domainerrors.ErrNotFound
 		}
 		return nil, err

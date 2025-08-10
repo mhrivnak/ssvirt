@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	domainerrors "github.com/mhrivnak/ssvirt/pkg/domain/errors"
 )
 
 // TemplateService provides access to OpenShift Templates via Kubernetes client
@@ -128,7 +129,7 @@ func (s *TemplateService) GetCatalogItem(ctx context.Context, catalogID, itemID 
 		}
 	}
 
-	return nil, fmt.Errorf("catalog item not found")
+	return nil, domainerrors.ErrNotFound
 }
 
 // getFilteredTemplates retrieves templates from openshift namespace with required labels/annotations

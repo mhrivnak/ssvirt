@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -24,6 +23,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	domainerrors "github.com/mhrivnak/ssvirt/pkg/domain/errors"
 	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
@@ -125,7 +125,7 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	// Set up default mock responses for catalog items
 	mockTemplateService.On("ListCatalogItems", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]models.CatalogItem{}, nil)
 	mockTemplateService.On("CountCatalogItems", mock.Anything, mock.Anything).Return(int64(0), nil)
-	mockTemplateService.On("GetCatalogItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("catalog item not found"))
+	mockTemplateService.On("GetCatalogItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, domainerrors.ErrNotFound)
 	mockTemplateService.On("Start", mock.Anything).Return(nil)
 
 	var templateService services.TemplateServiceInterface = mockTemplateService

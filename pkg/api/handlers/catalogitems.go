@@ -130,7 +130,7 @@ func (h *CatalogItemHandler) GetCatalogItem(c *gin.Context) {
 	// Get catalog item
 	catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemID)
 	if err != nil {
-		if errors.Is(err, domainerrors.ErrNotFound) || strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, domainerrors.ErrNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
