@@ -137,6 +137,23 @@ func TestVAppAPIEndpoints(t *testing.T) {
 			assert.Len(t, response.Values, 1)
 		})
 
+		t.Run("List vApps with filtering returns 200", func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/vapps?filter="+vapp1.Name, nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+
+			var response types.Page[handlers.VAppResponse]
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.Equal(t, int64(1), response.ResultTotal)
+			assert.Len(t, response.Values, 1)
+			assert.Equal(t, vapp1.Name, response.Values[0].Name)
+		})
+
 		t.Run("List vApps with invalid VDC URN returns 400", func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "/cloudapi/1.0.0/vdcs/invalid-vdc-id/vapps", nil)
 			req.Header.Set("Authorization", "Bearer "+userToken)
@@ -275,6 +292,39 @@ func TestVAppAPIEndpoints(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusNoContent, w.Code)
+		})
+
+		t.Run("Delete vApp with running VMs returns 400", func(t *testing.T) {
+			// Create a vApp with a running VM
+			runningVApp := &models.VApp{
+				Name:        "running-vm-vapp",
+				Description: "vApp with running VMs",
+				VDCID:       vdc.ID,
+				Status:      "RESOLVED",
+			}
+			require.NoError(t, db.DB.Create(runningVApp).Error)
+
+			// Create a VM in POWERED_ON status
+			runningVM := &models.VM{
+				Name:        "running-vm",
+				VAppID:      runningVApp.ID,
+				Status:      "POWERED_ON",
+				Description: "Running VM",
+				GuestOS:     "Ubuntu",
+			}
+			require.NoError(t, db.DB.Create(runningVM).Error)
+
+			req, _ := http.NewRequest("DELETE", "/cloudapi/1.0.0/vapps/"+runningVApp.ID, nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "running VMs")
 		})
 
 		t.Run("Delete vApp with invalid URN returns 400", func(t *testing.T) {

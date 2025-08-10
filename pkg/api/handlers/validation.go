@@ -10,11 +10,18 @@ package handlers
 
 import "regexp"
 
-// URN validation regex patterns used across handlers for VMware Cloud Director compliance.
-// These patterns ensure that resource identifiers match the expected VCD URN format.
+// Input validation patterns for non-URN fields used across handlers.
+// URN validation is now centralized in models.ParseURN and models.GetURNType.
 var (
-	// vdcURNRegex validates VDC (Virtual Data Center) URN format.
-	// Pattern: urn:vcloud:vdc:UUID
-	// Example: urn:vcloud:vdc:12345678-1234-1234-1234-123456789abc
-	vdcURNRegex = regexp.MustCompile(`^urn:vcloud:vdc:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	// catalogItemURNRegex validates catalog item URN format.
+	// Pattern: various formats for catalog items
+	catalogItemURNRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$`)
+
+	// dns1123LabelRegex validates DNS-1123 label format for Kubernetes compatibility.
+	// Requirements:
+	// - Must be lowercase
+	// - Must contain only lowercase letters, numbers, and hyphens
+	// - Must start and end with alphanumeric characters
+	// - Must be 1-63 characters long
+	dns1123LabelRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$`)
 )

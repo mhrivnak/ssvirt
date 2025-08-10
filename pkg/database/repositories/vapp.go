@@ -126,8 +126,8 @@ func (r *VAppRepository) ExistsByNameInVDC(ctx context.Context, vdcID, name stri
 	return count > 0, err
 }
 
-// ListByVDCWithPagination retrieves vApps for a VDC with pagination and filtering
-func (r *VAppRepository) ListByVDCWithPagination(ctx context.Context, vdcID string, limit, offset int, filter string) ([]models.VApp, error) {
+// ListByVDCWithPagination retrieves vApps for a VDC with pagination, filtering, and sorting
+func (r *VAppRepository) ListByVDCWithPagination(ctx context.Context, vdcID string, limit, offset int, filter, sortOrder string) ([]models.VApp, error) {
 	var vapps []models.VApp
 	query := r.db.WithContext(ctx).Preload("VMs").Where("vdc_id = ?", vdcID)
 
@@ -137,7 +137,12 @@ func (r *VAppRepository) ListByVDCWithPagination(ctx context.Context, vdcID stri
 		query = query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
 	}
 
-	err := query.Limit(limit).Offset(offset).Order("created_at DESC, id DESC").Find(&vapps).Error
+	// Apply sorting - use provided sort order or default
+	if sortOrder == "" {
+		sortOrder = "created_at DESC, id DESC"
+	}
+
+	err := query.Limit(limit).Offset(offset).Order(sortOrder).Find(&vapps).Error
 	return vapps, err
 }
 

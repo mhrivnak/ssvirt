@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -102,8 +103,8 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 
 	vdcID := c.Param("vdc_id")
 
-	// Validate VDC URN format
-	if !vdcURNRegex.MatchString(vdcID) {
+	// Validate VDC URN format using centralized validation
+	if urnType, err := models.GetURNType(vdcID); err != nil || urnType != "vdc" {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -119,6 +120,26 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 			http.StatusBadRequest,
 			"Bad Request",
 			"Invalid request format",
+		))
+		return
+	}
+
+	// Validate name follows DNS-1123 label format for Kubernetes compatibility
+	if !dns1123LabelRegex.MatchString(req.Name) {
+		c.JSON(http.StatusBadRequest, NewAPIError(
+			http.StatusBadRequest,
+			"Bad Request",
+			"Name must follow DNS-1123 label format: lowercase letters, numbers, and hyphens only; must start and end with alphanumeric characters; 1-63 characters long",
+		))
+		return
+	}
+
+	// Validate catalog item URN format
+	if !catalogItemURNRegex.MatchString(req.CatalogItem.ID) {
+		c.JSON(http.StatusBadRequest, NewAPIError(
+			http.StatusBadRequest,
+			"Bad Request",
+			"Invalid catalog item ID format",
 		))
 		return
 	}
@@ -191,6 +212,17 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 
 	err = h.vappRepo.CreateWithContext(c.Request.Context(), vapp)
 	if err != nil {
+		// Check if this is a unique constraint violation on the composite index
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") || 
+		   strings.Contains(err.Error(), "duplicate key") ||
+		   strings.Contains(err.Error(), "idx_vapp_vdc_name") {
+			c.JSON(http.StatusConflict, NewAPIError(
+				http.StatusConflict,
+				"Conflict",
+				"Name already in use within VDC",
+			))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
 			"Internal Server Error",

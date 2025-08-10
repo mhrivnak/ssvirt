@@ -102,8 +102,8 @@ func (h *VAppHandlers) ListVApps(c *gin.Context) {
 
 	vdcID := c.Param("vdc_id")
 
-	// Validate VDC URN format
-	if !vdcURNRegex.MatchString(vdcID) {
+	// Validate VDC URN format using centralized validation
+	if urnType, err := models.GetURNType(vdcID); err != nil || urnType != "vdc" {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -131,15 +131,15 @@ func (h *VAppHandlers) ListVApps(c *gin.Context) {
 		return
 	}
 
-	// Parse pagination parameters
-	page, pageSize := h.parseVAppPaginationParams(c)
+	// Parse pagination and sorting parameters
+	page, pageSize, sortOrder := h.parseVAppPaginationParams(c)
 	filter := c.Query("filter")
 
 	// Calculate offset
 	offset := (page - 1) * pageSize
 
 	// Get vApps in VDC
-	vapps, err := h.vappRepo.ListByVDCWithPagination(c.Request.Context(), vdcID, pageSize, offset, filter)
+	vapps, err := h.vappRepo.ListByVDCWithPagination(c.Request.Context(), vdcID, pageSize, offset, filter, sortOrder)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
@@ -206,8 +206,8 @@ func (h *VAppHandlers) GetVApp(c *gin.Context) {
 
 	vappID := c.Param("vapp_id")
 
-	// Validate vApp URN format
-	if !vappURNRegex.MatchString(vappID) {
+	// Validate vApp URN format using centralized validation
+	if urnType, err := models.GetURNType(vappID); err != nil || urnType != "vapp" {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -276,8 +276,8 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 
 	vappID := c.Param("vapp_id")
 
-	// Validate vApp URN format
-	if !vappURNRegex.MatchString(vappID) {
+	// Validate vApp URN format using centralized validation
+	if urnType, err := models.GetURNType(vappID); err != nil || urnType != "vapp" {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -405,11 +405,12 @@ func (h *VAppHandlers) toVAppDetailedResponse(vapp models.VApp) VAppDetailedResp
 	}
 }
 
-// parseVAppPaginationParams extracts and validates pagination parameters from the request
-func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize int) {
+// parseVAppPaginationParams extracts and validates pagination and sorting parameters from the request
+func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize int, sortOrder string) {
 	// Default values
 	page = 1
 	pageSize = 25
+	sortOrder = "created_at DESC, id DESC" // Default sort order
 
 	// Parse page parameter
 	if pageStr := c.Query("page"); pageStr != "" {
@@ -429,5 +430,32 @@ func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize
 		}
 	}
 
-	return page, pageSize
+	// Parse sorting parameters
+	sortAsc := c.Query("sortAsc")
+	sortDesc := c.Query("sortDesc")
+
+	if sortAsc != "" {
+		// Validate sort field to prevent SQL injection
+		if h.isValidSortField(sortAsc) {
+			sortOrder = sortAsc + " ASC"
+		}
+	} else if sortDesc != "" {
+		// Validate sort field to prevent SQL injection
+		if h.isValidSortField(sortDesc) {
+			sortOrder = sortDesc + " DESC"
+		}
+	}
+
+	return page, pageSize, sortOrder
+}
+
+// isValidSortField validates that the sort field is allowed
+func (h *VAppHandlers) isValidSortField(field string) bool {
+	allowedFields := map[string]bool{
+		"name":       true,
+		"created_at": true,
+		"updated_at": true,
+		"status":     true,
+	}
+	return allowedFields[field]
 }

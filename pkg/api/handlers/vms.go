@@ -26,9 +26,9 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -38,8 +38,8 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
 
-// VM URN validation regex - matches urn:vcloud:vm:UUID format
-var vmURNRegex = regexp.MustCompile(`^urn:vcloud:vm:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+// ErrAccessDenied is returned when a user doesn't have access to a resource
+var ErrAccessDenied = errors.New("access denied")
 
 // VMHandlers handles VM API endpoints
 type VMHandlers struct {
@@ -127,8 +127,8 @@ func (h *VMHandlers) GetVM(c *gin.Context) {
 
 	vmID := c.Param("vm_id")
 
-	// Validate VM URN format
-	if !vmURNRegex.MatchString(vmID) {
+	// Validate VM URN format using centralized validation
+	if urnType, err := models.GetURNType(vmID); err != nil || urnType != "vm" {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -146,11 +146,17 @@ func (h *VMHandlers) GetVM(c *gin.Context) {
 				"Not Found",
 				"VM not found",
 			))
-		} else {
+		} else if err == ErrAccessDenied {
 			c.JSON(http.StatusForbidden, NewAPIError(
 				http.StatusForbidden,
 				"Forbidden",
 				"VM access denied",
+			))
+		} else {
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to validate VM access",
 			))
 		}
 		return
@@ -171,7 +177,10 @@ func (h *VMHandlers) validateVMAccess(ctx context.Context, userID, vmID string) 
 	// Check if user has access to the VDC containing this VM's vApp
 	_, err = h.vdcRepo.GetAccessibleVDC(ctx, userID, vm.VApp.VDCID)
 	if err != nil {
-		return nil, fmt.Errorf("VDC access denied: %w", err)
+		if err == gorm.ErrRecordNotFound {
+			return nil, ErrAccessDenied
+		}
+		return nil, err // Return database errors as-is
 	}
 
 	return vm, nil
