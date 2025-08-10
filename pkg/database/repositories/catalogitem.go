@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 
+	"gorm.io/gorm"
+
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/services"
-	"gorm.io/gorm"
 )
 
 // CatalogItemRepository provides access to catalog items backed by OpenShift Templates
