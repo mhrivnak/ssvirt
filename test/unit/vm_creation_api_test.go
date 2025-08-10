@@ -1,0 +1,227 @@
+package unit
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
+)
+
+func TestVMCreationAPIEndpoints(t *testing.T) {
+	server, db, jwtManager := setupTestAPIServer(t)
+	router := server.GetRouter()
+
+	// Create test organization
+	org := &models.Organization{
+		Name:        "Test Organization",
+		DisplayName: "Test Organization Full Name",
+		Description: "Test organization for VM creation API testing",
+		IsEnabled:   true,
+	}
+	require.NoError(t, db.DB.Create(org).Error)
+
+	// Create test user with vApp User role
+	user := &models.User{
+		Username:       "testuser",
+		Email:          "testuser@example.com",
+		FullName:       "Test User",
+		Enabled:        true,
+		OrganizationID: org.ID,
+	}
+	require.NoError(t, user.SetPassword("password123"))
+	require.NoError(t, db.DB.Create(user).Error)
+
+	// Create vApp User role
+	userRole := &models.Role{
+		Name:        models.RoleVAppUser,
+		Description: "vApp User role",
+	}
+	require.NoError(t, db.DB.Create(userRole).Error)
+
+	// Create test VDC
+	vdc := &models.VDC{
+		Name:            "test-vdc",
+		Description:     "Test VDC for VM creation",
+		OrganizationID:  org.ID,
+		IsEnabled:       true,
+		AllocationModel: models.AllocationPool,
+		ProviderVdcName: "test-provider-vdc",
+	}
+	require.NoError(t, db.DB.Create(vdc).Error)
+
+	// Generate token
+	userToken, err := jwtManager.GenerateWithRole(user.ID, user.Username, org.ID, models.RoleVAppUser)
+	require.NoError(t, err)
+
+	t.Run("VM Creation", func(t *testing.T) {
+		t.Run("Instantiate template with valid data returns 201", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name:        "test-vapp",
+				Description: "Test vApp from template",
+				CatalogItem: handlers.CatalogItem{
+					ID:   "template-123",
+					Name: "Ubuntu Template",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusCreated, w.Code)
+
+			var response handlers.VAppResponse
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.Equal(t, "test-vapp", response.Name)
+			assert.Equal(t, "Test vApp from template", response.Description)
+			assert.Equal(t, "RESOLVED", response.Status)
+			assert.Equal(t, vdc.ID, response.VDCID)
+			assert.Equal(t, "template-123", response.TemplateID)
+			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
+			assert.Contains(t, response.Href, "/cloudapi/1.0.0/vapps/")
+		})
+
+		t.Run("Instantiate template with invalid VDC URN returns 400", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "template-123",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/invalid-vdc-id/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Invalid VDC URN format")
+		})
+
+		t.Run("Instantiate template with nonexistent VDC returns 404", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "template-123",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/urn:vcloud:vdc:99999999-9999-9999-9999-999999999999/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusNotFound, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "VDC not found")
+		})
+
+		t.Run("Instantiate template with duplicate name returns 409", func(t *testing.T) {
+			// Create a vApp first
+			vapp := &models.VApp{
+				Name:        "duplicate-vapp",
+				Description: "First vApp",
+				VDCID:       vdc.ID,
+				Status:      "RESOLVED",
+			}
+			require.NoError(t, db.DB.Create(vapp).Error)
+
+			// Try to create another with the same name
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "duplicate-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "template-123",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusConflict, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Name already in use")
+		})
+
+		t.Run("Instantiate template without authentication returns 401", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "template-123",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+
+		t.Run("Instantiate template with invalid JSON returns 400", func(t *testing.T) {
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer([]byte("invalid json")))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Invalid request format")
+		})
+
+		t.Run("Instantiate template with missing required fields returns 400", func(t *testing.T) {
+			requestData := map[string]interface{}{
+				"description": "Missing name and catalog item",
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Invalid request format")
+		})
+	})
+}

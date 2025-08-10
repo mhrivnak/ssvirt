@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
@@ -161,4 +163,20 @@ func (r *VMRepository) GetByVAppIDWithFilters(vappID string, status string, limi
 	var vms []models.VM
 	err := query.Find(&vms).Error
 	return vms, total, err
+}
+
+// Context-aware methods for VM API
+
+// GetWithVAppContext retrieves a VM with its vApp and VDC information for access control
+func (r *VMRepository) GetWithVAppContext(ctx context.Context, vmID string) (*models.VM, error) {
+	var vm models.VM
+	err := r.db.WithContext(ctx).
+		Preload("VApp").
+		Preload("VApp.VDC").
+		Where("id = ?", vmID).
+		First(&vm).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vm, nil
 }

@@ -43,6 +43,9 @@ type Server struct {
 	catalogHandlers     *handlers.CatalogHandlers
 	catalogItemHandlers *handlers.CatalogItemHandler
 	sessionHandlers     *handlers.SessionHandlers
+	vmCreationHandlers  *handlers.VMCreationHandlers
+	vappHandlers        *handlers.VAppHandlers
+	vmHandlers          *handlers.VMHandlers
 	router              *gin.Engine
 	httpServer          *http.Server
 }
@@ -81,6 +84,9 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo),
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
 		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
+		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo),
+		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo),
+		vmHandlers:          handlers.NewVMHandlers(vmRepo, vappRepo, vdcRepo),
 	}
 
 	// Configure gin mode based on log level
@@ -163,6 +169,17 @@ func (s *Server) setupRoutes() {
 			// Catalog Items API
 			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogItemHandlers.ListCatalogItems)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items
 			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
+
+			// VM Creation API
+			cloudAPI.POST("/vdcs/:vdc_id/actions/instantiateTemplate", s.vmCreationHandlers.InstantiateTemplate) // POST /cloudapi/1.0.0/vdcs/{vdc_id}/actions/instantiateTemplate - create vApp from template
+
+			// vApps API
+			cloudAPI.GET("/vdcs/:vdc_id/vapps", s.vappHandlers.ListVApps) // GET /cloudapi/1.0.0/vdcs/{vdc_id}/vapps - list vApps in VDC
+			cloudAPI.GET("/vapps/:vapp_id", s.vappHandlers.GetVApp)       // GET /cloudapi/1.0.0/vapps/{vapp_id} - get vApp
+			cloudAPI.DELETE("/vapps/:vapp_id", s.vappHandlers.DeleteVApp) // DELETE /cloudapi/1.0.0/vapps/{vapp_id} - delete vApp
+
+			// VMs API
+			cloudAPI.GET("/vms/:vm_id", s.vmHandlers.GetVM) // GET /cloudapi/1.0.0/vms/{vm_id} - get VM
 		}
 
 	}

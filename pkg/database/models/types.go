@@ -41,6 +41,8 @@ const (
 	URNPrefixVDC         = "urn:vcloud:vdc:"
 	URNPrefixCatalog     = "urn:vcloud:catalog:"
 	URNPrefixCatalogItem = "urn:vcloud:catalogitem:"
+	URNPrefixVApp        = "urn:vcloud:vapp:"
+	URNPrefixVM          = "urn:vcloud:vm:"
 )
 
 // Role constants
@@ -90,6 +92,14 @@ func GenerateCatalogItemURN() string {
 	return URNPrefixCatalogItem + uuid.New().String()
 }
 
+func GenerateVAppURN() string {
+	return URNPrefixVApp + uuid.New().String()
+}
+
+func GenerateVMURN() string {
+	return URNPrefixVM + uuid.New().String()
+}
+
 // ParseURN extracts the UUID from a URN
 func ParseURN(urn string) (string, error) {
 	if urn == "" {
@@ -113,6 +123,10 @@ func ParseURN(urn string) (string, error) {
 		prefix = URNPrefixCatalog
 	case strings.HasPrefix(urn, URNPrefixCatalogItem):
 		prefix = URNPrefixCatalogItem
+	case strings.HasPrefix(urn, URNPrefixVApp):
+		prefix = URNPrefixVApp
+	case strings.HasPrefix(urn, URNPrefixVM):
+		prefix = URNPrefixVM
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
@@ -142,6 +156,10 @@ func GetURNType(urn string) (string, error) {
 		return "catalog", nil
 	case strings.HasPrefix(urn, URNPrefixCatalogItem):
 		return "catalogitem", nil
+	case strings.HasPrefix(urn, URNPrefixVApp):
+		return "vapp", nil
+	case strings.HasPrefix(urn, URNPrefixVM):
+		return "vm", nil
 	default:
 		return "", fmt.Errorf("unknown URN type: %s", urn)
 	}

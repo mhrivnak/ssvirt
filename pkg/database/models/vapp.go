@@ -25,7 +25,7 @@ type VApp struct {
 
 func (va *VApp) BeforeCreate(tx *gorm.DB) error {
 	if va.ID == "" {
-		va.ID = GenerateOrgURN() // Reuse org URN format for vapps
+		va.ID = GenerateVAppURN()
 	}
 	return nil
 }
