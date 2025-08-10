@@ -4,8 +4,8 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -15,6 +15,9 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
+
+// VDC URN validation regex - matches urn:vcloud:vdc:UUID format
+var vdcURNRegex = regexp.MustCompile(`^urn:vcloud:vdc:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // VDCPublicHandlers handles public (non-admin) VDC API endpoints
 type VDCPublicHandlers struct {
@@ -26,6 +29,11 @@ func NewVDCPublicHandlers(vdcRepo *repositories.VDCRepository) *VDCPublicHandler
 	return &VDCPublicHandlers{
 		vdcRepo: vdcRepo,
 	}
+}
+
+// isValidVDCURN validates that a VDC URN matches the expected format
+func isValidVDCURN(urn string) bool {
+	return vdcURNRegex.MatchString(urn)
 }
 
 // ListVDCs handles GET /cloudapi/1.0.0/vdcs
@@ -58,7 +66,7 @@ func (h *VDCPublicHandlers) ListVDCs(c *gin.Context) {
 	offset := (page - 1) * pageSize
 
 	// Get VDCs accessible to the user
-	vdcs, err := h.vdcRepo.ListAccessibleVDCs(userClaims.UserID, pageSize, offset)
+	vdcs, err := h.vdcRepo.ListAccessibleVDCs(c.Request.Context(), userClaims.UserID, pageSize, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
@@ -69,7 +77,7 @@ func (h *VDCPublicHandlers) ListVDCs(c *gin.Context) {
 	}
 
 	// Get total count of accessible VDCs
-	totalCount, err := h.vdcRepo.CountAccessibleVDCs(userClaims.UserID)
+	totalCount, err := h.vdcRepo.CountAccessibleVDCs(c.Request.Context(), userClaims.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
@@ -126,7 +134,7 @@ func (h *VDCPublicHandlers) GetVDC(c *gin.Context) {
 	vdcID := c.Param("vdc_id")
 
 	// Validate VDC URN format
-	if !strings.HasPrefix(vdcID, models.URNPrefixVDC) {
+	if !isValidVDCURN(vdcID) {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -136,7 +144,7 @@ func (h *VDCPublicHandlers) GetVDC(c *gin.Context) {
 	}
 
 	// Get VDC if user has access
-	vdc, err := h.vdcRepo.GetAccessibleVDC(userClaims.UserID, vdcID)
+	vdc, err := h.vdcRepo.GetAccessibleVDC(c.Request.Context(), userClaims.UserID, vdcID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(

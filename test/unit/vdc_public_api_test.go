@@ -19,18 +19,18 @@ type MockVDCRepository struct {
 	mock.Mock
 }
 
-func (m *MockVDCRepository) ListAccessibleVDCs(userID string, limit, offset int) ([]models.VDC, error) {
-	args := m.Called(userID, limit, offset)
+func (m *MockVDCRepository) ListAccessibleVDCs(ctx context.Context, userID string, limit, offset int) ([]models.VDC, error) {
+	args := m.Called(ctx, userID, limit, offset)
 	return args.Get(0).([]models.VDC), args.Error(1)
 }
 
-func (m *MockVDCRepository) CountAccessibleVDCs(userID string) (int64, error) {
-	args := m.Called(userID)
+func (m *MockVDCRepository) CountAccessibleVDCs(ctx context.Context, userID string) (int64, error) {
+	args := m.Called(ctx, userID)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockVDCRepository) GetAccessibleVDC(userID, vdcID string) (*models.VDC, error) {
-	args := m.Called(userID, vdcID)
+func (m *MockVDCRepository) GetAccessibleVDC(ctx context.Context, userID, vdcID string) (*models.VDC, error) {
+	args := m.Called(ctx, userID, vdcID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -164,33 +164,8 @@ func TestVDCPublicAPI(t *testing.T) {
 			token, err := jwtManager.Generate(user.ID, user.Username)
 			require.NoError(t, err)
 
-			// Mock VDC data
-			testVDCs := []models.VDC{
-				{
-					ID:              "urn:vcloud:vdc:12345678-1234-1234-1234-123456789abc",
-					Name:            "Production VDC",
-					Description:     "Primary production environment",
-					AllocationModel: "PayAsYouGo",
-					CPUAllocated:    2000,
-					CPULimit:        4000,
-					CPUUnits:        "MHz",
-					MemoryAllocated: 2048,
-					MemoryLimit:     4096,
-					MemoryUnits:     "MB",
-					NicQuota:        100,
-					NetworkQuota:    50,
-					IsThinProvision: false,
-					IsEnabled:       true,
-				},
-			}
-
-			// Setup mock expectations
-			mockVDCRepo := &MockVDCRepository{}
-			mockVDCRepo.On("ListAccessibleVDCs", user.ID, 25, 0).Return(testVDCs, nil)
-			mockVDCRepo.On("CountAccessibleVDCs", user.ID).Return(int64(1), nil)
-
-			// Replace the VDC repository in the server (this would need dependency injection in real implementation)
-			// For now, we'll test the handler directly through API calls
+			// Note: This test uses the real server setup for integration testing
+			// The test verifies the API endpoints work correctly with authentication
 
 			req, _ := http.NewRequest("GET", "/cloudapi/1.0.0/vdcs", nil)
 			req.Header.Set("Authorization", "Bearer "+token)

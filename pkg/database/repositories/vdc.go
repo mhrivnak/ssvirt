@@ -182,14 +182,14 @@ func (r *VDCRepository) DeleteWithValidation(id string) error {
 // Public API methods for user access control
 
 // ListAccessibleVDCs retrieves VDCs accessible to a user based on organization membership with pagination
-func (r *VDCRepository) ListAccessibleVDCs(userID string, limit, offset int) ([]models.VDC, error) {
+func (r *VDCRepository) ListAccessibleVDCs(ctx context.Context, userID string, limit, offset int) ([]models.VDC, error) {
 	var vdcs []models.VDC
 
 	// First get the user's organization ID(s)
 	// For now, users have one organization, but this approach can be extended for multi-org users
-	subquery := r.db.Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
+	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.Where("organization_id IN (?)", subquery).
+	err := r.db.WithContext(ctx).Where("organization_id IN (?)", subquery).
 		Limit(limit).
 		Offset(offset).
 		Order("created_at DESC, id DESC").
@@ -199,24 +199,24 @@ func (r *VDCRepository) ListAccessibleVDCs(userID string, limit, offset int) ([]
 }
 
 // CountAccessibleVDCs returns the total count of VDCs accessible to a user
-func (r *VDCRepository) CountAccessibleVDCs(userID string) (int64, error) {
+func (r *VDCRepository) CountAccessibleVDCs(ctx context.Context, userID string) (int64, error) {
 	var count int64
 
 	// First get the user's organization ID(s)
-	subquery := r.db.Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
+	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.Model(&models.VDC{}).Where("organization_id IN (?)", subquery).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.VDC{}).Where("organization_id IN (?)", subquery).Count(&count).Error
 	return count, err
 }
 
 // GetAccessibleVDC retrieves a specific VDC if the user has access to it
-func (r *VDCRepository) GetAccessibleVDC(userID, vdcID string) (*models.VDC, error) {
+func (r *VDCRepository) GetAccessibleVDC(ctx context.Context, userID, vdcID string) (*models.VDC, error) {
 	var vdc models.VDC
 
 	// First get the user's organization ID(s)
-	subquery := r.db.Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
+	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.Where("id = ? AND organization_id IN (?)", vdcID, subquery).First(&vdc).Error
+	err := r.db.WithContext(ctx).Where("id = ? AND organization_id IN (?)", vdcID, subquery).First(&vdc).Error
 	if err != nil {
 		return nil, err
 	}
