@@ -29,7 +29,8 @@ func NewVDCPublicHandlers(vdcRepo *repositories.VDCRepository) *VDCPublicHandler
 
 // isValidVDCURN validates that a VDC URN matches the expected format
 func isValidVDCURN(urn string) bool {
-	return vdcURNRegex.MatchString(urn)
+	urnType, err := models.GetURNType(urn)
+	return err == nil && urnType == "vdc"
 }
 
 // ListVDCs handles GET /cloudapi/1.0.0/vdcs

@@ -20,10 +20,10 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -34,9 +34,6 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
-
-// vApp URN validation regex - matches urn:vcloud:vapp:UUID format
-var vappURNRegex = regexp.MustCompile(`^urn:vcloud:vapp:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // VAppHandlers handles vApp API endpoints
 type VAppHandlers struct {
@@ -132,11 +129,8 @@ func (h *VAppHandlers) ListVApps(c *gin.Context) {
 	}
 
 	// Parse pagination and sorting parameters
-	page, pageSize, sortOrder := h.parseVAppPaginationParams(c)
+	page, pageSize, offset, sortOrder := h.parseVAppPaginationParams(c)
 	filter := c.Query("filter")
-
-	// Calculate offset
-	offset := (page - 1) * pageSize
 
 	// Get vApps in VDC
 	vapps, err := h.vappRepo.ListByVDCWithPagination(c.Request.Context(), vdcID, pageSize, offset, filter, sortOrder)
@@ -311,11 +305,11 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 	// Delete vApp with validation
 	err = h.vappRepo.DeleteWithValidation(c.Request.Context(), vappID, force)
 	if err != nil {
-		if err.Error() == "vApp contains running VMs, use force=true to power off" {
+		if errors.Is(err, repositories.ErrVAppHasRunningVMs) {
 			c.JSON(http.StatusBadRequest, NewAPIError(
 				http.StatusBadRequest,
 				"Bad Request",
-				"vApp contains powered-on VMs",
+				"vApp contains running VMs",
 			))
 		} else {
 			c.JSON(http.StatusInternalServerError, NewAPIError(
@@ -406,10 +400,11 @@ func (h *VAppHandlers) toVAppDetailedResponse(vapp models.VApp) VAppDetailedResp
 }
 
 // parseVAppPaginationParams extracts and validates pagination and sorting parameters from the request
-func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize int, sortOrder string) {
+func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize, offset int, sortOrder string) {
 	// Default values
 	page = 1
 	pageSize = 25
+	offset = 0
 	sortOrder = "created_at DESC, id DESC" // Default sort order
 
 	// Parse page parameter
@@ -430,6 +425,16 @@ func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize
 		}
 	}
 
+	// Parse offset parameter (takes precedence over page-based pagination)
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	} else {
+		// Calculate offset from page if offset is not provided
+		offset = (page - 1) * pageSize
+	}
+
 	// Parse sorting parameters
 	sortAsc := c.Query("sortAsc")
 	sortDesc := c.Query("sortDesc")
@@ -446,7 +451,7 @@ func (h *VAppHandlers) parseVAppPaginationParams(c *gin.Context) (page, pageSize
 		}
 	}
 
-	return page, pageSize, sortOrder
+	return page, pageSize, offset, sortOrder
 }
 
 // isValidSortField validates that the sort field is allowed

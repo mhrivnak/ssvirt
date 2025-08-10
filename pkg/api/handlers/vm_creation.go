@@ -213,9 +213,9 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 	err = h.vappRepo.CreateWithContext(c.Request.Context(), vapp)
 	if err != nil {
 		// Check if this is a unique constraint violation on the composite index
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") || 
-		   strings.Contains(err.Error(), "duplicate key") ||
-		   strings.Contains(err.Error(), "idx_vapp_vdc_name") {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") ||
+			strings.Contains(err.Error(), "duplicate key") ||
+			strings.Contains(err.Error(), "idx_vapp_vdc_name") {
 			c.JSON(http.StatusConflict, NewAPIError(
 				http.StatusConflict,
 				"Conflict",

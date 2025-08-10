@@ -2,13 +2,18 @@ package repositories
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
+
+// ErrVAppHasRunningVMs is returned when attempting to delete a vApp that contains running VMs
+var ErrVAppHasRunningVMs = errors.New("vApp contains running VMs")
 
 type VAppRepository struct {
 	db *gorm.DB
@@ -133,8 +138,7 @@ func (r *VAppRepository) ListByVDCWithPagination(ctx context.Context, vdcID stri
 
 	// Apply filter if provided
 	if filter != "" {
-		// Simple name filter for now - can be extended for more complex filtering
-		query = query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
+		query = r.applyFilter(query, filter)
 	}
 
 	// Apply sorting - use provided sort order or default
@@ -153,7 +157,7 @@ func (r *VAppRepository) CountByVDC(ctx context.Context, vdcID string, filter st
 
 	// Apply filter if provided
 	if filter != "" {
-		query = query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
+		query = r.applyFilter(query, filter)
 	}
 
 	err := query.Count(&count).Error
@@ -185,11 +189,23 @@ func (r *VAppRepository) DeleteWithValidation(ctx context.Context, vappID string
 		}
 
 		// Check if VMs are powered on (if force is false)
-		if !force {
-			for _, vm := range vapp.VMs {
-				if vm.Status == "POWERED_ON" {
-					return fmt.Errorf("vApp contains running VMs, use force=true to power off")
-				}
+		hasRunningVMs := false
+		for _, vm := range vapp.VMs {
+			if vm.Status == "POWERED_ON" {
+				hasRunningVMs = true
+				break
+			}
+		}
+
+		if hasRunningVMs && !force {
+			return ErrVAppHasRunningVMs
+		}
+
+		// If force is true and there are running VMs, power them off first
+		if hasRunningVMs && force {
+			err = tx.Model(&models.VM{}).Where("vapp_id = ? AND status = ?", vappID, "POWERED_ON").Update("status", "POWERED_OFF").Error
+			if err != nil {
+				return fmt.Errorf("failed to power off VMs: %w", err)
 			}
 		}
 
@@ -204,4 +220,33 @@ func (r *VAppRepository) DeleteWithValidation(ctx context.Context, vappID string
 		// Delete the vApp
 		return tx.Where("id = ?", vappID).Delete(&models.VApp{}).Error
 	})
+}
+
+// applyFilter applies VMware Cloud Director API filter syntax to a query
+// Supports 'attribute==value' syntax for exact matches
+func (r *VAppRepository) applyFilter(query *gorm.DB, filter string) *gorm.DB {
+	// Check if filter uses 'attribute==value' syntax
+	if strings.Contains(filter, "==") {
+		parts := strings.SplitN(filter, "==", 2)
+		if len(parts) == 2 {
+			attribute := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+
+			// Validate allowed filter attributes
+			switch attribute {
+			case "name":
+				return query.Where("name = ?", value)
+			case "status":
+				return query.Where("status = ?", value)
+			case "description":
+				return query.Where("description = ?", value)
+			default:
+				// Invalid attribute, fall back to name substring matching
+				return query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
+			}
+		}
+	}
+
+	// Fall back to simple name substring matching for backward compatibility
+	return query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
 }
