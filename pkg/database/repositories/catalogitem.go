@@ -3,10 +3,12 @@ package repositories
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	domainerrors "github.com/mhrivnak/ssvirt/pkg/domain/errors"
 	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
@@ -30,7 +32,7 @@ func (r *CatalogItemRepository) ListByCatalogID(ctx context.Context, catalogID s
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
+			return nil, domainerrors.ErrNotFound
 		}
 		return nil, err
 	}
@@ -45,7 +47,7 @@ func (r *CatalogItemRepository) CountByCatalogID(ctx context.Context, catalogID 
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, ErrNotFound
+			return 0, domainerrors.ErrNotFound
 		}
 		return 0, err
 	}
@@ -60,11 +62,18 @@ func (r *CatalogItemRepository) GetByID(ctx context.Context, catalogID, itemID s
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrNotFound
+			return nil, domainerrors.ErrNotFound
 		}
 		return nil, err
 	}
 
 	// Get catalog item from template service
-	return r.templateService.GetCatalogItem(ctx, catalogID, itemID)
+	catalogItem, err := r.templateService.GetCatalogItem(ctx, catalogID, itemID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, domainerrors.ErrNotFound
+		}
+		return nil, err
+	}
+	return catalogItem, nil
 }

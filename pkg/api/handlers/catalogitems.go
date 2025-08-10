@@ -12,6 +12,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	domainerrors "github.com/mhrivnak/ssvirt/pkg/domain/errors"
 )
 
 // CatalogItemHandler handles catalog item API endpoints
@@ -49,7 +50,7 @@ func (h *CatalogItemHandler) ListCatalogItems(c *gin.Context) {
 	// Get catalog items
 	catalogItems, err := h.catalogItemRepo.ListByCatalogID(c.Request.Context(), catalogID, pageSize, offset)
 	if err != nil {
-		if errors.Is(err, repositories.ErrNotFound) {
+		if errors.Is(err, domainerrors.ErrNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
@@ -69,7 +70,7 @@ func (h *CatalogItemHandler) ListCatalogItems(c *gin.Context) {
 	// Get total count
 	totalCount, err := h.catalogItemRepo.CountByCatalogID(c.Request.Context(), catalogID)
 	if err != nil {
-		if errors.Is(err, repositories.ErrNotFound) {
+		if errors.Is(err, domainerrors.ErrNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
@@ -129,7 +130,7 @@ func (h *CatalogItemHandler) GetCatalogItem(c *gin.Context) {
 	// Get catalog item
 	catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemID)
 	if err != nil {
-		if errors.Is(err, repositories.ErrNotFound) || strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, domainerrors.ErrNotFound) || strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
