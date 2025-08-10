@@ -78,10 +78,13 @@ func main() {
 		log.Fatalf("Failed to create template service: %v", err)
 	}
 
+	// Create cancelable context for template service
+	templateCtx, templateCancel := context.WithCancel(context.Background())
+	defer templateCancel()
+
 	// Start template service cache in background
 	go func() {
-		ctx := context.Background()
-		if err := templateService.Start(ctx); err != nil {
+		if err := templateService.Start(templateCtx); err != nil {
 			log.Printf("Template service cache error: %v", err)
 		}
 	}()
@@ -102,6 +105,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutdown signal received")
+
+	// Cancel template service context first
+	templateCancel()
 
 	// Give the server 30 seconds to finish current requests
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

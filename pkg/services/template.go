@@ -2,14 +2,17 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	templatev1 "github.com/openshift/api/template/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -42,14 +45,16 @@ func NewTemplateService() (*TemplateService, error) {
 		return nil, fmt.Errorf("failed to add template scheme: %w", err)
 	}
 
-	c, err := client.New(cfg, client.Options{Scheme: scheme})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
-	}
-
 	cacheClient, err := cache.New(cfg, cache.Options{Scheme: scheme})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cache: %w", err)
+	}
+
+	// Create the client for both reads and writes
+	// The cache will be started separately and used when calling List/Get
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	return &TemplateService{
@@ -130,12 +135,14 @@ func (s *TemplateService) GetCatalogItem(ctx context.Context, catalogID, itemID 
 func (s *TemplateService) getFilteredTemplates(ctx context.Context) ([]templatev1.Template, error) {
 	var templateList templatev1.TemplateList
 
-	// Create label selector for templates with required label
-	labelSelector := labels.Set{
-		"template.kubevirt.io/version": "", // We just need the label to exist, value doesn't matter
-	}.AsSelector()
+	// Create label selector for templates with required label existence
+	requirement, err := labels.NewRequirement("template.kubevirt.io/version", selection.Exists, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create label requirement: %w", err)
+	}
+	labelSelector := labels.NewSelector().Add(*requirement)
 
-	err := s.client.List(ctx, &templateList, &client.ListOptions{
+	err = s.cache.List(ctx, &templateList, &client.ListOptions{
 		Namespace:     "openshift",
 		LabelSelector: labelSelector,
 	})
@@ -216,17 +223,15 @@ func (m *TemplateMapper) TemplateToCatalogItem(template *templatev1.Template, ca
 func (m *TemplateMapper) ExtractVMCount(template *templatev1.Template) int {
 	count := 0
 	for _, obj := range template.Objects {
-		// Look for VirtualMachine or VirtualMachineInstance objects in Raw data
 		if obj.Raw != nil {
-			// Simple string search in the raw YAML/JSON for kind field
-			objStr := string(obj.Raw)
-			if strings.Contains(objStr, `"kind":"VirtualMachine"`) ||
-				strings.Contains(objStr, `"kind": "VirtualMachine"`) ||
-				strings.Contains(objStr, `kind: VirtualMachine`) ||
-				strings.Contains(objStr, `"kind":"VirtualMachineInstance"`) ||
-				strings.Contains(objStr, `"kind": "VirtualMachineInstance"`) ||
-				strings.Contains(objStr, `kind: VirtualMachineInstance`) {
-				count++
+			// Parse the raw JSON/YAML to extract the Kind field
+			var typeMeta metav1.TypeMeta
+
+			// Try to unmarshal as JSON first
+			if err := json.Unmarshal(obj.Raw, &typeMeta); err == nil {
+				if typeMeta.Kind == "VirtualMachine" || typeMeta.Kind == "VirtualMachineInstance" {
+					count++
+				}
 			}
 		}
 	}

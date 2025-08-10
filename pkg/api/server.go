@@ -48,6 +48,11 @@ type Server struct {
 
 // NewServer creates a new API server instance
 func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface) *Server {
+	// Validate required parameters
+	if templateService == nil {
+		panic("templateService cannot be nil")
+	}
+
 	// Create catalog item repository
 	catalogItemRepo := repositories.NewCatalogItemRepository(templateService, catalogRepo)
 

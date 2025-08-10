@@ -2,9 +2,11 @@ package repositories
 
 import (
 	"context"
+	"errors"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/services"
+	"gorm.io/gorm"
 )
 
 // CatalogItemRepository provides access to catalog items backed by OpenShift Templates
@@ -26,6 +28,9 @@ func (r *CatalogItemRepository) ListByCatalogID(ctx context.Context, catalogID s
 	// Verify the catalog exists first
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 
@@ -38,6 +43,9 @@ func (r *CatalogItemRepository) CountByCatalogID(ctx context.Context, catalogID 
 	// Verify the catalog exists first
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, ErrNotFound
+		}
 		return 0, err
 	}
 
@@ -50,6 +58,9 @@ func (r *CatalogItemRepository) GetByID(ctx context.Context, catalogID, itemID s
 	// Verify the catalog exists first
 	_, err := r.catalogRepo.GetByID(catalogID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 

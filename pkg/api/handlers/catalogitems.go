@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"math"
 	"net/http"
 	"strconv"
@@ -48,7 +49,7 @@ func (h *CatalogItemHandler) ListCatalogItems(c *gin.Context) {
 	// Get catalog items
 	catalogItems, err := h.catalogItemRepo.ListByCatalogID(c.Request.Context(), catalogID, pageSize, offset)
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") {
+		if errors.Is(err, repositories.ErrNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
@@ -68,6 +69,15 @@ func (h *CatalogItemHandler) ListCatalogItems(c *gin.Context) {
 	// Get total count
 	totalCount, err := h.catalogItemRepo.CountByCatalogID(c.Request.Context(), catalogID)
 	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			c.JSON(http.StatusNotFound, NewAPIError(
+				http.StatusNotFound,
+				"Not Found",
+				"Catalog not found",
+			))
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
 			"Internal Server Error",
@@ -119,7 +129,7 @@ func (h *CatalogItemHandler) GetCatalogItem(c *gin.Context) {
 	// Get catalog item
 	catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemID)
 	if err != nil {
-		if strings.Contains(err.Error(), "record not found") || strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, repositories.ErrNotFound) || strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
