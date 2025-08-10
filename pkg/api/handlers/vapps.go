@@ -1,3 +1,21 @@
+// Package handlers provides vApp management API handlers for VMware Cloud Director compatibility.
+//
+// This package implements comprehensive vApp management endpoints that enable authenticated
+// users to list, retrieve, and delete vApps (virtual applications) within their accessible
+// VDCs. The implementation follows VMware Cloud Director API specifications.
+//
+// Key Features:
+//   - List vApps with pagination and filtering at /cloudapi/1.0.0/vdcs/{vdc_id}/vapps
+//   - Retrieve detailed vApp information at /cloudapi/1.0.0/vapps/{vapp_id}
+//   - Delete vApps with dependency validation at /cloudapi/1.0.0/vapps/{vapp_id}
+//   - Organization-based access control through VDC membership
+//   - VM reference management within vApps
+//   - Force deletion support for powered-on VMs
+//
+// Access Control:
+// All vApp operations validate user access through organization membership. Users can only
+// access vApps within VDCs that belong to their organization. This ensures proper isolation
+// and security boundaries in multi-tenant environments.
 package handlers
 
 import (

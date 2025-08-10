@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
@@ -146,4 +147,26 @@ func (r *CatalogRepository) DeleteWithValidation(urn string) error {
 		// Delete the catalog within the same transaction
 		return tx.Where("id = ?", urn).Delete(&models.Catalog{}).Error
 	})
+}
+
+// ValidateUserCatalogAccess checks if a user has access to any catalogs for template instantiation
+func (r *CatalogRepository) ValidateUserCatalogAccess(ctx context.Context, userID string) error {
+	// Get the user's organization ID using a subquery approach similar to VDC access
+	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
+
+	// Check if user has access to any catalogs in their organization or published catalogs
+	var catalogCount int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Catalog{}).
+		Where("organization_id IN (?) OR is_published = true", subquery).
+		Count(&catalogCount).Error
+	if err != nil {
+		return err
+	}
+
+	if catalogCount == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }

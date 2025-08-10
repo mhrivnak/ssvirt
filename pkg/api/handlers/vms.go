@@ -1,3 +1,27 @@
+// Package handlers provides VM information API handlers for VMware Cloud Director compatibility.
+//
+// This package implements VM information retrieval endpoints that enable authenticated users
+// to access detailed virtual machine information. The implementation follows VMware Cloud
+// Director API specifications and provides comprehensive VM details including hardware
+// configuration, network connections, and operational status.
+//
+// Key Features:
+//   - Detailed VM information retrieval at /cloudapi/1.0.0/vms/{vm_id}
+//   - Hardware specifications (CPU, memory, storage)
+//   - Network connection details (IP addresses, MAC addresses)
+//   - VM tools status and version information
+//   - Template source information
+//   - Access control through vApp → VDC → Organization chain
+//
+// Access Control:
+// VM access is validated through a multi-level hierarchy: users can only access VMs that
+// belong to vApps within VDCs in their organization. This ensures proper security isolation
+// and prevents unauthorized access to VM resources across organizational boundaries.
+//
+// Integration:
+// VM data is sourced from both the database models and would integrate with OpenShift
+// VirtualMachine resources in a full implementation to provide real-time status and
+// configuration information.
 package handlers
 
 import (

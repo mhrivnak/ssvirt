@@ -56,6 +56,15 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 	}
 	require.NoError(t, db.DB.Create(vdc).Error)
 
+	// Create test catalog for template validation
+	catalog := &models.Catalog{
+		Name:           "test-catalog",
+		Description:    "Test catalog for VM creation",
+		OrganizationID: org.ID,
+		IsPublished:    false,
+	}
+	require.NoError(t, db.DB.Create(catalog).Error)
+
 	// Generate token
 	userToken, err := jwtManager.GenerateWithRole(user.ID, user.Username, org.ID, models.RoleVAppUser)
 	require.NoError(t, err)
