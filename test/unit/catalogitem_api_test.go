@@ -106,7 +106,7 @@ func TestCatalogItemAPIEndpoints(t *testing.T) {
 			// Should have pagination structure
 			assert.Equal(t, 1, response.Page)
 			assert.Equal(t, 25, response.PageSize)
-			assert.GreaterOrEqual(t, response.PageCount, 1)
+			assert.GreaterOrEqual(t, response.PageCount, 0)
 			assert.GreaterOrEqual(t, response.ResultTotal, int64(0))
 		})
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -120,7 +121,14 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	authSvc := auth.NewService(userRepo, jwtManager)
 
 	// Create mock template service for testing
-	var templateService services.TemplateServiceInterface = &MockTemplateService{}
+	mockTemplateService := &MockTemplateService{}
+	// Set up default mock responses for catalog items
+	mockTemplateService.On("ListCatalogItems", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]models.CatalogItem{}, nil)
+	mockTemplateService.On("CountCatalogItems", mock.Anything, mock.Anything).Return(int64(0), nil)
+	mockTemplateService.On("GetCatalogItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, fmt.Errorf("catalog item not found"))
+	mockTemplateService.On("Start", mock.Anything).Return(nil)
+
+	var templateService services.TemplateServiceInterface = mockTemplateService
 
 	// Create API server
 	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateService)

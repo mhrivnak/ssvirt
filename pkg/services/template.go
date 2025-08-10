@@ -221,8 +221,10 @@ func (m *TemplateMapper) ExtractVMCount(template *templatev1.Template) int {
 			// Simple string search in the raw YAML/JSON for kind field
 			objStr := string(obj.Raw)
 			if strings.Contains(objStr, `"kind":"VirtualMachine"`) ||
+				strings.Contains(objStr, `"kind": "VirtualMachine"`) ||
 				strings.Contains(objStr, `kind: VirtualMachine`) ||
 				strings.Contains(objStr, `"kind":"VirtualMachineInstance"`) ||
+				strings.Contains(objStr, `"kind": "VirtualMachineInstance"`) ||
 				strings.Contains(objStr, `kind: VirtualMachineInstance`) {
 				count++
 			}
