@@ -15,55 +15,70 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 // Server represents the API server
 type Server struct {
-	config       *config.Config
-	db           *database.DB
-	authSvc      *auth.Service
-	jwtManager   *auth.JWTManager
-	userRepo     *repositories.UserRepository
-	roleRepo     *repositories.RoleRepository
-	orgRepo      *repositories.OrganizationRepository
-	vdcRepo      *repositories.VDCRepository
-	catalogRepo  *repositories.CatalogRepository
-	templateRepo *repositories.VAppTemplateRepository
-	vappRepo     *repositories.VAppRepository
-	vmRepo       *repositories.VMRepository
+	config          *config.Config
+	db              *database.DB
+	authSvc         *auth.Service
+	jwtManager      *auth.JWTManager
+	userRepo        *repositories.UserRepository
+	roleRepo        *repositories.RoleRepository
+	orgRepo         *repositories.OrganizationRepository
+	vdcRepo         *repositories.VDCRepository
+	catalogRepo     *repositories.CatalogRepository
+	templateRepo    *repositories.VAppTemplateRepository
+	vappRepo        *repositories.VAppRepository
+	vmRepo          *repositories.VMRepository
+	catalogItemRepo *repositories.CatalogItemRepository
+	templateService services.TemplateServiceInterface
 	// CloudAPI handlers
-	userHandlers    *handlers.UserHandlers
-	roleHandlers    *handlers.RoleHandlers
-	orgHandlers     *handlers.OrgHandlers
-	vdcHandlers     *handlers.VDCHandlers
-	catalogHandlers *handlers.CatalogHandlers
-	sessionHandlers *handlers.SessionHandlers
-	router          *gin.Engine
-	httpServer      *http.Server
+	userHandlers        *handlers.UserHandlers
+	roleHandlers        *handlers.RoleHandlers
+	orgHandlers         *handlers.OrgHandlers
+	vdcHandlers         *handlers.VDCHandlers
+	catalogHandlers     *handlers.CatalogHandlers
+	catalogItemHandlers *handlers.CatalogItemHandler
+	sessionHandlers     *handlers.SessionHandlers
+	router              *gin.Engine
+	httpServer          *http.Server
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface) *Server {
+	// Validate required parameters
+	if templateService == nil {
+		panic("templateService cannot be nil")
+	}
+
+	// Create catalog item repository
+	catalogItemRepo := repositories.NewCatalogItemRepository(templateService, catalogRepo)
+
 	server := &Server{
-		config:       cfg,
-		db:           db,
-		authSvc:      authSvc,
-		jwtManager:   jwtManager,
-		userRepo:     userRepo,
-		roleRepo:     roleRepo,
-		orgRepo:      orgRepo,
-		vdcRepo:      vdcRepo,
-		catalogRepo:  catalogRepo,
-		templateRepo: templateRepo,
-		vappRepo:     vappRepo,
-		vmRepo:       vmRepo,
+		config:          cfg,
+		db:              db,
+		authSvc:         authSvc,
+		jwtManager:      jwtManager,
+		userRepo:        userRepo,
+		roleRepo:        roleRepo,
+		orgRepo:         orgRepo,
+		vdcRepo:         vdcRepo,
+		catalogRepo:     catalogRepo,
+		templateRepo:    templateRepo,
+		vappRepo:        vappRepo,
+		vmRepo:          vmRepo,
+		catalogItemRepo: catalogItemRepo,
+		templateService: templateService,
 		// Initialize CloudAPI handlers
-		userHandlers:    handlers.NewUserHandlers(userRepo),
-		roleHandlers:    handlers.NewRoleHandlers(roleRepo),
-		orgHandlers:     handlers.NewOrgHandlers(orgRepo),
-		vdcHandlers:     handlers.NewVDCHandlers(vdcRepo, orgRepo),
-		catalogHandlers: handlers.NewCatalogHandlers(catalogRepo, orgRepo),
-		sessionHandlers: handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
+		userHandlers:        handlers.NewUserHandlers(userRepo),
+		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
+		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
+		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo),
+		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo),
+		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
+		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
 	}
 
 	// Configure gin mode based on log level
@@ -138,6 +153,10 @@ func (s *Server) setupRoutes() {
 			cloudAPI.POST("/catalogs", s.catalogHandlers.CreateCatalog)               // POST /cloudapi/1.0.0/catalogs - create catalog
 			cloudAPI.GET("/catalogs/:catalogUrn", s.catalogHandlers.GetCatalog)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn} - get catalog
 			cloudAPI.DELETE("/catalogs/:catalogUrn", s.catalogHandlers.DeleteCatalog) // DELETE /cloudapi/1.0.0/catalogs/{catalogUrn} - delete catalog
+
+			// Catalog Items API
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogItemHandlers.ListCatalogItems)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
 		}
 
 	}

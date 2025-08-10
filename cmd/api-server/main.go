@@ -13,6 +13,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 func main() {
@@ -71,8 +72,26 @@ func main() {
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
-	// Initialize API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
+	// Initialize template service
+	templateService, err := services.NewTemplateService()
+	if err != nil {
+		log.Fatalf("Failed to create template service: %v", err)
+	}
+
+	// Create cancelable context for template service
+	templateCtx, templateCancel := context.WithCancel(context.Background())
+	defer templateCancel()
+
+	// Start template service cache in background
+	go func() {
+		if err := templateService.Start(templateCtx); err != nil {
+			log.Printf("Template service cache error: %v", err)
+		}
+	}()
+
+	// Initialize API server with template service interface
+	var templateServiceInterface services.TemplateServiceInterface = templateService
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateServiceInterface)
 
 	// Start server in a goroutine
 	go func() {
@@ -86,6 +105,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutdown signal received")
+
+	// Cancel template service context first
+	templateCancel()
 
 	// Give the server 30 seconds to finish current requests
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

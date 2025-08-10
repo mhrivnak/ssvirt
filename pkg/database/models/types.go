@@ -34,12 +34,13 @@ func (am AllocationModel) String() string {
 
 // URN constants for VMware Cloud Director compatibility
 const (
-	URNPrefixUser    = "urn:vcloud:user:"
-	URNPrefixOrg     = "urn:vcloud:org:"
-	URNPrefixRole    = "urn:vcloud:role:"
-	URNPrefixSession = "urn:vcloud:session:"
-	URNPrefixVDC     = "urn:vcloud:vdc:"
-	URNPrefixCatalog = "urn:vcloud:catalog:"
+	URNPrefixUser        = "urn:vcloud:user:"
+	URNPrefixOrg         = "urn:vcloud:org:"
+	URNPrefixRole        = "urn:vcloud:role:"
+	URNPrefixSession     = "urn:vcloud:session:"
+	URNPrefixVDC         = "urn:vcloud:vdc:"
+	URNPrefixCatalog     = "urn:vcloud:catalog:"
+	URNPrefixCatalogItem = "urn:vcloud:catalogitem:"
 )
 
 // Role constants
@@ -85,6 +86,10 @@ func GenerateCatalogURN() string {
 	return URNPrefixCatalog + uuid.New().String()
 }
 
+func GenerateCatalogItemURN() string {
+	return URNPrefixCatalogItem + uuid.New().String()
+}
+
 // ParseURN extracts the UUID from a URN
 func ParseURN(urn string) (string, error) {
 	if urn == "" {
@@ -106,6 +111,8 @@ func ParseURN(urn string) (string, error) {
 		prefix = URNPrefixVDC
 	case strings.HasPrefix(urn, URNPrefixCatalog):
 		prefix = URNPrefixCatalog
+	case strings.HasPrefix(urn, URNPrefixCatalogItem):
+		prefix = URNPrefixCatalogItem
 	default:
 		return "", fmt.Errorf("invalid URN prefix: %s", urn)
 	}
@@ -133,6 +140,8 @@ func GetURNType(urn string) (string, error) {
 		return "vdc", nil
 	case strings.HasPrefix(urn, URNPrefixCatalog):
 		return "catalog", nil
+	case strings.HasPrefix(urn, URNPrefixCatalogItem):
+		return "catalogitem", nil
 	default:
 		return "", fmt.Errorf("unknown URN type: %s", urn)
 	}
