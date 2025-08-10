@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -21,7 +23,36 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
+
+// MockTemplateService is a mock implementation of TemplateService for testing
+type MockTemplateService struct {
+	mock.Mock
+}
+
+func (m *MockTemplateService) ListCatalogItems(ctx context.Context, catalogID string, limit, offset int) ([]models.CatalogItem, error) {
+	args := m.Called(ctx, catalogID, limit, offset)
+	return args.Get(0).([]models.CatalogItem), args.Error(1)
+}
+
+func (m *MockTemplateService) CountCatalogItems(ctx context.Context, catalogID string) (int64, error) {
+	args := m.Called(ctx, catalogID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockTemplateService) GetCatalogItem(ctx context.Context, catalogID, itemID string) (*models.CatalogItem, error) {
+	args := m.Called(ctx, catalogID, itemID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.CatalogItem), args.Error(1)
+}
+
+func (m *MockTemplateService) Start(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
 
 func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManager) {
 	// Create in-memory SQLite database
@@ -88,8 +119,11 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
+	// Create mock template service for testing
+	var templateService services.TemplateServiceInterface = &MockTemplateService{}
+
 	// Create API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateService)
 
 	return server, db, jwtManager
 }

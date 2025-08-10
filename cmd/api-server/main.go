@@ -13,6 +13,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/config"
 	"github.com/mhrivnak/ssvirt/pkg/database"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 func main() {
@@ -71,8 +72,23 @@ func main() {
 	jwtManager := auth.NewJWTManager(cfg.Auth.JWTSecret, cfg.Auth.TokenExpiry)
 	authSvc := auth.NewService(userRepo, jwtManager)
 
-	// Initialize API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo)
+	// Initialize template service
+	templateService, err := services.NewTemplateService()
+	if err != nil {
+		log.Fatalf("Failed to create template service: %v", err)
+	}
+
+	// Start template service cache in background
+	go func() {
+		ctx := context.Background()
+		if err := templateService.Start(ctx); err != nil {
+			log.Printf("Template service cache error: %v", err)
+		}
+	}()
+
+	// Initialize API server with template service interface
+	var templateServiceInterface services.TemplateServiceInterface = templateService
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateServiceInterface)
 
 	// Start server in a goroutine
 	go func() {
