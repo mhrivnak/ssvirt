@@ -241,8 +241,8 @@ func (r *VAppRepository) applyFilter(query *gorm.DB, filter string) *gorm.DB {
 			case "description":
 				return query.Where("description = ?", value)
 			default:
-				// Invalid attribute, fall back to name substring matching
-				return query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
+				// Invalid attribute, fall back to name substring matching using the value part
+				return query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", value))
 			}
 		}
 	}

@@ -112,7 +112,7 @@ func (h *VAppHandlers) ListVApps(c *gin.Context) {
 	// Validate VDC access
 	err := h.validateVDCAccess(c.Request.Context(), userClaims.UserID, vdcID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
@@ -213,7 +213,7 @@ func (h *VAppHandlers) GetVApp(c *gin.Context) {
 	// Validate vApp access
 	_, err := h.validateVAppAccess(c.Request.Context(), userClaims.UserID, vappID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
@@ -286,7 +286,7 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 	// Validate vApp access
 	_, err := h.validateVAppAccess(c.Request.Context(), userClaims.UserID, vappID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
 				http.StatusNotFound,
 				"Not Found",
