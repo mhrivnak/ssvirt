@@ -39,6 +39,7 @@ type Server struct {
 	roleHandlers        *handlers.RoleHandlers
 	orgHandlers         *handlers.OrgHandlers
 	vdcHandlers         *handlers.VDCHandlers
+	vdcPublicHandlers   *handlers.VDCPublicHandlers
 	catalogHandlers     *handlers.CatalogHandlers
 	catalogItemHandlers *handlers.CatalogItemHandler
 	sessionHandlers     *handlers.SessionHandlers
@@ -76,6 +77,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
 		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo),
+		vdcPublicHandlers:   handlers.NewVDCPublicHandlers(vdcRepo),
 		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo),
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
 		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
@@ -147,6 +149,10 @@ func (s *Server) setupRoutes() {
 			// Organizations API
 			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
 			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+
+			// VDCs API (Public - read-only access for authenticated users)
+			cloudAPI.GET("/vdcs", s.vdcPublicHandlers.ListVDCs)       // GET /cloudapi/1.0.0/vdcs - list accessible VDCs
+			cloudAPI.GET("/vdcs/:vdc_id", s.vdcPublicHandlers.GetVDC) // GET /cloudapi/1.0.0/vdcs/{vdc_id} - get VDC
 
 			// Catalogs API
 			cloudAPI.GET("/catalogs", s.catalogHandlers.ListCatalogs)                 // GET /cloudapi/1.0.0/catalogs - list catalogs
