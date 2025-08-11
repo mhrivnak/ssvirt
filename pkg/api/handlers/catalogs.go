@@ -17,16 +17,18 @@ import (
 )
 
 type CatalogHandlers struct {
-	catalogRepo *repositories.CatalogRepository
-	orgRepo     *repositories.OrganizationRepository
-	k8sService  services.KubernetesService
+	catalogRepo     *repositories.CatalogRepository
+	catalogItemRepo *repositories.CatalogItemRepository
+	orgRepo         *repositories.OrganizationRepository
+	k8sService      services.KubernetesService
 }
 
-func NewCatalogHandlers(catalogRepo *repositories.CatalogRepository, orgRepo *repositories.OrganizationRepository, k8sService services.KubernetesService) *CatalogHandlers {
+func NewCatalogHandlers(catalogRepo *repositories.CatalogRepository, catalogItemRepo *repositories.CatalogItemRepository, orgRepo *repositories.OrganizationRepository, k8sService services.KubernetesService) *CatalogHandlers {
 	return &CatalogHandlers{
-		catalogRepo: catalogRepo,
-		orgRepo:     orgRepo,
-		k8sService:  k8sService,
+		catalogRepo:     catalogRepo,
+		catalogItemRepo: catalogItemRepo,
+		orgRepo:         orgRepo,
+		k8sService:      k8sService,
 	}
 }
 
@@ -107,12 +109,11 @@ func (h *CatalogHandlers) ListCatalogs(c *gin.Context) {
 	for i, catalog := range catalogs {
 		catalogResponse := h.toCatalogResponse(catalog)
 
-		// Enrich with OpenShift template count if k8s service is available
-		if h.k8sService != nil {
-			templates, err := h.k8sService.ListAvailableTemplates(c.Request.Context())
-			if err == nil {
-				catalogResponse.NumberOfVAppTemplates = len(templates)
-			}
+		// Enrich with OpenShift template count if template service is available
+		// Use the existing template service which has proper filtering
+		templates, err := h.catalogItemRepo.CountByCatalogID(c.Request.Context(), catalog.ID)
+		if err == nil {
+			catalogResponse.NumberOfVAppTemplates = int(templates)
 		}
 
 		catalogResponses[i] = catalogResponse
@@ -291,81 +292,6 @@ func (h *CatalogHandlers) DeleteCatalog(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
-}
-
-// ListCatalogItemsFromTemplates handles GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems
-// This enhanced version queries OpenShift templates directly
-func (h *CatalogHandlers) ListCatalogItemsFromTemplates(c *gin.Context) {
-	catalogURN := c.Param("catalogUrn")
-
-	// Validate catalog URN format
-	if !strings.HasPrefix(catalogURN, models.URNPrefixCatalog) {
-		c.JSON(http.StatusBadRequest, NewAPIError(
-			http.StatusBadRequest,
-			"Bad Request",
-			"Invalid catalog URN format",
-			"Catalog ID must be a valid URN with prefix 'urn:vcloud:catalog:'",
-		))
-		return
-	}
-
-	// Verify catalog exists
-	_, err := h.catalogRepo.GetByURN(catalogURN)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, NewAPIError(
-				http.StatusNotFound,
-				"Not Found",
-				"Catalog not found",
-				fmt.Sprintf("Catalog with ID '%s' does not exist", catalogURN),
-			))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, NewAPIError(
-			http.StatusInternalServerError,
-			"Internal Server Error",
-			"Failed to retrieve catalog",
-			err.Error(),
-		))
-		return
-	}
-
-	// Query OpenShift templates if k8s service is available
-	if h.k8sService != nil {
-		templates, err := h.k8sService.ListAvailableTemplates(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, NewAPIError(
-				http.StatusInternalServerError,
-				"Internal Server Error",
-				"Failed to query templates",
-				err.Error(),
-			))
-			return
-		}
-
-		// Convert templates to catalog item responses
-		catalogItems := make([]interface{}, len(templates))
-		for i, template := range templates {
-			catalogItems[i] = map[string]interface{}{
-				"id":          fmt.Sprintf("urn:vcloud:catalogitem:%s", template.Name),
-				"name":        template.Name,
-				"description": template.Description,
-				"catalogId":   catalogURN,
-				"entityType":  "vappTemplate",
-				"status":      "RESOLVED",
-				"href":        fmt.Sprintf("/cloudapi/1.0.0/catalogs/%s/catalogItems/urn:vcloud:catalogitem:%s", catalogURN, template.Name),
-			}
-		}
-
-		// Return paginated response
-		response := types.NewPage(catalogItems, 1, len(catalogItems), int64(len(catalogItems)))
-		c.JSON(http.StatusOK, response)
-		return
-	}
-
-	// Fallback to empty list if no k8s service
-	response := types.NewPage([]interface{}{}, 1, 0, 0)
-	c.JSON(http.StatusOK, response)
 }
 
 // toCatalogResponse converts a catalog model to VCD-compliant response format

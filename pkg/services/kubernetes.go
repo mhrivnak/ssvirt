@@ -35,8 +35,7 @@ type KubernetesService interface {
 	DeleteNamespaceForVDC(ctx context.Context, vdc *models.VDC) error
 	EnsureNamespaceForVDC(ctx context.Context, vdc *models.VDC, org *models.Organization) error
 
-	// Template discovery
-	ListAvailableTemplates(ctx context.Context) ([]*TemplateInfo, error)
+	// Template instantiation support
 	GetTemplate(ctx context.Context, name string) (*TemplateInfo, error)
 
 	// Template instantiation
@@ -473,25 +472,6 @@ func (k *kubernetesService) createNetworkPolicies(ctx context.Context, namespace
 	existingPolicy.Spec = policy.Spec
 	existingPolicy.Labels = policy.Labels
 	return k.directClient.Update(ctx, existingPolicy)
-}
-
-// ListAvailableTemplates retrieves templates from the configured namespace
-func (k *kubernetesService) ListAvailableTemplates(ctx context.Context) ([]*TemplateInfo, error) {
-	templateList := &templatev1.TemplateList{}
-
-	err := k.client.List(ctx, templateList, client.InNamespace(k.templateNamespace))
-	if err != nil {
-		return nil, fmt.Errorf("failed to list templates in namespace %s: %w", k.templateNamespace, err)
-	}
-
-	templates := make([]*TemplateInfo, 0, len(templateList.Items))
-
-	for _, tmpl := range templateList.Items {
-		templateInfo := k.convertTemplate(&tmpl)
-		templates = append(templates, templateInfo)
-	}
-
-	return templates, nil
 }
 
 // GetTemplate retrieves a specific template by name
