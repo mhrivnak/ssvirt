@@ -302,7 +302,7 @@ func TestTemplateMapper(t *testing.T) {
 		catalogID := "urn:vcloud:catalog:test-catalog"
 		catalogItem := mapper.TemplateToCatalogItem(template, catalogID)
 
-		assert.Equal(t, "urn:vcloud:catalogitem:12345678-1234-1234-1234-123456789abc", catalogItem.ID)
+		assert.Equal(t, "urn:vcloud:catalogitem:test-catalog:test-template", catalogItem.ID)
 		assert.Equal(t, "test-template", catalogItem.Name)
 		assert.Equal(t, "Test template description", catalogItem.Description)
 		assert.Equal(t, catalogID, catalogItem.CatalogID)

@@ -130,8 +130,8 @@ func setupTestAPIServer(t *testing.T) (*api.Server, *database.DB, *auth.JWTManag
 
 	var templateService services.TemplateServiceInterface = mockTemplateService
 
-	// Create API server
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateService)
+	// Create API server (with nil k8s service for unit tests)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateService, nil)
 
 	return server, db, jwtManager
 }

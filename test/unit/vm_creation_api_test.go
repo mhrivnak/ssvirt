@@ -75,7 +75,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 				Name:        "test-vapp",
 				Description: "Test vApp from template",
 				CatalogItem: handlers.CatalogItem{
-					ID:   "template-123",
+					ID:   "urn:vcloud:catalogitem:template-123",
 					Name: "Ubuntu Template",
 				},
 			}
@@ -97,7 +97,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			assert.Equal(t, "Test vApp from template", response.Description)
 			assert.Equal(t, "RESOLVED", response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
-			assert.Equal(t, "template-123", response.TemplateID)
+			assert.Equal(t, "urn:vcloud:catalogitem:template-123", response.TemplateID)
 			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
 			assert.Contains(t, response.Href, "/cloudapi/1.0.0/vapps/")
 		})
@@ -106,7 +106,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			requestData := handlers.InstantiateTemplateRequest{
 				Name: "test-vapp",
 				CatalogItem: handlers.CatalogItem{
-					ID: "template-123",
+					ID: "urn:vcloud:catalogitem:template-123",
 				},
 			}
 
@@ -129,7 +129,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			requestData := handlers.InstantiateTemplateRequest{
 				Name: "test-vapp",
 				CatalogItem: handlers.CatalogItem{
-					ID: "template-123",
+					ID: "urn:vcloud:catalogitem:template-123",
 				},
 			}
 
@@ -162,7 +162,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			requestData := handlers.InstantiateTemplateRequest{
 				Name: "duplicate-vapp",
 				CatalogItem: handlers.CatalogItem{
-					ID: "template-123",
+					ID: "urn:vcloud:catalogitem:template-123",
 				},
 			}
 
@@ -185,7 +185,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			requestData := handlers.InstantiateTemplateRequest{
 				Name: "test-vapp",
 				CatalogItem: handlers.CatalogItem{
-					ID: "template-123",
+					ID: "urn:vcloud:catalogitem:template-123",
 				},
 			}
 

@@ -1,5 +1,3 @@
-//go:build ignore
-
 package k8s
 
 import (
@@ -38,13 +36,11 @@ func (vm *VMManager) CreateVM(ctx context.Context, dbVM *models.VM, diskSizeGB i
 	if err := vm.translator.ValidateVMSpec(dbVM); err != nil {
 		return fmt.Errorf("invalid VM specification: %w", err)
 	}
-
 	// Convert to KubeVirt VirtualMachine
 	kvVM, err := vm.translator.ToKubeVirtVM(dbVM)
 	if err != nil {
 		return fmt.Errorf("failed to convert VM to KubeVirt format: %w", err)
 	}
-
 	// Create VirtualMachine in OpenShift
 	if err := vm.client.VMs(dbVM.Namespace).Create(ctx, kvVM); err != nil {
 		if errors.IsAlreadyExists(err) {
@@ -52,7 +48,6 @@ func (vm *VMManager) CreateVM(ctx context.Context, dbVM *models.VM, diskSizeGB i
 		}
 		return fmt.Errorf("failed to create VM in OpenShift: %w", err)
 	}
-
 	// Update VM status in database based on KubeVirt VM state
 	dbVM.Status = vm.translator.VMStatusFromKubeVirt(kvVM)
 	if err := vm.vmRepo.Update(dbVM); err != nil {
@@ -60,7 +55,6 @@ func (vm *VMManager) CreateVM(ctx context.Context, dbVM *models.VM, diskSizeGB i
 		_ = vm.client.VMs(dbVM.Namespace).Delete(ctx, dbVM.VMName)
 		return fmt.Errorf("failed to update VM in database: %w", err)
 	}
-
 	return nil
 }
 
@@ -73,7 +67,6 @@ func (vm *VMManager) GetVM(ctx context.Context, vmName, namespace string) (*kube
 		}
 		return nil, fmt.Errorf("failed to get VM from OpenShift: %w", err)
 	}
-
 	// Update database status if we have the VM ID
 	if vmID, exists := kvVM.Labels["ssvirt.io/vm-id"]; exists {
 		if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil && dbVM.ID == vmID {
@@ -83,7 +76,6 @@ func (vm *VMManager) GetVM(ctx context.Context, vmName, namespace string) (*kube
 			}
 		}
 	}
-
 	return kvVM, nil
 }
 
@@ -93,7 +85,6 @@ func (vm *VMManager) UpdateVM(ctx context.Context, dbVM *models.VM) error {
 	if err := vm.translator.ValidateVMSpec(dbVM); err != nil {
 		return fmt.Errorf("invalid VM specification: %w", err)
 	}
-
 	// Get current VM from OpenShift
 	currentKvVM, err := vm.client.VMs(dbVM.Namespace).Get(ctx, dbVM.VMName)
 	if err != nil {
@@ -102,28 +93,23 @@ func (vm *VMManager) UpdateVM(ctx context.Context, dbVM *models.VM) error {
 		}
 		return fmt.Errorf("failed to get current VM from OpenShift: %w", err)
 	}
-
 	// Convert updated VM to KubeVirt format
 	newKvVM, err := vm.translator.ToKubeVirtVM(dbVM)
 	if err != nil {
 		return fmt.Errorf("failed to convert VM to KubeVirt format: %w", err)
 	}
-
 	// Preserve resource version and other metadata
 	newKvVM.ResourceVersion = currentKvVM.ResourceVersion
 	newKvVM.UID = currentKvVM.UID
 	newKvVM.CreationTimestamp = currentKvVM.CreationTimestamp
-
 	// Update VM in OpenShift
 	if err := vm.client.VMs(dbVM.Namespace).Update(ctx, newKvVM); err != nil {
 		return fmt.Errorf("failed to update VM in OpenShift: %w", err)
 	}
-
 	// Update database
 	if err := vm.vmRepo.Update(dbVM); err != nil {
 		return fmt.Errorf("failed to update VM in database: %w", err)
 	}
-
 	return nil
 }
 
@@ -136,14 +122,12 @@ func (vm *VMManager) DeleteVM(ctx context.Context, vmName, namespace string) err
 		}
 		// VM doesn't exist in OpenShift, continue with database cleanup
 	}
-
 	// Delete from database
 	if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil {
 		if err := vm.vmRepo.Delete(dbVM.ID); err != nil {
 			return fmt.Errorf("failed to delete VM from database: %w", err)
 		}
 	}
-
 	return nil
 }
 
@@ -163,22 +147,18 @@ func (vm *VMManager) SuspendVM(ctx context.Context, vmName, namespace string) er
 	if err != nil {
 		return fmt.Errorf("failed to get VM: %w", err)
 	}
-
 	// Set suspend annotation
 	if kvVM.Annotations == nil {
 		kvVM.Annotations = make(map[string]string)
 	}
 	kvVM.Annotations["ssvirt.io/suspend-status"] = "suspended"
 	kvVM.Annotations["ssvirt.io/suspend-time"] = time.Now().Format(time.RFC3339)
-
 	// Power off the VM
 	running := false
 	kvVM.Spec.Running = &running
-
 	if err := vm.client.VMs(namespace).Update(ctx, kvVM); err != nil {
 		return fmt.Errorf("failed to suspend VM: %w", err)
 	}
-
 	// Update database status
 	if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil {
 		dbVM.Status = "SUSPENDED"
@@ -186,7 +166,6 @@ func (vm *VMManager) SuspendVM(ctx context.Context, vmName, namespace string) er
 			klog.Warningf("Failed to update VM status to SUSPENDED in database for VM %s/%s: %v", namespace, vmName, err)
 		}
 	}
-
 	return nil
 }
 
@@ -196,22 +175,18 @@ func (vm *VMManager) ResetVM(ctx context.Context, vmName, namespace string) erro
 	if err != nil {
 		return fmt.Errorf("failed to get VM: %w", err)
 	}
-
 	// Only reset if VM is running
 	if kvVM.Spec.Running == nil || !*kvVM.Spec.Running {
 		return fmt.Errorf("VM must be powered on to reset")
 	}
-
 	// Add restart annotation to trigger reset
 	if kvVM.Annotations == nil {
 		kvVM.Annotations = make(map[string]string)
 	}
 	kvVM.Annotations["ssvirt.io/restart-request"] = time.Now().Format(time.RFC3339)
-
 	if err := vm.client.VMs(namespace).Update(ctx, kvVM); err != nil {
 		return fmt.Errorf("failed to reset VM: %w", err)
 	}
-
 	return nil
 }
 
@@ -221,19 +196,15 @@ func (vm *VMManager) setPowerState(ctx context.Context, vmName, namespace string
 	if err != nil {
 		return fmt.Errorf("failed to get VM: %w", err)
 	}
-
 	// Clear suspend annotation if powering on
 	if running && kvVM.Annotations != nil {
 		delete(kvVM.Annotations, "ssvirt.io/suspend-status")
 		delete(kvVM.Annotations, "ssvirt.io/suspend-time")
 	}
-
 	kvVM.Spec.Running = &running
-
 	if err := vm.client.VMs(namespace).Update(ctx, kvVM); err != nil {
 		return fmt.Errorf("failed to set power state: %w", err)
 	}
-
 	// Update database status
 	if dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace); err == nil {
 		if running {
@@ -245,7 +216,6 @@ func (vm *VMManager) setPowerState(ctx context.Context, vmName, namespace string
 			klog.Warningf("Failed to update VM power status in database for VM %s/%s: %v", namespace, vmName, err)
 		}
 	}
-
 	return nil
 }
 
@@ -269,13 +239,11 @@ func (vm *VMManager) SyncVMStatus(ctx context.Context, vmName, namespace string)
 		}
 		return fmt.Errorf("failed to get VM from OpenShift: %w", err)
 	}
-
 	// Get VM from database
 	dbVM, err := vm.vmRepo.GetByVMName(vmName, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get VM from database: %w", err)
 	}
-
 	// Update database VM with OpenShift status
 	vm.translator.UpdateVMFromKubeVirt(dbVM, kvVM)
 	return vm.vmRepo.Update(dbVM)

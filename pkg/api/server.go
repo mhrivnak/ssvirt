@@ -2,13 +2,16 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/auth"
@@ -34,6 +37,7 @@ type Server struct {
 	vmRepo          *repositories.VMRepository
 	catalogItemRepo *repositories.CatalogItemRepository
 	templateService services.TemplateServiceInterface
+	k8sService      services.KubernetesService
 	// CloudAPI handlers
 	userHandlers        *handlers.UserHandlers
 	roleHandlers        *handlers.RoleHandlers
@@ -51,7 +55,7 @@ type Server struct {
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface, k8sService services.KubernetesService) *Server {
 	// Validate required parameters
 	if templateService == nil {
 		panic("templateService cannot be nil")
@@ -75,16 +79,17 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		vmRepo:          vmRepo,
 		catalogItemRepo: catalogItemRepo,
 		templateService: templateService,
+		k8sService:      k8sService,
 		// Initialize CloudAPI handlers
 		userHandlers:        handlers.NewUserHandlers(userRepo),
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
-		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo),
+		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, k8sService),
 		vdcPublicHandlers:   handlers.NewVDCPublicHandlers(vdcRepo),
-		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo),
+		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, catalogItemRepo, orgRepo, k8sService),
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
 		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
-		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo),
+		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo, k8sService),
 		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo),
 		vmHandlers:          handlers.NewVMHandlers(vmRepo, vappRepo, vdcRepo),
 	}
@@ -280,4 +285,88 @@ func (s *Server) Stop(ctx context.Context) error {
 // GetRouter returns the gin router (useful for testing)
 func (s *Server) GetRouter() *gin.Engine {
 	return s.router
+}
+
+// healthHandler handles health check requests
+func (s *Server) healthHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "ok",
+		"version":   "1.0.0",
+		"database":  "ok",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// readinessHandler handles readiness check requests
+func (s *Server) readinessHandler(c *gin.Context) {
+	services := gin.H{
+		"database": "ready",
+		"auth":     "ready",
+	}
+
+	// Check Kubernetes service status
+	if s.k8sService == nil {
+		services["k8s"] = "disabled"
+	} else {
+		ctx := c.Request.Context()
+		if err := s.k8sService.HealthCheck(ctx); err != nil {
+			services["k8s"] = "unavailable"
+		} else {
+			services["k8s"] = "ready"
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ready":     true,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"services":  services,
+	})
+}
+
+// versionHandler handles version requests
+func (s *Server) versionHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"version":    "1.0.0",
+		"build_time": "dev",
+		"go_version": runtime.Version(),
+		"git_commit": "dev",
+	})
+}
+
+// userProfileHandler handles user profile requests
+func (s *Server) userProfileHandler(c *gin.Context) {
+	// Extract user claims from JWT middleware
+	claims, exists := c.Get(auth.ClaimsContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication token"})
+		return
+	}
+
+	// Get user details from repository
+	user, err := s.userRepo.GetByID(userClaims.UserID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		} else {
+			log.Printf("Error retrieving user %s: %v", userClaims.UserID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":        user.ID,
+			"username":  user.Username,
+			"email":     user.Email,
+			"full_name": user.FullName,
+		},
+	})
 }

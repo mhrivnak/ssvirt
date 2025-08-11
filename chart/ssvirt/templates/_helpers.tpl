@@ -70,38 +70,11 @@ app.kubernetes.io/component: api-server
 {{- end }}
 
 {{/*
-Controller labels
-*/}}
-{{- define "ssvirt.controllerLabels" -}}
-{{ include "ssvirt.labels" . }}
-app.kubernetes.io/component: controller
-{{- end }}
-
-{{/*
-Controller selector labels
-*/}}
-{{- define "ssvirt.controllerSelectorLabels" -}}
-{{ include "ssvirt.selectorLabels" . }}
-app.kubernetes.io/component: controller
-{{- end }}
-
-{{/*
 Create the name of the service account to use
 */}}
 {{- define "ssvirt.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "ssvirt.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
-Create the name of the controller service account to use
-*/}}
-{{- define "ssvirt.controllerServiceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- printf "%s-controller" (include "ssvirt.fullname" .) }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

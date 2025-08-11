@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -190,8 +191,13 @@ func (m *TemplateMapper) TemplateToCatalogItem(template *templatev1.Template, ca
 	// Estimate size (simplified calculation)
 	size := int64(numberOfVMs * 2 * 1024 * 1024 * 1024) // 2GB per VM estimate
 
+	// Extract catalog ID from full catalog URN (urn:vcloud:catalog:uuid)
+	catalogUUID := strings.TrimPrefix(catalogID, models.URNPrefixCatalog)
+	// URL-encode template name to handle special characters
+	encodedTemplateName := url.QueryEscape(template.Name)
+
 	return &models.CatalogItem{
-		ID:           models.URNPrefixCatalogItem + string(template.UID),
+		ID:           fmt.Sprintf("%s%s:%s", models.URNPrefixCatalogItem, catalogUUID, encodedTemplateName),
 		Name:         template.Name,
 		Description:  description,
 		CatalogID:    catalogID,

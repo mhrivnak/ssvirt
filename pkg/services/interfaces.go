@@ -13,3 +13,8 @@ type TemplateServiceInterface interface {
 	GetCatalogItem(ctx context.Context, catalogID, itemID string) (*models.CatalogItem, error)
 	Start(ctx context.Context) error
 }
+
+// KubernetesServiceInterface defines the interface for Kubernetes operations
+type KubernetesServiceInterface interface {
+	KubernetesService
+}

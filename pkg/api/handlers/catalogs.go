@@ -13,17 +13,22 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 type CatalogHandlers struct {
-	catalogRepo *repositories.CatalogRepository
-	orgRepo     *repositories.OrganizationRepository
+	catalogRepo     *repositories.CatalogRepository
+	catalogItemRepo *repositories.CatalogItemRepository
+	orgRepo         *repositories.OrganizationRepository
+	k8sService      services.KubernetesService
 }
 
-func NewCatalogHandlers(catalogRepo *repositories.CatalogRepository, orgRepo *repositories.OrganizationRepository) *CatalogHandlers {
+func NewCatalogHandlers(catalogRepo *repositories.CatalogRepository, catalogItemRepo *repositories.CatalogItemRepository, orgRepo *repositories.OrganizationRepository, k8sService services.KubernetesService) *CatalogHandlers {
 	return &CatalogHandlers{
-		catalogRepo: catalogRepo,
-		orgRepo:     orgRepo,
+		catalogRepo:     catalogRepo,
+		catalogItemRepo: catalogItemRepo,
+		orgRepo:         orgRepo,
+		k8sService:      k8sService,
 	}
 }
 
@@ -102,7 +107,16 @@ func (h *CatalogHandlers) ListCatalogs(c *gin.Context) {
 	// Convert to response format
 	catalogResponses := make([]CatalogResponse, len(catalogs))
 	for i, catalog := range catalogs {
-		catalogResponses[i] = h.toCatalogResponse(catalog)
+		catalogResponse := h.toCatalogResponse(catalog)
+
+		// Enrich with OpenShift template count if template service is available
+		// Use the existing template service which has proper filtering
+		templates, err := h.catalogItemRepo.CountByCatalogID(c.Request.Context(), catalog.ID)
+		if err == nil {
+			catalogResponse.NumberOfVAppTemplates = int(templates)
+		}
+
+		catalogResponses[i] = catalogResponse
 	}
 
 	// Build paginated response

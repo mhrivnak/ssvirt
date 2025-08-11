@@ -62,43 +62,6 @@ apiServer:
   tolerations: []
   affinity: {}
 
-# Controller configuration
-controller:
-  enabled: true
-  replicaCount: 1
-
-  # Resource limits
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
-
-  # Health checks
-  livenessProbe:
-    httpGet:
-      path: /healthz
-      port: 8081
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 3
-
-  readinessProbe:
-    httpGet:
-      path: /readyz
-      port: 8081
-    initialDelaySeconds: 5
-    periodSeconds: 5
-    timeoutSeconds: 3
-    failureThreshold: 1
-
-  # Node selection
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
 
 # Database configuration
 database:
