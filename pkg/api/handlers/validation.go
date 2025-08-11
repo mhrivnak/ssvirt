@@ -13,10 +13,6 @@ import "regexp"
 // Input validation patterns for non-URN fields used across handlers.
 // URN validation is now centralized in models.ParseURN and models.GetURNType.
 var (
-	// catalogItemURNRegex validates catalog item URN format.
-	// Pattern: various formats for catalog items
-	catalogItemURNRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9\-_.]*[a-zA-Z0-9]$`)
-
 	// dns1123LabelRegex validates DNS-1123 label format for Kubernetes compatibility.
 	// Requirements:
 	// - Must be lowercase

@@ -79,7 +79,11 @@ func main() {
 	}
 
 	// Initialize Kubernetes service
-	k8sService, err := services.NewKubernetesService("openshift")
+	templateNamespace := os.Getenv("TEMPLATE_NAMESPACE")
+	if templateNamespace == "" {
+		templateNamespace = "openshift"
+	}
+	k8sService, err := services.NewKubernetesService(templateNamespace, log.Default())
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Kubernetes service: %v", err)
 		log.Println("Continuing without Kubernetes integration...")

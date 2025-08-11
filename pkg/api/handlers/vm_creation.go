@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -137,8 +138,8 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		return
 	}
 
-	// Validate catalog item URN format
-	if !catalogItemURNRegex.MatchString(req.CatalogItem.ID) {
+	// Validate catalog item URN format using proper URN validation
+	if !strings.HasPrefix(req.CatalogItem.ID, models.URNPrefixCatalogItem) {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
@@ -236,20 +237,40 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 
 	// Create TemplateInstance in OpenShift if k8s service is available
 	if h.k8sService != nil {
-		// Get catalog item details to determine template name
-		// Extract catalog ID from catalog item ID (format: urn:vcloud:catalogitem:catalog-id:item-name)
-		catalogItemParts := strings.Split(req.CatalogItem.ID, ":")
-		if len(catalogItemParts) < 5 {
-			// Invalid catalog item ID format
-			c.JSON(http.StatusBadRequest, NewAPIError(
-				http.StatusBadRequest,
-				"Bad Request",
-				"Invalid catalog item ID format",
-			))
-			return
+		// Parse catalog item URN to extract catalog ID and item name
+		// Supports both formats:
+		// - Legacy 4-part: urn:vcloud:catalogitem:<item-name>
+		// - New 5-part: urn:vcloud:catalogitem:<catalog-id>:<item-name>
+
+		catalogItemID := req.CatalogItem.ID
+		catalogItemSuffix := strings.TrimPrefix(catalogItemID, models.URNPrefixCatalogItem)
+
+		var catalogID, itemName string
+
+		// Check if it contains a colon (5-part format)
+		if colonIndex := strings.LastIndex(catalogItemSuffix, ":"); colonIndex != -1 {
+			// 5-part format: urn:vcloud:catalogitem:<catalog-id>:<item-name>
+			catalogUUID := catalogItemSuffix[:colonIndex]
+			catalogID = models.URNPrefixCatalog + catalogUUID
+			itemName = catalogItemSuffix[colonIndex+1:]
+
+			// URL decode the item name since it may have been encoded
+			var err error
+			itemName, err = url.QueryUnescape(itemName)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, NewAPIError(
+					http.StatusBadRequest,
+					"Bad Request",
+					"Invalid catalog item name encoding",
+				))
+				return
+			}
+		} else {
+			// 4-part format: urn:vcloud:catalogitem:<item-name>
+			// TODO: This is legacy format support - catalog ID is not available
+			catalogID = "" // Will need to be handled by the repository
+			itemName = catalogItemSuffix
 		}
-		catalogID := strings.Join(catalogItemParts[:4], ":") // urn:vcloud:catalog:catalog-id
-		itemName := catalogItemParts[4]                      // item-name
 
 		catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemName)
 		if err != nil {

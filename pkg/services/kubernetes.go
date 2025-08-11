@@ -22,6 +22,12 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
+// Logger interface for structured logging
+type Logger interface {
+	Printf(format string, v ...interface{})
+	Println(v ...interface{})
+}
+
 // KubernetesService provides Kubernetes operations for SSVirt
 type KubernetesService interface {
 	// Lifecycle management
@@ -128,6 +134,9 @@ type kubernetesService struct {
 	scheme       *runtime.Scheme
 	directClient client.Client // For write operations
 	started      bool
+	cacheCtx     context.Context
+	cacheCancel  context.CancelFunc
+	logger       Logger
 
 	// Configuration
 	templateNamespace string
@@ -135,7 +144,7 @@ type kubernetesService struct {
 }
 
 // NewKubernetesService creates a new Kubernetes service
-func NewKubernetesService(templateNamespace string) (KubernetesService, error) {
+func NewKubernetesService(templateNamespace string, logger Logger) (KubernetesService, error) {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
@@ -157,9 +166,10 @@ func NewKubernetesService(templateNamespace string) (KubernetesService, error) {
 	}
 
 	// Create cache for read operations
+	syncPeriod := 10 * time.Minute
 	cache, err := cache.New(cfg, cache.Options{
 		Scheme:     scheme,
-		SyncPeriod: &[]time.Duration{10 * time.Minute}[0],
+		SyncPeriod: &syncPeriod,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cache: %w", err)
@@ -187,6 +197,7 @@ func NewKubernetesService(templateNamespace string) (KubernetesService, error) {
 		cache:             cache,
 		scheme:            scheme,
 		directClient:      directClient,
+		logger:            logger,
 		templateNamespace: templateNamespace,
 		cacheResync:       10 * time.Minute,
 	}, nil
@@ -198,12 +209,15 @@ func (k *kubernetesService) Start(ctx context.Context) error {
 		return nil
 	}
 
+	// Create context for cache lifecycle management
+	k.cacheCtx, k.cacheCancel = context.WithCancel(ctx)
+
 	// Start cache in background
 	go func() {
-		if err := k.cache.Start(ctx); err != nil {
+		if err := k.cache.Start(k.cacheCtx); err != nil {
 			// Log error but don't fail startup
 			// Service will fall back to direct API calls
-			fmt.Printf("Cache failed to start: %v\n", err)
+			k.logger.Printf("Kubernetes cache failed to start: %v", err)
 		}
 	}()
 
@@ -213,7 +227,7 @@ func (k *kubernetesService) Start(ctx context.Context) error {
 
 	if !k.cache.WaitForCacheSync(syncCtx) {
 		// Cache didn't sync but service can still work with direct calls
-		fmt.Println("Warning: Cache did not sync, using direct API calls")
+		k.logger.Println("Warning: Kubernetes cache did not sync, using direct API calls")
 	}
 
 	k.started = true
@@ -222,6 +236,15 @@ func (k *kubernetesService) Start(ctx context.Context) error {
 
 // Stop gracefully stops the Kubernetes service
 func (k *kubernetesService) Stop(ctx context.Context) error {
+	if !k.started {
+		return nil
+	}
+
+	// Cancel the cache context to stop the cache
+	if k.cacheCancel != nil {
+		k.cacheCancel()
+	}
+
 	k.started = false
 	return nil
 }
@@ -388,8 +411,10 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 
 	// Add VDC-specific limits if configured
 	if vdc.CPULimit > 0 {
-		quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse(fmt.Sprintf("%d", vdc.CPULimit))
-		quota.Spec.Hard[corev1.ResourceLimitsCPU] = resource.MustParse(fmt.Sprintf("%d", vdc.CPULimit))
+		// Convert CPULimit from MHz to millicores (1 MHz = 1 millicore)
+		cpuLimitMillicores := fmt.Sprintf("%dm", vdc.CPULimit)
+		quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse(cpuLimitMillicores)
+		quota.Spec.Hard[corev1.ResourceLimitsCPU] = resource.MustParse(cpuLimitMillicores)
 	}
 
 	if vdc.MemoryLimit > 0 {
@@ -443,16 +468,20 @@ func (k *kubernetesService) createNetworkPolicies(ctx context.Context, namespace
 							},
 						},
 					},
-					Ports: []networkingv1.NetworkPolicyPort{
-						{
-							Protocol: &[]corev1.Protocol{corev1.ProtocolUDP}[0],
-							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
-						},
-						{
-							Protocol: &[]corev1.Protocol{corev1.ProtocolTCP}[0],
-							Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
-						},
-					},
+					Ports: func() []networkingv1.NetworkPolicyPort {
+						protoUDP := corev1.ProtocolUDP
+						protoTCP := corev1.ProtocolTCP
+						return []networkingv1.NetworkPolicyPort{
+							{
+								Protocol: &protoUDP,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
+							},
+							{
+								Protocol: &protoTCP,
+								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
+							},
+						}
+					}(),
 				},
 			},
 		},

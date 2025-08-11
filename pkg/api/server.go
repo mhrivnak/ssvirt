@@ -297,13 +297,27 @@ func (s *Server) healthHandler(c *gin.Context) {
 
 // readinessHandler handles readiness check requests
 func (s *Server) readinessHandler(c *gin.Context) {
+	services := gin.H{
+		"database": "ready",
+		"auth":     "ready",
+	}
+
+	// Check Kubernetes service status
+	if s.k8sService == nil {
+		services["k8s"] = "disabled"
+	} else {
+		ctx := c.Request.Context()
+		if err := s.k8sService.HealthCheck(ctx); err != nil {
+			services["k8s"] = "unavailable"
+		} else {
+			services["k8s"] = "ready"
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"ready":     true,
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"services": gin.H{
-			"database": "ready",
-			"auth":     "ready",
-		},
+		"services":  services,
 	})
 }
 
