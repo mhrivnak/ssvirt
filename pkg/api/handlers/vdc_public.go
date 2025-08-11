@@ -4,7 +4,6 @@ import (
 	"errors"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -15,9 +14,6 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
-
-// VDC URN validation regex - matches urn:vcloud:vdc:UUID format
-var vdcURNRegex = regexp.MustCompile(`^urn:vcloud:vdc:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // VDCPublicHandlers handles public (non-admin) VDC API endpoints
 type VDCPublicHandlers struct {
@@ -33,7 +29,8 @@ func NewVDCPublicHandlers(vdcRepo *repositories.VDCRepository) *VDCPublicHandler
 
 // isValidVDCURN validates that a VDC URN matches the expected format
 func isValidVDCURN(urn string) bool {
-	return vdcURNRegex.MatchString(urn)
+	urnType, err := models.GetURNType(urn)
+	return err == nil && urnType == "vdc"
 }
 
 // ListVDCs handles GET /cloudapi/1.0.0/vdcs

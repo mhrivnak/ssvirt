@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 type OrganizationRepository struct {
@@ -111,15 +112,8 @@ func (r *OrganizationRepository) GetWithEntityRefs(id string) (*models.Organizat
 
 // ListWithEntityRefs gets organizations and populates entity references for API responses
 func (r *OrganizationRepository) ListWithEntityRefs(limit, offset int) ([]models.Organization, error) {
-	if limit <= 0 {
-		limit = 25 // Default limit to ensure results are returned
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	if limit > 1000 { // reasonable maximum
-		limit = 1000
-	}
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
 
 	var orgs []models.Organization
 	err := r.db.Limit(limit).Offset(offset).Order("name ASC").Find(&orgs).Error

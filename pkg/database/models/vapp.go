@@ -8,8 +8,8 @@ import (
 
 type VApp struct {
 	ID          string         `gorm:"type:varchar(255);primary_key" json:"id"`
-	Name        string         `gorm:"not null" json:"name"`
-	VDCID       string         `gorm:"type:varchar(255);not null;index" json:"vdc_id"`
+	Name        string         `gorm:"not null;uniqueIndex:idx_vapp_vdc_name" json:"name"`
+	VDCID       string         `gorm:"type:varchar(255);not null;index;uniqueIndex:idx_vapp_vdc_name" json:"vdc_id"`
 	TemplateID  *string        `gorm:"type:varchar(255);index" json:"template_id"`
 	Status      string         `json:"status"` // RESOLVED, DEPLOYED, SUSPENDED, etc.
 	Description string         `json:"description"`
@@ -25,7 +25,7 @@ type VApp struct {
 
 func (va *VApp) BeforeCreate(tx *gorm.DB) error {
 	if va.ID == "" {
-		va.ID = GenerateOrgURN() // Reuse org URN format for vapps
+		va.ID = GenerateVAppURN()
 	}
 	return nil
 }

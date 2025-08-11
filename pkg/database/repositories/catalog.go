@@ -1,11 +1,13 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 // ErrCatalogHasDependencies is returned when attempting to delete a catalog that has dependent vApp templates
@@ -83,6 +85,10 @@ func (r *CatalogRepository) GetWithTemplates(id string) (*models.Catalog, error)
 // ListWithPagination retrieves catalogs with pagination
 func (r *CatalogRepository) ListWithPagination(limit, offset int) ([]models.Catalog, error) {
 	var catalogs []models.Catalog
+
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
+
 	err := r.db.Preload("VAppTemplates").
 		Limit(limit).
 		Offset(offset).
@@ -146,4 +152,26 @@ func (r *CatalogRepository) DeleteWithValidation(urn string) error {
 		// Delete the catalog within the same transaction
 		return tx.Where("id = ?", urn).Delete(&models.Catalog{}).Error
 	})
+}
+
+// ValidateUserCatalogAccess checks if a user has access to any catalogs for template instantiation
+func (r *CatalogRepository) ValidateUserCatalogAccess(ctx context.Context, userID string) error {
+	// Get the user's organization ID using a subquery approach similar to VDC access
+	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
+
+	// Check if user has access to any catalogs in their organization or published catalogs
+	var catalogCount int64
+	err := r.db.WithContext(ctx).
+		Model(&models.Catalog{}).
+		Where("organization_id IN (?) OR is_published = true", subquery).
+		Count(&catalogCount).Error
+	if err != nil {
+		return err
+	}
+
+	if catalogCount == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return nil
 }
