@@ -7,12 +7,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -159,10 +157,6 @@ func NewKubernetesService(templateNamespace string, logger Logger) (KubernetesSe
 
 	if err := templatev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add template/v1 to scheme: %w", err)
-	}
-
-	if err := networkingv1.AddToScheme(scheme); err != nil {
-		return nil, fmt.Errorf("failed to add networking/v1 to scheme: %w", err)
 	}
 
 	// Create cache for read operations
@@ -379,11 +373,6 @@ func (k *kubernetesService) EnsureNamespaceResources(ctx context.Context, namesp
 		return fmt.Errorf("failed to create resource quota: %w", err)
 	}
 
-	// Create network policies
-	if err := k.createNetworkPolicies(ctx, namespace, vdc); err != nil {
-		return fmt.Errorf("failed to create network policies: %w", err)
-	}
-
 	return nil
 }
 
@@ -411,10 +400,25 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 
 	// Add VDC-specific limits if configured
 	if vdc.CPULimit > 0 {
-		// Convert CPULimit from MHz to millicores (1 MHz = 1 millicore)
-		cpuLimitMillicores := fmt.Sprintf("%dm", vdc.CPULimit)
-		quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse(cpuLimitMillicores)
-		quota.Spec.Hard[corev1.ResourceLimitsCPU] = resource.MustParse(cpuLimitMillicores)
+		// Only set CPU quotas when VDC uses Kubernetes-compatible units
+		switch vdc.CPUUnits {
+		case "cores":
+			// Convert cores to millicores
+			cpuLimitMillicores := fmt.Sprintf("%dm", vdc.CPULimit*1000)
+			quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse(cpuLimitMillicores)
+			quota.Spec.Hard[corev1.ResourceLimitsCPU] = resource.MustParse(cpuLimitMillicores)
+		case "millicores":
+			// Direct millicores value
+			cpuLimitMillicores := fmt.Sprintf("%dm", vdc.CPULimit)
+			quota.Spec.Hard[corev1.ResourceRequestsCPU] = resource.MustParse(cpuLimitMillicores)
+			quota.Spec.Hard[corev1.ResourceLimitsCPU] = resource.MustParse(cpuLimitMillicores)
+		case "MHz":
+			// Skip setting CPU quota for MHz units and log warning
+			k.logger.Printf("Warning: Skipping CPU quota for VDC %s - MHz units not supported in Kubernetes", vdc.ID)
+		default:
+			// Unknown or unspecified units, skip and log warning
+			k.logger.Printf("Warning: Skipping CPU quota for VDC %s - unknown CPU units: %s", vdc.ID, vdc.CPUUnits)
+		}
 	}
 
 	if vdc.MemoryLimit > 0 {
@@ -437,70 +441,6 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 	existingQuota.Spec = quota.Spec
 	existingQuota.Labels = quota.Labels
 	return k.directClient.Update(ctx, existingQuota)
-}
-
-func (k *kubernetesService) createNetworkPolicies(ctx context.Context, namespace string, vdc *models.VDC) error {
-	// Create a network policy that provides basic VDC isolation
-	policy := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "vdc-isolation",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"ssvirt.io/vdc-id":             vdc.ID,
-				"app.kubernetes.io/managed-by": "ssvirt",
-			},
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PolicyTypes: []networkingv1.PolicyType{
-				networkingv1.PolicyTypeIngress,
-				networkingv1.PolicyTypeEgress,
-			},
-			PodSelector: metav1.LabelSelector{}, // Apply to all pods in namespace
-			// Allow DNS resolution
-			Egress: []networkingv1.NetworkPolicyEgressRule{
-				{
-					To: []networkingv1.NetworkPolicyPeer{
-						{
-							NamespaceSelector: &metav1.LabelSelector{
-								MatchLabels: map[string]string{
-									"name": "openshift-dns",
-								},
-							},
-						},
-					},
-					Ports: func() []networkingv1.NetworkPolicyPort {
-						protoUDP := corev1.ProtocolUDP
-						protoTCP := corev1.ProtocolTCP
-						return []networkingv1.NetworkPolicyPort{
-							{
-								Protocol: &protoUDP,
-								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
-							},
-							{
-								Protocol: &protoTCP,
-								Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
-							},
-						}
-					}(),
-				},
-			},
-		},
-	}
-
-	// Check if policy already exists
-	existingPolicy := &networkingv1.NetworkPolicy{}
-	err := k.directClient.Get(ctx, client.ObjectKey{Name: "vdc-isolation", Namespace: namespace}, existingPolicy)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return k.directClient.Create(ctx, policy)
-		}
-		return fmt.Errorf("failed to check existing network policy: %w", err)
-	}
-
-	// Update existing policy
-	existingPolicy.Spec = policy.Spec
-	existingPolicy.Labels = policy.Labels
-	return k.directClient.Update(ctx, existingPolicy)
 }
 
 // GetTemplate retrieves a specific template by name
@@ -579,6 +519,16 @@ func (k *kubernetesService) CreateTemplateInstance(ctx context.Context, req *Tem
 		return nil, fmt.Errorf("failed to create parameter secret: %w", err)
 	}
 
+	// Fetch the full template resource
+	fullTemplate := &templatev1.Template{}
+	err := k.directClient.Get(ctx, client.ObjectKey{
+		Name:      req.TemplateName,
+		Namespace: k.templateNamespace,
+	}, fullTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch template %s/%s: %w", k.templateNamespace, req.TemplateName, err)
+	}
+
 	// Create TemplateInstance resource
 	templateInstance := &templatev1.TemplateInstance{
 		ObjectMeta: metav1.ObjectMeta{
@@ -590,12 +540,7 @@ func (k *kubernetesService) CreateTemplateInstance(ctx context.Context, req *Tem
 			},
 		},
 		Spec: templatev1.TemplateInstanceSpec{
-			Template: templatev1.Template{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      req.TemplateName,
-					Namespace: k.templateNamespace,
-				},
-			},
+			Template: *fullTemplate, // Use the full template including objects and parameters
 			Secret: &corev1.LocalObjectReference{
 				Name: req.Name + "-params",
 			},
@@ -610,6 +555,12 @@ func (k *kubernetesService) CreateTemplateInstance(ctx context.Context, req *Tem
 	// Create the template instance
 	if err := k.directClient.Create(ctx, templateInstance); err != nil {
 		return nil, fmt.Errorf("failed to create template instance: %w", err)
+	}
+
+	// Add OwnerReference to the parameter secret for garbage collection
+	if err := k.addOwnerReferenceToSecret(ctx, req.Name+"-params", req.Namespace, templateInstance); err != nil {
+		// Log warning but don't fail the creation
+		k.logger.Printf("Warning: Failed to set owner reference on secret %s-%s: %v", req.Name, "params", err)
 	}
 
 	return &TemplateInstanceResult{
@@ -640,6 +591,31 @@ func (k *kubernetesService) createParameterSecret(ctx context.Context, req *Temp
 	}
 
 	return k.directClient.Create(ctx, secret)
+}
+
+// addOwnerReferenceToSecret adds an OwnerReference to a secret for garbage collection
+func (k *kubernetesService) addOwnerReferenceToSecret(ctx context.Context, secretName, namespace string, templateInstance *templatev1.TemplateInstance) error {
+	secret := &corev1.Secret{}
+	err := k.directClient.Get(ctx, client.ObjectKey{
+		Name:      secretName,
+		Namespace: namespace,
+	}, secret)
+	if err != nil {
+		return fmt.Errorf("failed to get secret: %w", err)
+	}
+
+	// Add OwnerReference
+	isController := true
+	secret.OwnerReferences = append(secret.OwnerReferences, metav1.OwnerReference{
+		APIVersion:         templateInstance.APIVersion,
+		Kind:               templateInstance.Kind,
+		Name:               templateInstance.Name,
+		UID:                templateInstance.UID,
+		Controller:         &isController,
+		BlockOwnerDeletion: &isController,
+	})
+
+	return k.directClient.Update(ctx, secret)
 }
 
 // GetTemplateInstance retrieves the status of a template instance

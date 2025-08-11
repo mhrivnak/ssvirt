@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/auth"
@@ -349,7 +351,12 @@ func (s *Server) userProfileHandler(c *gin.Context) {
 	// Get user details from repository
 	user, err := s.userRepo.GetByID(userClaims.UserID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		} else {
+			log.Printf("Error retrieving user %s: %v", userClaims.UserID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		}
 		return
 	}
 
