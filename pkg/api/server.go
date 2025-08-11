@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -168,9 +169,9 @@ func (s *Server) setupRoutes() {
 			cloudAPI.GET("/catalogs/:catalogUrn", s.catalogHandlers.GetCatalog)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn} - get catalog
 			cloudAPI.DELETE("/catalogs/:catalogUrn", s.catalogHandlers.DeleteCatalog) // DELETE /cloudapi/1.0.0/catalogs/{catalogUrn} - delete catalog
 
-			// Catalog Items API (enhanced with OpenShift template integration)
-			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogHandlers.ListCatalogItemsFromTemplates) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items from OpenShift templates
-			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem)    // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
+			// Catalog Items API
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogItemHandlers.ListCatalogItems)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
 
 			// VM Creation API
 			cloudAPI.POST("/vdcs/:vdc_id/actions/instantiateTemplate", s.vmCreationHandlers.InstantiateTemplate) // POST /cloudapi/1.0.0/vdcs/{vdc_id}/actions/instantiateTemplate - create vApp from template
@@ -286,20 +287,65 @@ func (s *Server) GetRouter() *gin.Engine {
 
 // healthHandler handles health check requests
 func (s *Server) healthHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "ok",
+		"version":   "1.0.0",
+		"database":  "ok",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // readinessHandler handles readiness check requests
 func (s *Server) readinessHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	c.JSON(http.StatusOK, gin.H{
+		"ready":     true,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"services": gin.H{
+			"database": "ready",
+			"auth":     "ready",
+		},
+	})
 }
 
 // versionHandler handles version requests
 func (s *Server) versionHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"version": "1.0.0"})
+	c.JSON(http.StatusOK, gin.H{
+		"version":    "1.0.0",
+		"build_time": "dev",
+		"go_version": runtime.Version(),
+		"git_commit": "dev",
+	})
 }
 
 // userProfileHandler handles user profile requests
 func (s *Server) userProfileHandler(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "user profile endpoint"})
+	// Extract user claims from JWT middleware
+	claims, exists := c.Get(auth.ClaimsContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication token"})
+		return
+	}
+
+	// Get user details from repository
+	user, err := s.userRepo.GetByID(userClaims.UserID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":        user.ID,
+			"username":  user.Username,
+			"email":     user.Email,
+			"full_name": user.FullName,
+		},
+	})
 }

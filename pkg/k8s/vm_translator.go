@@ -3,11 +3,12 @@ package k8s
 import (
 	"fmt"
 
-	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
 // VMTranslator handles translation between database VM models and KubeVirt VirtualMachine resources

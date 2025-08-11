@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mhrivnak/ssvirt/pkg/database/models"
-	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
 
 // VMManager manages VirtualMachine resources in OpenShift Virtualization
