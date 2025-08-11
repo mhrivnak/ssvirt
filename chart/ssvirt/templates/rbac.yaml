@@ -1,12 +1,12 @@
 {{- if .Values.rbac.create }}
-# VDC Controller RBAC (manages Kubernetes namespaces)
+# API Server RBAC - includes embedded Kubernetes management capabilities
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "ssvirt.fullname" . }}-vdc-controller
+  name: {{ include "ssvirt.fullname" . }}-api-server
   labels:
     {{- include "ssvirt.labels" . | nindent 4 }}
-    app.kubernetes.io/component: controller
+    app.kubernetes.io/component: api-server
   {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
   {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
   {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
@@ -62,63 +62,14 @@ rules:
 - apiGroups: ["k8s.ovn.org"]
   resources: ["userdefinednetworks"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ include "ssvirt.fullname" . }}-vdc-controller
-  labels:
-    {{- include "ssvirt.labels" . | nindent 4 }}
-    app.kubernetes.io/component: controller
-  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
-  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
-  {{- if $mergedAnnotations }}
-  annotations:
-    {{- toYaml $mergedAnnotations | nindent 4 }}
-  {{- end }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "ssvirt.fullname" . }}-vdc-controller
-subjects:
-- kind: ServiceAccount
-  name: {{ include "ssvirt.controllerServiceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
-
----
-# API Server RBAC - minimal permissions for API operations
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "ssvirt.fullname" . }}-api-server
-  labels:
-    {{- include "ssvirt.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api-server
-  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
-  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
-  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
-  {{- if $mergedAnnotations }}
-  annotations:
-    {{- toYaml $mergedAnnotations | nindent 4 }}
-  {{- end }}
-rules:
-# Read access to OpenShift Virtualization resources for API queries
-- apiGroups: ["kubevirt.io"]
-  resources: ["virtualmachines", "virtualmachineinstances"]
+# OpenShift Templates for catalog integration
+- apiGroups: ["template.openshift.io"]
+  resources: ["templates"]
   verbs: ["get", "list", "watch"]
-- apiGroups: ["instancetype.kubevirt.io"]
-  resources: ["virtualmachineinstancetypes", "virtualmachineclusterinstancetypes"]
-  verbs: ["get", "list", "watch"]
-# Read access to namespaces for organization validation
-- apiGroups: [""]
-  resources: ["namespaces"]
-  verbs: ["get", "list", "watch"]
-# Events for logging
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create", "patch"]
+# Template instances for VM creation
+- apiGroups: ["template.openshift.io"]
+  resources: ["templateinstances"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -144,4 +95,3 @@ subjects:
   name: {{ include "ssvirt.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}
-

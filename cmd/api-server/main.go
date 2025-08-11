@@ -78,20 +78,36 @@ func main() {
 		log.Fatalf("Failed to create template service: %v", err)
 	}
 
-	// Create cancelable context for template service
-	templateCtx, templateCancel := context.WithCancel(context.Background())
-	defer templateCancel()
+	// Initialize Kubernetes service
+	k8sService, err := services.NewKubernetesService("openshift")
+	if err != nil {
+		log.Printf("Warning: Failed to initialize Kubernetes service: %v", err)
+		log.Println("Continuing without Kubernetes integration...")
+	}
+
+	// Create cancelable context for services
+	serviceCtx, serviceCancel := context.WithCancel(context.Background())
+	defer serviceCancel()
 
 	// Start template service cache in background
 	go func() {
-		if err := templateService.Start(templateCtx); err != nil {
+		if err := templateService.Start(serviceCtx); err != nil {
 			log.Printf("Template service cache error: %v", err)
 		}
 	}()
 
-	// Initialize API server with template service interface
+	// Start Kubernetes service if available
+	if k8sService != nil {
+		go func() {
+			if err := k8sService.Start(serviceCtx); err != nil {
+				log.Printf("Kubernetes service error: %v", err)
+			}
+		}()
+	}
+
+	// Initialize API server with service interfaces
 	var templateServiceInterface services.TemplateServiceInterface = templateService
-	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateServiceInterface)
+	server := api.NewServer(cfg, db, authSvc, jwtManager, userRepo, roleRepo, orgRepo, vdcRepo, catalogRepo, templateRepo, vappRepo, vmRepo, templateServiceInterface, k8sService)
 
 	// Start server in a goroutine
 	go func() {
@@ -106,8 +122,8 @@ func main() {
 	<-quit
 	log.Println("Shutdown signal received")
 
-	// Cancel template service context first
-	templateCancel()
+	// Cancel service contexts first
+	serviceCancel()
 
 	// Give the server 30 seconds to finish current requests
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

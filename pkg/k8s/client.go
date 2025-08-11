@@ -1,5 +1,3 @@
-//go:build ignore
-
 package k8s
 
 import (
@@ -33,7 +31,6 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get kubernetes config: %w", err)
 	}
-
 	return createClientWithCache(cfg)
 }
 
@@ -43,7 +40,6 @@ func NewReadyClient(ctx context.Context) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Start the cache in a goroutine
 	go func() {
 		if err := client.Start(ctx); err != nil {
@@ -52,33 +48,27 @@ func NewReadyClient(ctx context.Context) (*Client, error) {
 			klog.Warningf("Failed to start cache: %v", err)
 		}
 	}()
-
 	// Wait for cache to sync with a timeout
 	syncCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-
 	if !client.WaitForCacheSync(syncCtx) {
 		// Cache didn't sync, but client can still be used for direct API calls
 		klog.Warning("Cache did not sync within timeout, proceeding with direct API calls")
 	}
-
 	return client, nil
 }
 
 // createScheme creates and configures the runtime scheme with all required APIs
 func createScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
-
 	// Add core Kubernetes APIs
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add core/v1 to scheme: %w", err)
 	}
-
 	// Add KubeVirt APIs
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add kubevirt APIs to scheme: %w", err)
 	}
-
 	return scheme, nil
 }
 
@@ -89,7 +79,6 @@ func createClientWithCache(cfg *rest.Config) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	// Create cache with optimized settings
 	cacheOptions := cache.Options{
 		Scheme: scheme,
@@ -98,13 +87,11 @@ func createClientWithCache(cfg *rest.Config) (*Client, error) {
 		// Cache for all namespaces by default
 		DefaultNamespaces: map[string]cache.Config{},
 	}
-
 	// Create cache
 	kubeCache, err := cache.New(cfg, cacheOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes cache: %w", err)
 	}
-
 	// Create client with cache for reads
 	cl, err := client.New(cfg, client.Options{
 		Scheme: scheme,
@@ -115,7 +102,6 @@ func createClientWithCache(cfg *rest.Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
-
 	return &Client{
 		Client: cl,
 		config: cfg,
@@ -129,7 +115,6 @@ func NewClientWithConfig(kubeconfigPath string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build config from kubeconfig %s: %w", kubeconfigPath, err)
 	}
-
 	return createClientWithCache(cfg)
 }
 
@@ -273,7 +258,6 @@ func (c *Client) Health(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to kubernetes cluster: %w", err)
 	}
-
 	// Check if cache is running (this is optional for health check)
 	if c.cache != nil {
 		// Try to get informer for namespaces to verify cache is accessible
@@ -283,6 +267,5 @@ func (c *Client) Health(ctx context.Context) error {
 			return nil
 		}
 	}
-
 	return nil
 }

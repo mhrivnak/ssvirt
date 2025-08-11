@@ -13,17 +13,20 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 type VDCHandlers struct {
-	vdcRepo *repositories.VDCRepository
-	orgRepo *repositories.OrganizationRepository
+	vdcRepo    *repositories.VDCRepository
+	orgRepo    *repositories.OrganizationRepository
+	k8sService services.KubernetesService
 }
 
-func NewVDCHandlers(vdcRepo *repositories.VDCRepository, orgRepo *repositories.OrganizationRepository) *VDCHandlers {
+func NewVDCHandlers(vdcRepo *repositories.VDCRepository, orgRepo *repositories.OrganizationRepository, k8sService services.KubernetesService) *VDCHandlers {
 	return &VDCHandlers{
-		vdcRepo: vdcRepo,
-		orgRepo: orgRepo,
+		vdcRepo:    vdcRepo,
+		orgRepo:    orgRepo,
+		k8sService: k8sService,
 	}
 }
 
@@ -223,7 +226,7 @@ func (h *VDCHandlers) CreateVDC(c *gin.Context) {
 	}
 
 	// Verify organization exists
-	_, err := h.orgRepo.GetByID(orgURN)
+	org, err := h.orgRepo.GetByID(orgURN)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, NewAPIError(
@@ -290,7 +293,7 @@ func (h *VDCHandlers) CreateVDC(c *gin.Context) {
 	// Set provider VDC reference
 	vdc.SetProviderVdc(req.ProviderVdc)
 
-	// Create VDC
+	// Create VDC in database
 	if err := h.vdcRepo.Create(vdc); err != nil {
 		c.JSON(http.StatusInternalServerError, NewAPIError(
 			http.StatusInternalServerError,
@@ -299,6 +302,24 @@ func (h *VDCHandlers) CreateVDC(c *gin.Context) {
 			err.Error(),
 		))
 		return
+	}
+
+	// Create Kubernetes namespace if k8s service is available
+	if h.k8sService != nil {
+		if err := h.k8sService.CreateNamespaceForVDC(c.Request.Context(), vdc, org); err != nil {
+			// Try to cleanup the VDC if namespace creation fails
+			if cleanupErr := h.vdcRepo.Delete(vdc.ID); cleanupErr != nil {
+				// Log cleanup error but don't fail the request
+				_ = cleanupErr
+			}
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to create VDC namespace",
+				err.Error(),
+			))
+			return
+		}
 	}
 
 	c.JSON(http.StatusCreated, h.toVDCResponse(*vdc))
@@ -476,6 +497,15 @@ func (h *VDCHandlers) DeleteVDC(c *gin.Context) {
 			err.Error(),
 		))
 		return
+	}
+
+	// Delete Kubernetes namespace if k8s service is available
+	if h.k8sService != nil {
+		if err := h.k8sService.DeleteNamespaceForVDC(c.Request.Context(), vdc); err != nil {
+			// Log the error but don't fail the API call since the VDC is already deleted
+			// TODO: Add proper logging
+			_ = err
+		}
 	}
 
 	c.Status(http.StatusNoContent)

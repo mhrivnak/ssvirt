@@ -34,6 +34,7 @@ type Server struct {
 	vmRepo          *repositories.VMRepository
 	catalogItemRepo *repositories.CatalogItemRepository
 	templateService services.TemplateServiceInterface
+	k8sService      services.KubernetesService
 	// CloudAPI handlers
 	userHandlers        *handlers.UserHandlers
 	roleHandlers        *handlers.RoleHandlers
@@ -51,7 +52,7 @@ type Server struct {
 }
 
 // NewServer creates a new API server instance
-func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface) *Server {
+func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtManager *auth.JWTManager, userRepo *repositories.UserRepository, roleRepo *repositories.RoleRepository, orgRepo *repositories.OrganizationRepository, vdcRepo *repositories.VDCRepository, catalogRepo *repositories.CatalogRepository, templateRepo *repositories.VAppTemplateRepository, vappRepo *repositories.VAppRepository, vmRepo *repositories.VMRepository, templateService services.TemplateServiceInterface, k8sService services.KubernetesService) *Server {
 	// Validate required parameters
 	if templateService == nil {
 		panic("templateService cannot be nil")
@@ -75,16 +76,17 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		vmRepo:          vmRepo,
 		catalogItemRepo: catalogItemRepo,
 		templateService: templateService,
+		k8sService:      k8sService,
 		// Initialize CloudAPI handlers
 		userHandlers:        handlers.NewUserHandlers(userRepo),
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
-		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo),
+		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, k8sService),
 		vdcPublicHandlers:   handlers.NewVDCPublicHandlers(vdcRepo),
-		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo),
+		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, orgRepo, k8sService),
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
 		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
-		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo),
+		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo, k8sService),
 		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo),
 		vmHandlers:          handlers.NewVMHandlers(vmRepo, vappRepo, vdcRepo),
 	}
@@ -166,9 +168,9 @@ func (s *Server) setupRoutes() {
 			cloudAPI.GET("/catalogs/:catalogUrn", s.catalogHandlers.GetCatalog)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn} - get catalog
 			cloudAPI.DELETE("/catalogs/:catalogUrn", s.catalogHandlers.DeleteCatalog) // DELETE /cloudapi/1.0.0/catalogs/{catalogUrn} - delete catalog
 
-			// Catalog Items API
-			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogItemHandlers.ListCatalogItems)       // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items
-			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
+			// Catalog Items API (enhanced with OpenShift template integration)
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems", s.catalogHandlers.ListCatalogItemsFromTemplates) // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems - list catalog items from OpenShift templates
+			cloudAPI.GET("/catalogs/:catalogUrn/catalogItems/:itemId", s.catalogItemHandlers.GetCatalogItem)    // GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId} - get catalog item
 
 			// VM Creation API
 			cloudAPI.POST("/vdcs/:vdc_id/actions/instantiateTemplate", s.vmCreationHandlers.InstantiateTemplate) // POST /cloudapi/1.0.0/vdcs/{vdc_id}/actions/instantiateTemplate - create vApp from template
@@ -280,4 +282,24 @@ func (s *Server) Stop(ctx context.Context) error {
 // GetRouter returns the gin router (useful for testing)
 func (s *Server) GetRouter() *gin.Engine {
 	return s.router
+}
+
+// healthHandler handles health check requests
+func (s *Server) healthHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// readinessHandler handles readiness check requests
+func (s *Server) readinessHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ready"})
+}
+
+// versionHandler handles version requests
+func (s *Server) versionHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"version": "1.0.0"})
+}
+
+// userProfileHandler handles user profile requests
+func (s *Server) userProfileHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "user profile endpoint"})
 }

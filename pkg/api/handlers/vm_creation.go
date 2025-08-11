@@ -32,6 +32,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 // VMCreationHandlers handles VM creation via template instantiation
@@ -40,15 +41,17 @@ type VMCreationHandlers struct {
 	vappRepo        *repositories.VAppRepository
 	catalogItemRepo *repositories.CatalogItemRepository
 	catalogRepo     *repositories.CatalogRepository
+	k8sService      services.KubernetesService
 }
 
 // NewVMCreationHandlers creates a new VMCreationHandlers instance
-func NewVMCreationHandlers(vdcRepo *repositories.VDCRepository, vappRepo *repositories.VAppRepository, catalogItemRepo *repositories.CatalogItemRepository, catalogRepo *repositories.CatalogRepository) *VMCreationHandlers {
+func NewVMCreationHandlers(vdcRepo *repositories.VDCRepository, vappRepo *repositories.VAppRepository, catalogItemRepo *repositories.CatalogItemRepository, catalogRepo *repositories.CatalogRepository, k8sService services.KubernetesService) *VMCreationHandlers {
 	return &VMCreationHandlers{
 		vdcRepo:         vdcRepo,
 		vappRepo:        vappRepo,
 		catalogItemRepo: catalogItemRepo,
 		catalogRepo:     catalogRepo,
+		k8sService:      k8sService,
 	}
 }
 
@@ -231,9 +234,90 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		return
 	}
 
-	// TODO: Create TemplateInstance in OpenShift
-	// For now, we'll set status to RESOLVED as a placeholder
-	vapp.Status = "RESOLVED"
+	// Create TemplateInstance in OpenShift if k8s service is available
+	if h.k8sService != nil {
+		// Get catalog item details to determine template name
+		// Extract catalog ID from catalog item ID (format: urn:vcloud:catalogitem:catalog-id:item-name)
+		catalogItemParts := strings.Split(req.CatalogItem.ID, ":")
+		if len(catalogItemParts) < 5 {
+			// Invalid catalog item ID format
+			c.JSON(http.StatusBadRequest, NewAPIError(
+				http.StatusBadRequest,
+				"Bad Request",
+				"Invalid catalog item ID format",
+			))
+			return
+		}
+		catalogID := strings.Join(catalogItemParts[:4], ":") // urn:vcloud:catalog:catalog-id
+		itemName := catalogItemParts[4]                      // item-name
+
+		catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemName)
+		if err != nil {
+			// Cleanup vApp and return error
+			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+				// Log cleanup error but don't fail the request
+				_ = cleanupErr
+			}
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to retrieve catalog item details",
+				err.Error(),
+			))
+			return
+		}
+
+		// Get VDC to determine namespace
+		vdc, err := h.vdcRepo.GetByIDString(c.Request.Context(), vdcID)
+		if err != nil {
+			// Cleanup vApp and return error
+			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+				// Log cleanup error but don't fail the request
+				_ = cleanupErr
+			}
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to retrieve VDC details",
+				err.Error(),
+			))
+			return
+		}
+
+		// Create template instance request
+		templateInstanceReq := &services.TemplateInstanceRequest{
+			Name:         req.Name,
+			Namespace:    fmt.Sprintf("vdc-%s", vdc.ID[strings.LastIndex(vdc.ID, ":")+1:]), // Extract ID from URN
+			TemplateName: catalogItem.Name,
+			Parameters:   []services.TemplateInstanceParam{}, // Empty parameters for now
+		}
+
+		// Create the template instance
+		result, err := h.k8sService.CreateTemplateInstance(c.Request.Context(), templateInstanceReq)
+		if err != nil {
+			// Cleanup vApp and return error
+			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+				// Log cleanup error but don't fail the request
+				_ = cleanupErr
+			}
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to create template instance",
+				err.Error(),
+			))
+			return
+		}
+
+		// Update vApp with template instance details
+		vapp.Status = "INSTANTIATING"
+		// Store the template instance name for future reference
+		vapp.Description = fmt.Sprintf("%s\nTemplateInstance: %s", vapp.Description, result.Name)
+	} else {
+		// No k8s service available, set to resolved as placeholder
+		vapp.Status = "RESOLVED"
+	}
+
 	err = h.vappRepo.UpdateWithContext(c.Request.Context(), vapp)
 	if err != nil {
 		// Log error but don't fail the request

@@ -1,16 +1,13 @@
-//go:build ignore
-
 package k8s
 
 import (
 	"fmt"
 
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
 // VMTranslator handles translation between database VM models and KubeVirt VirtualMachine resources
@@ -26,7 +23,6 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 	if vm == nil {
 		return nil, fmt.Errorf("vm cannot be nil")
 	}
-
 	// Create VirtualMachine resource
 	kvVM := &kubevirtv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
@@ -102,7 +98,6 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 			},
 		},
 	}
-
 	// Set CPU count
 	if vm.CPUCount != nil && *vm.CPUCount > 0 {
 		// Safely convert int to uint32 with bounds checking
@@ -119,7 +114,6 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 			Cores: 1,
 		}
 	}
-
 	// Set memory
 	if vm.MemoryMB != nil && *vm.MemoryMB > 0 {
 		memoryQuantity := resource.NewQuantity(int64(*vm.MemoryMB)*1024*1024, resource.BinarySI)
@@ -129,7 +123,6 @@ func (vt *VMTranslator) ToKubeVirtVM(vm *models.VM) (*kubevirtv1.VirtualMachine,
 		memoryQuantity := resource.NewQuantity(1024*1024*1024, resource.BinarySI)
 		kvVM.Spec.Template.Spec.Domain.Resources.Requests[corev1.ResourceMemory] = *memoryQuantity
 	}
-
 	return kvVM, nil
 }
 
@@ -159,19 +152,16 @@ func (vt *VMTranslator) VMStatusFromKubeVirt(kvVM *kubevirtv1.VirtualMachine) st
 		// VM should be running but isn't ready yet
 		return "POWERED_ON" // Starting up
 	}
-
 	// Check for suspend annotation (KubeVirt doesn't have native suspend)
 	if kvVM.Annotations != nil {
 		if suspendStatus, exists := kvVM.Annotations["ssvirt.io/suspend-status"]; exists && suspendStatus == "suspended" {
 			return "SUSPENDED"
 		}
 	}
-
 	// Check if VM is being deleted
 	if kvVM.DeletionTimestamp != nil {
 		return "UNRESOLVED"
 	}
-
 	// Default to powered off
 	return "POWERED_OFF"
 }
@@ -181,7 +171,6 @@ func (vt *VMTranslator) CreateDataVolumeSpec(vm *models.VM, diskSizeGB int) map[
 	if diskSizeGB <= 0 {
 		diskSizeGB = 20 // Default 20GB
 	}
-
 	dataVolumeSpec := map[string]interface{}{
 		"apiVersion": "cdi.kubevirt.io/v1beta1",
 		"kind":       "DataVolume",
@@ -210,7 +199,6 @@ func (vt *VMTranslator) CreateDataVolumeSpec(vm *models.VM, diskSizeGB int) map[
 			},
 		},
 	}
-
 	return dataVolumeSpec
 }
 
@@ -219,10 +207,8 @@ func (vt *VMTranslator) UpdateVMFromKubeVirt(vm *models.VM, kvVM *kubevirtv1.Vir
 	if vm == nil || kvVM == nil {
 		return
 	}
-
 	// Update status
 	vm.Status = vt.VMStatusFromKubeVirt(kvVM)
-
 	// Update CPU and memory if they changed in KubeVirt
 	if kvVM.Spec.Template != nil && kvVM.Spec.Template.Spec.Domain.CPU != nil {
 		// Safely convert uint32 to int with bounds checking
@@ -232,7 +218,6 @@ func (vt *VMTranslator) UpdateVMFromKubeVirt(vm *models.VM, kvVM *kubevirtv1.Vir
 			vm.CPUCount = &cpuCount
 		}
 	}
-
 	if kvVM.Spec.Template != nil {
 		if memoryQuantity, exists := kvVM.Spec.Template.Spec.Domain.Resources.Requests[corev1.ResourceMemory]; exists {
 			// Safely convert memory value with bounds checking
@@ -251,15 +236,12 @@ func (vt *VMTranslator) ValidateVMSpec(vm *models.VM) error {
 	if vm == nil {
 		return fmt.Errorf("vm cannot be nil")
 	}
-
 	if vm.VMName == "" {
 		return fmt.Errorf("vm name cannot be empty")
 	}
-
 	if vm.Namespace == "" {
 		return fmt.Errorf("vm namespace cannot be empty")
 	}
-
 	// Validate CPU count
 	if vm.CPUCount != nil {
 		if *vm.CPUCount < 1 {
@@ -269,7 +251,6 @@ func (vt *VMTranslator) ValidateVMSpec(vm *models.VM) error {
 			return fmt.Errorf("cpu count cannot exceed 64")
 		}
 	}
-
 	// Validate memory
 	if vm.MemoryMB != nil {
 		if *vm.MemoryMB < 128 {
@@ -279,6 +260,5 @@ func (vt *VMTranslator) ValidateVMSpec(vm *models.VM) error {
 			return fmt.Errorf("memory cannot exceed 1TB")
 		}
 	}
-
 	return nil
 }
