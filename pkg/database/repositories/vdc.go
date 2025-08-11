@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 type VDCRepository struct {
@@ -114,6 +115,10 @@ func (r *VDCRepository) GetByNamespace(ctx context.Context, namespaceName string
 // ListByOrgWithPagination retrieves VDCs for an organization with pagination
 func (r *VDCRepository) ListByOrgWithPagination(orgID string, limit, offset int) ([]models.VDC, error) {
 	var vdcs []models.VDC
+
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
+
 	err := r.db.Where("organization_id = ?", orgID).
 		Limit(limit).
 		Offset(offset).

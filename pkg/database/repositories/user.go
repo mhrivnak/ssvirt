@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 type UserRepository struct {
@@ -69,15 +70,9 @@ func (r *UserRepository) Delete(id string) error {
 }
 
 func (r *UserRepository) List(limit, offset int) ([]models.User, error) {
-	if limit <= 0 {
-		limit = 25 // Default limit to ensure results are returned
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	if limit > 1000 { // reasonable maximum
-		limit = 1000
-	}
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
+
 	var users []models.User
 	err := r.db.Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error
 	return users, err
@@ -121,15 +116,8 @@ func (r *UserRepository) GetWithEntityRefs(id string) (*models.User, error) {
 
 // ListWithEntityRefs gets users and populates entity references for API responses
 func (r *UserRepository) ListWithEntityRefs(limit, offset int) ([]models.User, error) {
-	if limit <= 0 {
-		limit = 25 // Default limit to ensure results are returned
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	if limit > 1000 { // reasonable maximum
-		limit = 1000
-	}
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
 
 	var users []models.User
 	err := r.db.Preload("Roles").Preload("Organization").Limit(limit).Offset(offset).Order("username ASC").Find(&users).Error

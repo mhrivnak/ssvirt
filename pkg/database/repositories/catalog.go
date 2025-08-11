@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 // ErrCatalogHasDependencies is returned when attempting to delete a catalog that has dependent vApp templates
@@ -84,6 +85,10 @@ func (r *CatalogRepository) GetWithTemplates(id string) (*models.Catalog, error)
 // ListWithPagination retrieves catalogs with pagination
 func (r *CatalogRepository) ListWithPagination(limit, offset int) ([]models.Catalog, error) {
 	var catalogs []models.Catalog
+
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
+
 	err := r.db.Preload("VAppTemplates").
 		Limit(limit).
 		Offset(offset).

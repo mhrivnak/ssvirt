@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+	"github.com/mhrivnak/ssvirt/pkg/database/pagination"
 )
 
 // ErrVAppHasRunningVMs is returned when attempting to delete a vApp that contains running VMs
@@ -141,10 +142,9 @@ func (r *VAppRepository) ListByVDCWithPagination(ctx context.Context, vdcID stri
 		query = r.applyFilter(query, filter)
 	}
 
-	// Apply sorting - use provided sort order or default
-	if sortOrder == "" {
-		sortOrder = "created_at DESC, id DESC"
-	}
+	// Sanitize and validate pagination parameters
+	limit, offset = pagination.ClampPaginationParams(limit, offset)
+	sortOrder = pagination.SanitizeSortOrder(sortOrder, pagination.VAppSortColumns, "created_at DESC, id DESC")
 
 	err := query.Limit(limit).Offset(offset).Order(sortOrder).Find(&vapps).Error
 	return vapps, err
