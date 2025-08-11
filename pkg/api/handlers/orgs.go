@@ -254,8 +254,13 @@ func (h *OrgHandlers) UpdateOrg(c *gin.Context) {
 		org.DisplayName = req.DisplayName
 	}
 
-	org.Description = req.Description
-	org.MaskedEventTaskUsername = req.MaskedEventTaskUsername
+	if req.Description != "" {
+		org.Description = req.Description
+	}
+
+	if req.MaskedEventTaskUsername != "" {
+		org.MaskedEventTaskUsername = req.MaskedEventTaskUsername
+	}
 
 	if req.IsEnabled != nil {
 		org.IsEnabled = *req.IsEnabled

@@ -17,6 +17,7 @@ import (
 // UserHandlers contains handlers for user-related CloudAPI endpoints
 type UserHandlers struct {
 	userRepo *repositories.UserRepository
+	orgRepo  *repositories.OrganizationRepository
 }
 
 // CreateUserRequest represents the request body for creating a user
@@ -48,9 +49,10 @@ type UpdateUserRequest struct {
 }
 
 // NewUserHandlers creates a new UserHandlers instance
-func NewUserHandlers(userRepo *repositories.UserRepository) *UserHandlers {
+func NewUserHandlers(userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository) *UserHandlers {
 	return &UserHandlers{
 		userRepo: userRepo,
+		orgRepo:  orgRepo,
 	}
 }
 
@@ -157,28 +159,17 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid organization ID: expected org URN"})
 			return
 		}
-	}
 
-	// Check if username already exists
-	existingUser, err := h.userRepo.GetByUsername(req.Username)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing username"})
-		return
-	}
-	if existingUser != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Username already exists"})
-		return
-	}
-
-	// Check if email already exists
-	existingUser, err = h.userRepo.GetByEmail(req.Email)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check existing email"})
-		return
-	}
-	if existingUser != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
-		return
+		// Check if organization exists
+		_, err = h.orgRepo.GetByID(req.OrganizationID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Organization not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate organization"})
+			return
+		}
 	}
 
 	// Create user model
@@ -318,8 +309,13 @@ func (h *UserHandlers) UpdateUser(c *gin.Context) {
 		user.Email = req.Email
 	}
 
-	user.Description = req.Description
-	user.OrganizationID = req.OrganizationID
+	if req.Description != "" {
+		user.Description = req.Description
+	}
+
+	if req.OrganizationID != "" {
+		user.OrganizationID = req.OrganizationID
+	}
 
 	if req.DeployedVmQuota != nil {
 		user.DeployedVmQuota = *req.DeployedVmQuota
