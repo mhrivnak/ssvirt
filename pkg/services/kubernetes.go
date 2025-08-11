@@ -297,7 +297,7 @@ func (k *kubernetesService) UpdateNamespaceForVDC(ctx context.Context, vdc *mode
 	}
 
 	namespace := &corev1.Namespace{}
-	err := k.directClient.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
+	err := k.client.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
 	if err != nil {
 		return fmt.Errorf("failed to get namespace %s: %w", vdc.Namespace, err)
 	}
@@ -355,7 +355,7 @@ func (k *kubernetesService) EnsureNamespaceForVDC(ctx context.Context, vdc *mode
 	}
 
 	namespace := &corev1.Namespace{}
-	err := k.directClient.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
+	err := k.client.Get(ctx, client.ObjectKey{Name: vdc.Namespace}, namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return k.CreateNamespaceForVDC(ctx, vdc, org)
@@ -429,7 +429,7 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 
 	// Check if quota already exists
 	existingQuota := &corev1.ResourceQuota{}
-	err := k.directClient.Get(ctx, client.ObjectKey{Name: "vdc-quota", Namespace: namespace}, existingQuota)
+	err := k.client.Get(ctx, client.ObjectKey{Name: "vdc-quota", Namespace: namespace}, existingQuota)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return k.directClient.Create(ctx, quota)
@@ -521,7 +521,7 @@ func (k *kubernetesService) CreateTemplateInstance(ctx context.Context, req *Tem
 
 	// Fetch the full template resource
 	fullTemplate := &templatev1.Template{}
-	err := k.directClient.Get(ctx, client.ObjectKey{
+	err := k.client.Get(ctx, client.ObjectKey{
 		Name:      req.TemplateName,
 		Namespace: k.templateNamespace,
 	}, fullTemplate)
@@ -596,7 +596,7 @@ func (k *kubernetesService) createParameterSecret(ctx context.Context, req *Temp
 // addOwnerReferenceToSecret adds an OwnerReference to a secret for garbage collection
 func (k *kubernetesService) addOwnerReferenceToSecret(ctx context.Context, secretName, namespace string, templateInstance *templatev1.TemplateInstance) error {
 	secret := &corev1.Secret{}
-	err := k.directClient.Get(ctx, client.ObjectKey{
+	err := k.client.Get(ctx, client.ObjectKey{
 		Name:      secretName,
 		Namespace: namespace,
 	}, secret)
