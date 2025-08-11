@@ -85,12 +85,32 @@ log:
 ## API Compatibility
 
 SSVirt implements the VMware Cloud Director OpenAPI specification for:
-- Authentication and session management
-- Organization and VDC operations  
-- Catalog and vApp template browsing
-- vApp instantiation and management
-- Virtual machine CRUD operations
-- VM power state management
+- **Authentication**: Session-based authentication with JWT tokens
+- **User Management**: Complete CRUD operations for user accounts
+- **Organization Management**: Complete CRUD operations for organizations
+- **Role Management**: Role assignment and management
+- **VDC Operations**: Virtual Data Center management and operations
+- **Catalog Management**: Catalog and vApp template browsing and management
+- **vApp Lifecycle**: vApp instantiation, management, and deletion
+- **Virtual Machine Operations**: Complete VM CRUD operations and power management
+
+### CloudAPI Endpoints
+
+The following VMware Cloud Director compatible endpoints are available:
+
+**Core Management:**
+- `/cloudapi/1.0.0/sessions` - Authentication and session management
+- `/cloudapi/1.0.0/users` - User account management (GET, POST, PUT, DELETE)
+- `/cloudapi/1.0.0/orgs` - Organization management (GET, POST, PUT, DELETE) 
+- `/cloudapi/1.0.0/roles` - Role and permissions management
+
+**Infrastructure:**
+- `/cloudapi/1.0.0/vdcs` - Virtual Data Center operations
+- `/cloudapi/1.0.0/catalogs` - Catalog and template management
+- `/cloudapi/1.0.0/vapps` - vApp lifecycle management
+- `/cloudapi/1.0.0/vms` - Virtual machine operations
+
+See [docs/api-reference.md](docs/api-reference.md) for complete API documentation.
 
 ## Development Status
 

@@ -419,11 +419,17 @@ The following VMware Cloud Director compatible API endpoints are now functional:
 
 **CloudAPI Endpoints:**
 - `GET /cloudapi/1.0.0/users` - List users with entity references
+- `POST /cloudapi/1.0.0/users` - Create new user account with validation
 - `GET /cloudapi/1.0.0/users/{id}` - Get single user with role and org references
+- `PUT /cloudapi/1.0.0/users/{id}` - Update user account with conflict detection
+- `DELETE /cloudapi/1.0.0/users/{id}` - Delete user account
 - `GET /cloudapi/1.0.0/roles` - List available roles
 - `GET /cloudapi/1.0.0/roles/{id}` - Get single role details
 - `GET /cloudapi/1.0.0/orgs` - List organizations with computed fields
+- `POST /cloudapi/1.0.0/orgs` - Create new organization with validation
 - `GET /cloudapi/1.0.0/orgs/{id}` - Get single organization
+- `PUT /cloudapi/1.0.0/orgs/{id}` - Update organization with conflict detection
+- `DELETE /cloudapi/1.0.0/orgs/{id}` - Delete organization (protects Provider org)
 
 **Data Bootstrap:**
 - Default roles: "System Administrator", "Organization Administrator", "vApp User"

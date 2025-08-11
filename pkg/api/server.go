@@ -81,7 +81,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		templateService: templateService,
 		k8sService:      k8sService,
 		// Initialize CloudAPI handlers
-		userHandlers:        handlers.NewUserHandlers(userRepo),
+		userHandlers:        handlers.NewUserHandlers(userRepo, orgRepo),
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
 		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, k8sService),
@@ -150,16 +150,22 @@ func (s *Server) setupRoutes() {
 			cloudAPI.DELETE("/sessions/:sessionId", s.sessionHandlers.DeleteSession)  // DELETE /cloudapi/1.0.0/sessions/{sessionId} - delete session
 
 			// Users API
-			cloudAPI.GET("/users", s.userHandlers.ListUsers)   // GET /cloudapi/1.0.0/users - list users
-			cloudAPI.GET("/users/:id", s.userHandlers.GetUser) // GET /cloudapi/1.0.0/users/{id} - get user
+			cloudAPI.GET("/users", s.userHandlers.ListUsers)         // GET /cloudapi/1.0.0/users - list users
+			cloudAPI.POST("/users", s.userHandlers.CreateUser)       // POST /cloudapi/1.0.0/users - create user
+			cloudAPI.GET("/users/:id", s.userHandlers.GetUser)       // GET /cloudapi/1.0.0/users/{id} - get user
+			cloudAPI.PUT("/users/:id", s.userHandlers.UpdateUser)    // PUT /cloudapi/1.0.0/users/{id} - update user
+			cloudAPI.DELETE("/users/:id", s.userHandlers.DeleteUser) // DELETE /cloudapi/1.0.0/users/{id} - delete user
 
 			// Roles API
 			cloudAPI.GET("/roles", s.roleHandlers.ListRoles)   // GET /cloudapi/1.0.0/roles - list roles
 			cloudAPI.GET("/roles/:id", s.roleHandlers.GetRole) // GET /cloudapi/1.0.0/roles/{id} - get role
 
 			// Organizations API
-			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)   // GET /cloudapi/1.0.0/orgs - list organizations
-			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg) // GET /cloudapi/1.0.0/orgs/{id} - get organization
+			cloudAPI.GET("/orgs", s.orgHandlers.ListOrgs)         // GET /cloudapi/1.0.0/orgs - list organizations
+			cloudAPI.POST("/orgs", s.orgHandlers.CreateOrg)       // POST /cloudapi/1.0.0/orgs - create organization
+			cloudAPI.GET("/orgs/:id", s.orgHandlers.GetOrg)       // GET /cloudapi/1.0.0/orgs/{id} - get organization
+			cloudAPI.PUT("/orgs/:id", s.orgHandlers.UpdateOrg)    // PUT /cloudapi/1.0.0/orgs/{id} - update organization
+			cloudAPI.DELETE("/orgs/:id", s.orgHandlers.DeleteOrg) // DELETE /cloudapi/1.0.0/orgs/{id} - delete organization
 
 			// VDCs API (Public - read-only access for authenticated users)
 			cloudAPI.GET("/vdcs", s.vdcPublicHandlers.ListVDCs)       // GET /cloudapi/1.0.0/vdcs - list accessible VDCs
