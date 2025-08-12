@@ -46,22 +46,56 @@ All API interactions require authentication. Start by creating a session:
 export SSVIRT_URL="https://ssvirt.apps.your-cluster.com"
 
 # Login and get session token
-curl -k -X POST $SSVIRT_URL/api/sessions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "your-username",
-    "password": "your-password"
-  }'
+curl -u admin -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions
 ```
 
-Response:
+Response headers:
+```
+HTTP/1.1 200 OK
+server: nginx/1.26.3
+date: Tue, 12 Aug 2025 14:23:29 GMT
+content-type: application/json; charset=utf-8
+content-length: 613
+access-control-allow-credentials: true
+access-control-allow-headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization
+access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+access-control-allow-origin: *
+access-control-expose-headers: Content-Length
+authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidXJuOnZjbG91ZDp1c2VyOjViZWNmYjFjLWVmMGYtNDk0Ni1hMzA0LTlkY2YwYzk2OTg0MSIsInVzZXJuYW1lIjoiYWRtaW4iLCJzZXNzaW9uX2lkIjoidXJuOnZjbG91ZDpzZXNzaW9uOjViNDg2NzQ2LTgxZWQtNDNhNi05YTQwLTYxNTAzNGQxOTE5NyIsImV4cCI6MTc1NTA5NTAwOSwibmJmIjoxNzU1MDA4NjA5LCJpYXQiOjE3NTUwMDg2MDl9.jpB1GS-D6LZ2nwUeSsvkNvZZr0MW0E6hola3mMHlsco
+set-cookie: d458673311421c8f051987738f42631d=062eebc690264a271b87ed1e3f176ac6; path=/; HttpOnly; Secure; SameSite=None
+```
+
+Response body:
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "id": "urn:vcloud:session:94235a1c-6dc8-452c-af0c-5eb05e213958",
+  "site": {
+    "name": "SSVirt Provider",
+    "id": "urn:vcloud:site:00000000-0000-0000-0000-000000000001"
+  },
   "user": {
-    "name": "your-username",
-    "org": "your-org"
-  }
+    "name": "admin",
+    "id": "urn:vcloud:user:5becfb1c-ef0f-4946-a304-9dcf0c969841"
+  },
+  "org": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:9f372aca-56ce-4c4c-bf52-6582fe4b5c44"
+  },
+  "operatingOrg": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:9f372aca-56ce-4c4c-bf52-6582fe4b5c44"
+  },
+  "location": "us-west-1",
+  "roles": [
+    "System Administrator"
+  ],
+  "roleRefs": [
+    {
+      "name": "System Administrator",
+      "id": "urn:vcloud:role:9443e3b2-6cc4-4007-bcae-ea0adee976f9"
+    }
+  ],
+  "sessionIdleTimeoutMinutes": 30
 }
 ```
 
@@ -75,15 +109,49 @@ export TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 Check your current session:
 ```bash
 curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/session
+  "$SSVIRT_URL/cloudapi/1.0.0/sessions/urn:vcloud:session:5b486746-81ed-43a6-9a40-615034d19197"
+```
+
+Response
+```json
+{
+  "id": "urn:vcloud:session:5b486746-81ed-43a6-9a40-615034d19197",
+  "site": {
+    "name": "SSVirt Provider",
+    "id": "urn:vcloud:site:00000000-0000-0000-0000-000000000001"
+  },
+  "user": {
+    "name": "admin",
+    "id": "urn:vcloud:user:5becfb1c-ef0f-4946-a304-9dcf0c969841"
+  },
+  "org": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:9f372aca-56ce-4c4c-bf52-6582fe4b5c44"
+  },
+  "operatingOrg": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:9f372aca-56ce-4c4c-bf52-6582fe4b5c44"
+  },
+  "location": "us-west-1",
+  "roles": [
+    "System Administrator"
+  ],
+  "roleRefs": [
+    {
+      "name": "System Administrator",
+      "id": "urn:vcloud:role:9443e3b2-6cc4-4007-bcae-ea0adee976f9"
+    }
+  ],
+  "sessionIdleTimeoutMinutes": 30
+}
 ```
 
 ### Logout
 
 End your session when finished:
 ```bash
-curl -k -X DELETE -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/sessions
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+  "$SSVIRT_URL/cloudapi/1.0.0/sessions/urn:vcloud:session:5b486746-81ed-43a6-9a40-615034d19197"
 ```
 
 ## Understanding Organizations and VDCs
