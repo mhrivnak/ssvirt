@@ -1,0 +1,1626 @@
+openapi: 3.0.3
+info:
+  title: SSVirt API
+  description: |
+    SSVirt provides a VMware Cloud Director compatible API for self-service virtual machine provisioning using OpenShift Virtualization.
+    
+    This API implements the core capabilities of VMware Cloud Director while using OpenShift technologies:
+    - Organizations → PostgreSQL metadata with namespace isolation
+    - Virtual Data Centers (VDCs) → Kubernetes Namespaces with Resource Quotas
+    - VMs → OpenShift Virtualization VirtualMachines
+    - vApp Templates → PostgreSQL metadata + VirtualMachineClusterInstanceTypes
+    - Catalogs → PostgreSQL catalog and template metadata store
+    
+    ## Authentication
+    
+    Most endpoints require JWT authentication using the `Authorization: Bearer <token>` header.
+    Get a token by creating a session with username/password via the `/cloudapi/1.0.0/sessions` endpoint.
+    
+    ## URN Format
+    
+    All entity IDs use the URN format: `urn:vcloud:{type}:{uuid}`
+    - Types: user, org, role, vdc, catalog, catalogitem, vapp, vm, session
+    - Example: `urn:vcloud:user:12345678-1234-1234-1234-123456789abc`
+    
+  version: 1.0.0
+  contact:
+    name: SSVirt API Support
+    url: https://github.com/mhrivnak/ssvirt
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+  - url: https://your-ssvirt-instance.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+  - BasicAuth: []
+
+paths:
+  # Health & Status Endpoints
+  /healthz:
+    get:
+      summary: Health check
+      description: Basic health check endpoint
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /readyz:
+    get:
+      summary: Readiness check
+      description: Kubernetes readiness probe endpoint
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
+
+  /api/v1/version:
+    get:
+      summary: Version information
+      description: Returns version and build information
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+
+  # Session Management
+  /cloudapi/1.0.0/sessions:
+    post:
+      summary: Create session (Login)
+      description: Authenticate and create a new session
+      tags:
+        - Authentication
+      security:
+        - BasicAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: {}
+      responses:
+        '200':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /cloudapi/1.0.0/sessions/{sessionId}:
+    get:
+      summary: Get session details
+      description: Retrieve details about a specific session
+      tags:
+        - Authentication
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionInfo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      summary: Delete session (Logout)
+      description: Delete a session and log out
+      tags:
+        - Authentication
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '204':
+          description: Session deleted successfully
+
+  # User Management
+  /cloudapi/1.0.0/users:
+    get:
+      summary: List users
+      description: Retrieve a paginated list of users
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create user
+      description: Create a new user account
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cloudapi/1.0.0/users/{id}:
+    get:
+      summary: Get user details
+      description: Retrieve detailed information about a specific user
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      summary: Update user
+      description: Update an existing user account
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      summary: Delete user
+      description: Delete a user account
+      tags:
+        - Users
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '204':
+          description: User deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Organization Management
+  /cloudapi/1.0.0/orgs:
+    get:
+      summary: List organizations
+      description: Retrieve a paginated list of organizations
+      tags:
+        - Organizations
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationListResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    post:
+      summary: Create organization
+      description: Create a new organization
+      tags:
+        - Organizations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /cloudapi/1.0.0/orgs/{id}:
+    get:
+      summary: Get organization details
+      description: Retrieve detailed information about a specific organization
+      tags:
+        - Organizations
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    put:
+      summary: Update organization
+      description: Update an existing organization
+      tags:
+        - Organizations
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrganizationRequest'
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    
+    delete:
+      summary: Delete organization
+      description: Delete an organization (Provider organization cannot be deleted)
+      tags:
+        - Organizations
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+      responses:
+        '204':
+          description: Organization deleted successfully
+        '400':
+          description: Cannot delete Provider organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Role Management
+  /cloudapi/1.0.0/roles:
+    get:
+      summary: List roles
+      description: Retrieve a paginated list of available roles
+      tags:
+        - Roles
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleListResponse'
+
+  /cloudapi/1.0.0/roles/{id}:
+    get:
+      summary: Get role details
+      description: Retrieve detailed information about a specific role
+      tags:
+        - Roles
+      parameters:
+        - $ref: '#/components/parameters/RoleIdPath'
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Virtual Data Centers
+  /cloudapi/1.0.0/vdcs:
+    get:
+      summary: List VDCs
+      description: Retrieve a list of accessible Virtual Data Centers
+      tags:
+        - VDCs
+      parameters:
+        - $ref: '#/components/parameters/PageQuery'
+        - $ref: '#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: List of VDCs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDCListResponse'
+
+  /cloudapi/1.0.0/vdcs/{vdc_id}:
+    get:
+      summary: Get VDC details
+      description: Retrieve detailed information about a specific VDC
+      tags:
+        - VDCs
+      parameters:
+        - $ref: '#/components/parameters/VDCIdPath'
+      responses:
+        '200':
+          description: VDC details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDC'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Catalog Management
+  /cloudapi/1.0.0/catalogs:
+    get:
+      summary: List catalogs
+      description: Retrieve a list of catalogs
+      tags:
+        - Catalogs
+      responses:
+        '200':
+          description: List of catalogs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogListResponse'
+    
+    post:
+      summary: Create catalog
+      description: Create a new catalog
+      tags:
+        - Catalogs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCatalogRequest'
+      responses:
+        '201':
+          description: Catalog created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalog'
+
+  /cloudapi/1.0.0/catalogs/{catalogUrn}:
+    get:
+      summary: Get catalog details
+      description: Retrieve detailed information about a specific catalog
+      tags:
+        - Catalogs
+      parameters:
+        - $ref: '#/components/parameters/CatalogUrnPath'
+      responses:
+        '200':
+          description: Catalog details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Catalog'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      summary: Delete catalog
+      description: Delete a catalog
+      tags:
+        - Catalogs
+      parameters:
+        - $ref: '#/components/parameters/CatalogUrnPath'
+      responses:
+        '204':
+          description: Catalog deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems:
+    get:
+      summary: List catalog items
+      description: Retrieve a list of items in a catalog
+      tags:
+        - Catalog Items
+      parameters:
+        - $ref: '#/components/parameters/CatalogUrnPath'
+      responses:
+        '200':
+          description: List of catalog items
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItemListResponse'
+
+  /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId}:
+    get:
+      summary: Get catalog item details
+      description: Retrieve detailed information about a specific catalog item
+      tags:
+        - Catalog Items
+      parameters:
+        - $ref: '#/components/parameters/CatalogUrnPath'
+        - $ref: '#/components/parameters/CatalogItemIdPath'
+      responses:
+        '200':
+          description: Catalog item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # vApp Management
+  /cloudapi/1.0.0/vdcs/{vdc_id}/vapps:
+    get:
+      summary: List vApps in VDC
+      description: Retrieve a list of vApps in a specific VDC
+      tags:
+        - vApps
+      parameters:
+        - $ref: '#/components/parameters/VDCIdPath'
+      responses:
+        '200':
+          description: List of vApps
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VAppListResponse'
+
+  /cloudapi/1.0.0/vdcs/{vdc_id}/actions/instantiateTemplate:
+    post:
+      summary: Instantiate template
+      description: Create a vApp from a template
+      tags:
+        - vApps
+      parameters:
+        - $ref: '#/components/parameters/VDCIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InstantiateTemplateRequest'
+      responses:
+        '201':
+          description: vApp created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VApp'
+
+  /cloudapi/1.0.0/vapps/{vapp_id}:
+    get:
+      summary: Get vApp details
+      description: Retrieve detailed information about a specific vApp
+      tags:
+        - vApps
+      parameters:
+        - $ref: '#/components/parameters/VAppIdPath'
+      responses:
+        '200':
+          description: vApp details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VApp'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      summary: Delete vApp
+      description: Delete a vApp
+      tags:
+        - vApps
+      parameters:
+        - $ref: '#/components/parameters/VAppIdPath'
+      responses:
+        '204':
+          description: vApp deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Virtual Machine Operations
+  /cloudapi/1.0.0/vms/{vm_id}:
+    get:
+      summary: Get VM details
+      description: Retrieve detailed information about a specific virtual machine
+      tags:
+        - Virtual Machines
+      parameters:
+        - $ref: '#/components/parameters/VMIdPath'
+      responses:
+        '200':
+          description: VM details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VirtualMachine'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Admin API
+  /api/admin/org/{orgId}/vdcs:
+    get:
+      summary: List VDCs in organization (Admin)
+      description: Retrieve a list of VDCs in a specific organization (System Administrator only)
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+      responses:
+        '200':
+          description: List of VDCs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDCListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    
+    post:
+      summary: Create VDC (Admin)
+      description: Create a new VDC in an organization (System Administrator only)
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVDCRequest'
+      responses:
+        '201':
+          description: VDC created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDC'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/org/{orgId}/vdcs/{vdcId}:
+    get:
+      summary: Get VDC details (Admin)
+      description: Retrieve detailed information about a VDC (System Administrator only)
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+        - $ref: '#/components/parameters/VDCIdPath'
+      responses:
+        '200':
+          description: VDC details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDC'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      summary: Update VDC (Admin)
+      description: Update a VDC (System Administrator only)
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+        - $ref: '#/components/parameters/VDCIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVDCRequest'
+      responses:
+        '200':
+          description: VDC updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VDC'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      summary: Delete VDC (Admin)
+      description: Delete a VDC (System Administrator only)
+      tags:
+        - Admin
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrganizationIdPath'
+        - $ref: '#/components/parameters/VDCIdPath'
+      responses:
+        '204':
+          description: VDC deleted successfully
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Legacy API - User Profile
+  /api/v1/user/profile:
+    get:
+      summary: Get user profile (Legacy)
+      description: Get current user profile information (legacy endpoint)
+      tags:
+        - Legacy
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      username:
+                        type: string
+                      email:
+                        type: string
+                      full_name:
+                        type: string
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    BasicAuth:
+      type: http
+      scheme: basic
+
+  parameters:
+    PageQuery:
+      name: page
+      in: query
+      description: Page number (1-based)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PageSizeQuery:
+      name: pageSize
+      in: query
+      description: Number of items per page
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+    SessionId:
+      name: sessionId
+      in: path
+      description: Session URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:session:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    UserIdPath:
+      name: id
+      in: path
+      description: User URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:user:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    OrganizationIdPath:
+      name: id
+      in: path
+      description: Organization URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    RoleIdPath:
+      name: id
+      in: path
+      description: Role URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:role:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    VDCIdPath:
+      name: vdc_id
+      in: path
+      description: VDC URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:vdc:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    VAppIdPath:
+      name: vapp_id
+      in: path
+      description: vApp URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:vapp:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    VMIdPath:
+      name: vm_id
+      in: path
+      description: VM URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:vm:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    CatalogUrnPath:
+      name: catalogUrn
+      in: path
+      description: Catalog URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:catalog:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    CatalogItemIdPath:
+      name: itemId
+      in: path
+      description: Catalog Item URN ID
+      required: true
+      schema:
+        type: string
+        pattern: '^urn:vcloud:catalogitem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidInput:
+              summary: Invalid input
+              value:
+                error: "Invalid request body: username is required"
+            invalidURN:
+              summary: Invalid URN format
+              value:
+                error: "Invalid user ID format"
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Authentication required"
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "System Administrator role required"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            userNotFound:
+              summary: User not found
+              value:
+                error: "User not found"
+            orgNotFound:
+              summary: Organization not found
+              value:
+                error: "Organization not found"
+
+    Conflict:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            usernameExists:
+              summary: Username already exists
+              value:
+                error: "Username already exists"
+            emailExists:
+              summary: Email already exists
+              value:
+                error: "Email already exists"
+            orgNameExists:
+              summary: Organization name already exists
+              value:
+                error: "Organization name already exists"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Internal server error"
+
+  schemas:
+    # Common Schemas
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+
+    EntityRef:
+      type: object
+      required:
+        - name
+        - id
+      properties:
+        name:
+          type: string
+          description: Name of the referenced entity
+        id:
+          type: string
+          description: URN ID of the referenced entity
+          pattern: '^urn:vcloud:[a-z]+:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+    PaginatedResponse:
+      type: object
+      required:
+        - resultTotal
+        - pageCount
+        - page
+        - pageSize
+        - associations
+        - values
+      properties:
+        resultTotal:
+          type: integer
+          description: Total number of items matching the query
+        pageCount:
+          type: integer
+          description: Total number of pages available
+        page:
+          type: integer
+          description: Current page number (1-based)
+        pageSize:
+          type: integer
+          description: Number of items per page
+        associations:
+          type: array
+          items: {}
+          description: Related entity links (typically empty)
+        values:
+          type: array
+          items: {}
+          description: Array containing the actual entity data
+
+    # Health & Status Schemas
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - version
+        - database
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: "ok"
+        version:
+          type: string
+          example: "1.0.0"
+        database:
+          type: string
+          example: "ok"
+        timestamp:
+          type: string
+          format: date-time
+
+    ReadinessResponse:
+      type: object
+      required:
+        - ready
+        - timestamp
+        - services
+      properties:
+        ready:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+        services:
+          type: object
+          properties:
+            database:
+              type: string
+              example: "ready"
+            auth:
+              type: string
+              example: "ready"
+            k8s:
+              type: string
+              example: "ready"
+
+    VersionResponse:
+      type: object
+      required:
+        - version
+        - build_time
+        - go_version
+        - git_commit
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+        build_time:
+          type: string
+          example: "2024-01-15T09:00:00Z"
+        go_version:
+          type: string
+          example: "go1.24.1"
+        git_commit:
+          type: string
+          example: "abc123def456"
+
+    # Authentication Schemas
+    SessionResponse:
+      type: object
+      required:
+        - sessionId
+        - token
+        - user
+        - expires
+      properties:
+        sessionId:
+          type: string
+          pattern: '^urn:vcloud:session:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        token:
+          type: string
+          description: JWT token for authentication
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              pattern: '^urn:vcloud:user:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            username:
+              type: string
+            fullName:
+              type: string
+        expires:
+          type: string
+          format: date-time
+
+    SessionInfo:
+      type: object
+      required:
+        - sessionId
+        - user
+        - expires
+      properties:
+        sessionId:
+          type: string
+          pattern: '^urn:vcloud:session:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              pattern: '^urn:vcloud:user:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            username:
+              type: string
+            fullName:
+              type: string
+        expires:
+          type: string
+          format: date-time
+
+    # User Schemas
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - fullName
+        - email
+        - enabled
+        - deployedVmQuota
+        - storedVmQuota
+        - nameInSource
+        - providerType
+        - isGroupRole
+        - locked
+        - stranded
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:user:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        username:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        description:
+          type: string
+        enabled:
+          type: boolean
+        deployedVmQuota:
+          type: integer
+          minimum: 0
+        storedVmQuota:
+          type: integer
+          minimum: 0
+        nameInSource:
+          type: string
+        providerType:
+          type: string
+          enum: [LOCAL, LDAP, SAML]
+        isGroupRole:
+          type: boolean
+        locked:
+          type: boolean
+        stranded:
+          type: boolean
+        organizationId:
+          type: string
+          pattern: '^urn:vcloud:org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        roleEntityRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/EntityRef'
+        orgEntityRef:
+          $ref: '#/components/schemas/EntityRef'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - fullName
+        - email
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+        fullName:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        description:
+          type: string
+        organizationId:
+          type: string
+          pattern: '^urn:vcloud:org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        deployedVmQuota:
+          type: integer
+          minimum: 0
+          default: 0
+        storedVmQuota:
+          type: integer
+          minimum: 0
+          default: 0
+        enabled:
+          type: boolean
+          default: true
+        providerType:
+          type: string
+          enum: [LOCAL, LDAP, SAML]
+          default: LOCAL
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        description:
+          type: string
+        organizationId:
+          type: string
+          pattern: '^urn:vcloud:org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        deployedVmQuota:
+          type: integer
+          minimum: 0
+        storedVmQuota:
+          type: integer
+          minimum: 0
+        enabled:
+          type: boolean
+        providerType:
+          type: string
+          enum: [LOCAL, LDAP, SAML]
+
+    UserListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+
+    # Organization Schemas
+    Organization:
+      type: object
+      required:
+        - id
+        - name
+        - displayName
+        - isEnabled
+        - orgVdcCount
+        - catalogCount
+        - vappCount
+        - runningVMCount
+        - userCount
+        - diskCount
+        - canManageOrgs
+        - canPublish
+        - directlyManagedOrgCount
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:org:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        isEnabled:
+          type: boolean
+        orgVdcCount:
+          type: integer
+          minimum: 0
+        catalogCount:
+          type: integer
+          minimum: 0
+        vappCount:
+          type: integer
+          minimum: 0
+        runningVMCount:
+          type: integer
+          minimum: 0
+        userCount:
+          type: integer
+          minimum: 0
+        diskCount:
+          type: integer
+          minimum: 0
+        canManageOrgs:
+          type: boolean
+        canPublish:
+          type: boolean
+        maskedEventTaskUsername:
+          type: string
+        directlyManagedOrgCount:
+          type: integer
+          minimum: 0
+        managedBy:
+          $ref: '#/components/schemas/EntityRef'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateOrganizationRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        displayName:
+          type: string
+        description:
+          type: string
+        isEnabled:
+          type: boolean
+          default: true
+        canManageOrgs:
+          type: boolean
+          default: false
+        canPublish:
+          type: boolean
+          default: false
+        maskedEventTaskUsername:
+          type: string
+
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        displayName:
+          type: string
+        description:
+          type: string
+        isEnabled:
+          type: boolean
+        canManageOrgs:
+          type: boolean
+        canPublish:
+          type: boolean
+        maskedEventTaskUsername:
+          type: string
+
+    OrganizationListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/Organization'
+
+    # Role Schemas
+    Role:
+      type: object
+      required:
+        - id
+        - name
+        - readOnly
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:role:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+          enum: [System Administrator, Organization Administrator, vApp User]
+        description:
+          type: string
+        bundleKey:
+          type: string
+        readOnly:
+          type: boolean
+
+    RoleListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/Role'
+
+    # VDC Schemas
+    VDC:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:vdc:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        description:
+          type: string
+        orgEntityRef:
+          $ref: '#/components/schemas/EntityRef'
+
+    CreateVDCRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    UpdateVDCRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    VDCListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/VDC'
+
+    # Catalog Schemas
+    Catalog:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:catalog:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        description:
+          type: string
+
+    CreateCatalogRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    CatalogListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/Catalog'
+
+    # Catalog Item Schemas
+    CatalogItem:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:catalogitem:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        description:
+          type: string
+        owner:
+          $ref: '#/components/schemas/EntityRef'
+        catalog:
+          $ref: '#/components/schemas/EntityRef'
+
+    CatalogItemListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/CatalogItem'
+
+    # vApp Schemas
+    VApp:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:vapp:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+
+    InstantiateTemplateRequest:
+      type: object
+      required:
+        - templateName
+        - name
+      properties:
+        templateName:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    VAppListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            values:
+              type: array
+              items:
+                $ref: '#/components/schemas/VApp'
+
+    # Virtual Machine Schemas
+    VirtualMachine:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          pattern: '^urn:vcloud:vm:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+
+tags:
+  - name: Health
+    description: Health and status endpoints
+  - name: Authentication
+    description: Session management and authentication
+  - name: Users
+    description: User account management
+  - name: Organizations
+    description: Organization management
+  - name: Roles
+    description: Role and permissions management
+  - name: VDCs
+    description: Virtual Data Center operations
+  - name: Catalogs
+    description: Catalog management
+  - name: Catalog Items
+    description: Catalog item operations
+  - name: vApps
+    description: vApp lifecycle management
+  - name: Virtual Machines
+    description: Virtual machine operations
+  - name: Admin
+    description: Administrative operations (System Administrator only)
+  - name: Legacy
+    description: Legacy API endpoints (deprecated)

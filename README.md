@@ -110,7 +110,7 @@ The following VMware Cloud Director compatible endpoints are available:
 - `/cloudapi/1.0.0/vapps` - vApp lifecycle management
 - `/cloudapi/1.0.0/vms` - Virtual machine operations
 
-See [docs/api-reference.md](docs/api-reference.md) for complete API documentation.
+See [docs/api-reference.md](docs/api-reference.md) for complete API documentation or [docs/openapi.yaml](docs/openapi.yaml) for the OpenAPI specification.
 
 ## Development Status
 
