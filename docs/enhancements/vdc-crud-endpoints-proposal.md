@@ -9,11 +9,11 @@ This proposal documents the current implementation of VDC (Virtual Data Center) 
 ### Existing VDC CRUD Implementation
 
 The project currently has VDC CRUD endpoints implemented at:
-- **POST** `/api/admin/org/{orgId}/vdcs` - Create VDC (implemented in `pkg/api/handlers/vdcs.go:213`)
-- **PUT** `/api/admin/org/{orgId}/vdcs/{vdcId}` - Update VDC (implemented in `pkg/api/handlers/vdcs.go:328`)  
-- **DELETE** `/api/admin/org/{orgId}/vdcs/{vdcId}` - Delete VDC (implemented in `pkg/api/handlers/vdcs.go:436`)
+- **POST** `/api/admin/org/{orgId}/vdcs` - Create VDC (implemented in `pkg/api/handlers/vdcs.go` - `CreateVDC` function)
+- **PUT** `/api/admin/org/{orgId}/vdcs/{vdcId}` - Update VDC (implemented in `pkg/api/handlers/vdcs.go` - `UpdateVDC` function)  
+- **DELETE** `/api/admin/org/{orgId}/vdcs/{vdcId}` - Delete VDC (implemented in `pkg/api/handlers/vdcs.go` - `DeleteVDC` function)
 
-These endpoints are registered in the admin API routes (`pkg/api/server.go:204-208`) and require System Administrator privileges.
+These endpoints are registered in the admin API routes (`pkg/api/server.go` - `RegisterAdminRoutes` function) and require System Administrator privileges.
 
 ### Existing VDC Data Structure
 
@@ -72,41 +72,6 @@ PUT /cloudapi/1.0.0/orgs/{orgId}/vdcs/{id} - Update VDC (Org Admin)
 DELETE /cloudapi/1.0.0/orgs/{orgId}/vdcs/{id} - Delete VDC (Org Admin)
 ```
 
-### 2. Enhanced VDC Validation
-
-Improve validation in VDC handlers:
-
-```go
-// Enhanced compute capacity validation
-func validateComputeCapacity(cc models.ComputeCapacity) error {
-    if cc.CPU.Limit > 0 && cc.CPU.Allocated > cc.CPU.Limit {
-        return errors.New("CPU allocated cannot exceed limit")
-    }
-    if cc.Memory.Limit > 0 && cc.Memory.Allocated > cc.Memory.Limit {
-        return errors.New("Memory allocated cannot exceed limit")
-    }
-    return nil
-}
-```
-
-### 3. Bulk VDC Operations
-
-Add endpoints for bulk operations:
-
-```go
-// POST /api/admin/vdcs/bulk/create
-// PUT /api/admin/vdcs/bulk/update  
-// DELETE /api/admin/vdcs/bulk/delete
-```
-
-### 4. Enhanced Query Capabilities
-
-Improve VDC listing with advanced filtering:
-
-```go
-// GET /api/admin/org/{orgId}/vdcs?filter=allocationModel eq 'Flex'&sort=name
-// GET /api/admin/org/{orgId}/vdcs?filter=isEnabled eq true&page_size=50
-```
 
 ## Implementation Plan
 
