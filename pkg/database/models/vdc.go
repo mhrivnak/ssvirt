@@ -36,7 +36,7 @@ type VDC struct {
 	IsEnabled       bool `gorm:"default:true" json:"isEnabled"`
 
 	// Kubernetes integration (hidden from JSON)
-	Namespace string `gorm:"uniqueIndex;size:253" json:"-"` // Kubernetes namespace for this VDC
+	Namespace string `gorm:"size:253;uniqueIndex:idx_vdc_namespace_active,where:deleted_at IS NULL" json:"-"` // Kubernetes namespace for this VDC
 
 	// Timestamps (hidden from JSON in VCD format)
 	CreatedAt time.Time      `json:"-"`
@@ -131,7 +131,13 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", v.OrganizationID).First(&org).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
-		v.Namespace = generateNamespaceName(org.Name, v.Name)
+
+		// Generate unique namespace name
+		namespace, err := generateUniqueNamespaceName(tx, org.Name, v.Name)
+		if err != nil {
+			return fmt.Errorf("failed to generate unique namespace: %w", err)
+		}
+		v.Namespace = namespace
 	}
 
 	// Set default units if not provided
@@ -145,6 +151,59 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
+// generateUniqueNamespaceName creates a unique Kubernetes-compliant namespace name
+func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, error) {
+	// Start with the base name
+	baseName := generateNamespaceName(orgName, vdcName)
+
+	// Check if the base name is available
+	var existingVDC VDC
+	err := tx.Where("namespace = ?", baseName).First(&existingVDC).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// Base name is available
+			return baseName, nil
+		}
+		// Database error
+		return "", err
+	}
+
+	// Base name is taken, try with incremental suffixes
+	for i := 1; i <= 999; i++ {
+		suffix := fmt.Sprintf("-%d", i)
+
+		// Ensure the final name doesn't exceed 63 characters
+		maxBaseLength := 63 - len(suffix)
+		trimmedBase := baseName
+		if len(baseName) > maxBaseLength {
+			trimmedBase = baseName[:maxBaseLength]
+			// Remove any trailing hyphens after truncation
+			trimmedBase = strings.TrimRight(trimmedBase, "-")
+		}
+
+		// Safety check: if trimmedBase is empty after truncation, use a safe fallback
+		if trimmedBase == "" {
+			trimmedBase = "vdc"
+		}
+
+		candidateName := trimmedBase + suffix
+
+		err := tx.Where("namespace = ?", candidateName).First(&existingVDC).Error
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				// This candidate is available
+				return candidateName, nil
+			}
+			// Database error
+			return "", err
+		}
+		// This candidate is also taken, try the next one
+	}
+
+	// If we get here, we couldn't find a unique name after 999 attempts
+	return "", fmt.Errorf("unable to generate unique namespace name for org '%s' and VDC '%s'", orgName, vdcName)
+}
+
 // generateNamespaceName creates a Kubernetes-compliant namespace name
 func generateNamespaceName(orgName, vdcName string) string {
 	// Convert to lowercase and replace invalid characters
@@ -155,7 +214,19 @@ func generateNamespaceName(orgName, vdcName string) string {
 	orgSafe = sanitizeKubernetesName(orgSafe)
 	vdcSafe = sanitizeKubernetesName(vdcSafe)
 
-	return fmt.Sprintf("vdc-%s-%s", orgSafe, vdcSafe)
+	// Build the base name
+	baseName := fmt.Sprintf("vdc-%s-%s", orgSafe, vdcSafe)
+
+	// Kubernetes namespace names must be 63 characters or less
+	// Reserve space for potential numeric suffix (e.g., "-999")
+	maxBaseLength := 63 - 4 // Reserve 4 chars for "-999"
+	if len(baseName) > maxBaseLength {
+		baseName = baseName[:maxBaseLength]
+		// Remove any trailing hyphens after truncation
+		baseName = strings.TrimRight(baseName, "-")
+	}
+
+	return baseName
 }
 
 // sanitizeKubernetesName ensures the name is valid for Kubernetes

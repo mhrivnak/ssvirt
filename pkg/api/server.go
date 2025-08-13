@@ -60,6 +60,9 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 	if templateService == nil {
 		panic("templateService cannot be nil")
 	}
+	if userRepo == nil {
+		panic("userRepo cannot be nil")
+	}
 
 	// Create catalog item repository
 	catalogItemRepo := repositories.NewCatalogItemRepository(templateService, catalogRepo)
@@ -84,7 +87,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		userHandlers:        handlers.NewUserHandlers(userRepo, orgRepo),
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
-		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, k8sService),
+		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, userRepo, k8sService),
 		vdcPublicHandlers:   handlers.NewVDCPublicHandlers(vdcRepo),
 		catalogHandlers:     handlers.NewCatalogHandlers(catalogRepo, catalogItemRepo, orgRepo, k8sService),
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
@@ -198,7 +201,7 @@ func (s *Server) setupRoutes() {
 	// Admin API endpoints (System Administrator only)
 	adminAPIRoot := s.router.Group("/api/admin")
 	adminAPIRoot.Use(auth.JWTMiddleware(s.jwtManager))
-	adminAPIRoot.Use(handlers.RequireSystemAdmin())
+	adminAPIRoot.Use(handlers.RequireSystemAdmin(s.userRepo))
 	{
 		// VDC Management API (System Administrator only)
 		adminAPIRoot.GET("/org/:orgId/vdcs", s.vdcHandlers.ListVDCs)            // GET /api/admin/org/{orgId}/vdcs - list VDCs in organization

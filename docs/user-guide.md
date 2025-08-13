@@ -46,7 +46,7 @@ All API interactions require authentication. Start by creating a session:
 export SSVIRT_URL="https://ssvirt.apps.your-cluster.com"
 
 # Login and get session token
-curl -u admin -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions
+curl -i -u admin -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions
 ```
 
 Response headers:
