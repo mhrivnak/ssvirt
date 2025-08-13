@@ -261,9 +261,9 @@ func (k *kubernetesService) CreateNamespaceForVDC(ctx context.Context, vdc *mode
 			Name: vdc.Namespace,
 			Labels: map[string]string{
 				"ssvirt.io/organization":       k.sanitizeLabelValue(org.Name),
-				"ssvirt.io/organization-id":    extractUUIDFromURN(org.ID),
+				"ssvirt.io/organization-id":    k.sanitizeLabelValue(extractUUIDFromURN(org.ID)),
 				"ssvirt.io/vdc":                k.sanitizeLabelValue(vdc.Name),
-				"ssvirt.io/vdc-id":             extractUUIDFromURN(vdc.ID),
+				"ssvirt.io/vdc-id":             k.sanitizeLabelValue(extractUUIDFromURN(vdc.ID)),
 				"app.kubernetes.io/managed-by": "ssvirt",
 				"app.kubernetes.io/component":  "vdc",
 			},
@@ -313,9 +313,9 @@ func (k *kubernetesService) UpdateNamespaceForVDC(ctx context.Context, vdc *mode
 	}
 
 	namespace.Labels["ssvirt.io/organization"] = k.sanitizeLabelValue(org.Name)
-	namespace.Labels["ssvirt.io/organization-id"] = extractUUIDFromURN(org.ID)
+	namespace.Labels["ssvirt.io/organization-id"] = k.sanitizeLabelValue(extractUUIDFromURN(org.ID))
 	namespace.Labels["ssvirt.io/vdc"] = k.sanitizeLabelValue(vdc.Name)
-	namespace.Labels["ssvirt.io/vdc-id"] = extractUUIDFromURN(vdc.ID)
+	namespace.Labels["ssvirt.io/vdc-id"] = k.sanitizeLabelValue(extractUUIDFromURN(vdc.ID))
 	namespace.Labels["app.kubernetes.io/managed-by"] = "ssvirt"
 	namespace.Labels["app.kubernetes.io/component"] = "vdc"
 
@@ -387,7 +387,7 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 			Namespace: namespace,
 			Labels: map[string]string{
 				"ssvirt.io/vdc":                k.sanitizeLabelValue(vdc.Name),
-				"ssvirt.io/vdc-id":             extractUUIDFromURN(vdc.ID),
+				"ssvirt.io/vdc-id":             k.sanitizeLabelValue(extractUUIDFromURN(vdc.ID)),
 				"app.kubernetes.io/managed-by": "ssvirt",
 				"app.kubernetes.io/component":  "resource-quota",
 			},

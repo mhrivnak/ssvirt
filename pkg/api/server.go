@@ -60,6 +60,9 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 	if templateService == nil {
 		panic("templateService cannot be nil")
 	}
+	if userRepo == nil {
+		panic("userRepo cannot be nil")
+	}
 
 	// Create catalog item repository
 	catalogItemRepo := repositories.NewCatalogItemRepository(templateService, catalogRepo)
