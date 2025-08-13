@@ -260,17 +260,19 @@ func (k *kubernetesService) CreateNamespaceForVDC(ctx context.Context, vdc *mode
 		ObjectMeta: metav1.ObjectMeta{
 			Name: vdc.Namespace,
 			Labels: map[string]string{
-				"ssvirt.io/organization":       org.Name,
-				"ssvirt.io/organization-id":    org.ID,
-				"ssvirt.io/vdc":                vdc.Name,
-				"ssvirt.io/vdc-id":             vdc.ID,
+				"ssvirt.io/organization":       k.sanitizeLabelValue(org.Name),
+				"ssvirt.io/organization-id":    extractUUIDFromURN(org.ID),
+				"ssvirt.io/vdc":                k.sanitizeLabelValue(vdc.Name),
+				"ssvirt.io/vdc-id":             extractUUIDFromURN(vdc.ID),
 				"app.kubernetes.io/managed-by": "ssvirt",
 				"app.kubernetes.io/component":  "vdc",
 			},
 			Annotations: map[string]string{
 				"ssvirt.io/organization-display-name": org.DisplayName,
 				"ssvirt.io/organization-description":  org.Description,
+				"ssvirt.io/organization-urn":          org.ID,
 				"ssvirt.io/vdc-description":           vdc.Description,
+				"ssvirt.io/vdc-urn":                   vdc.ID,
 				"ssvirt.io/created-by":                "ssvirt-api-server",
 			},
 		},
@@ -310,16 +312,18 @@ func (k *kubernetesService) UpdateNamespaceForVDC(ctx context.Context, vdc *mode
 		namespace.Annotations = make(map[string]string)
 	}
 
-	namespace.Labels["ssvirt.io/organization"] = org.Name
-	namespace.Labels["ssvirt.io/organization-id"] = org.ID
-	namespace.Labels["ssvirt.io/vdc"] = vdc.Name
-	namespace.Labels["ssvirt.io/vdc-id"] = vdc.ID
+	namespace.Labels["ssvirt.io/organization"] = k.sanitizeLabelValue(org.Name)
+	namespace.Labels["ssvirt.io/organization-id"] = extractUUIDFromURN(org.ID)
+	namespace.Labels["ssvirt.io/vdc"] = k.sanitizeLabelValue(vdc.Name)
+	namespace.Labels["ssvirt.io/vdc-id"] = extractUUIDFromURN(vdc.ID)
 	namespace.Labels["app.kubernetes.io/managed-by"] = "ssvirt"
 	namespace.Labels["app.kubernetes.io/component"] = "vdc"
 
 	namespace.Annotations["ssvirt.io/organization-display-name"] = org.DisplayName
 	namespace.Annotations["ssvirt.io/organization-description"] = org.Description
+	namespace.Annotations["ssvirt.io/organization-urn"] = org.ID
 	namespace.Annotations["ssvirt.io/vdc-description"] = vdc.Description
+	namespace.Annotations["ssvirt.io/vdc-urn"] = vdc.ID
 
 	if err := k.directClient.Update(ctx, namespace); err != nil {
 		return fmt.Errorf("failed to update namespace %s: %w", vdc.Namespace, err)
@@ -700,4 +704,50 @@ func (k *kubernetesService) DeleteTemplateInstance(ctx context.Context, namespac
 	}
 
 	return nil
+}
+
+// extractUUIDFromURN extracts the UUID portion from a URN for use in Kubernetes labels
+// URN format: urn:vcloud:type:uuid -> uuid
+func extractUUIDFromURN(urn string) string {
+	parts := strings.Split(urn, ":")
+	if len(parts) >= 4 {
+		return parts[3] // Return the UUID part
+	}
+	// Fallback: return a sanitized version of the original
+	return strings.ReplaceAll(urn, ":", "-")
+}
+
+// sanitizeLabelValue ensures a string is valid for use as a Kubernetes label value
+// Kubernetes label values must be alphanumeric, '-', '_', or '.', and start/end with alphanumeric
+func (k *kubernetesService) sanitizeLabelValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	
+	// Replace invalid characters with hyphens
+	sanitized := ""
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			sanitized += string(r)
+		} else {
+			sanitized += "-"
+		}
+	}
+	
+	// Ensure it starts and ends with alphanumeric
+	sanitized = strings.Trim(sanitized, "-_.")
+	
+	// If empty after sanitization, provide a default
+	if sanitized == "" {
+		sanitized = "unknown"
+	}
+	
+	// Limit length to 63 characters (Kubernetes limit)
+	if len(sanitized) > 63 {
+		sanitized = sanitized[:63]
+		// Ensure it doesn't end with a non-alphanumeric character after truncation
+		sanitized = strings.TrimRight(sanitized, "-_.")
+	}
+	
+	return sanitized
 }
