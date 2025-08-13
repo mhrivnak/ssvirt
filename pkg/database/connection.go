@@ -110,7 +110,7 @@ func (db *DB) fixVDCNamespaceConstraint() error {
 			return fmt.Errorf("failed to drop namespace constraint: %w", err)
 		}
 
-		// Drop the existing index if it exists  
+		// Drop the existing index if it exists
 		if err := tx.Exec("DROP INDEX IF EXISTS idx_vdcs_namespace").Error; err != nil {
 			return fmt.Errorf("failed to drop namespace index: %w", err)
 		}

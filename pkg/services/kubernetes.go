@@ -386,8 +386,15 @@ func (k *kubernetesService) createResourceQuota(ctx context.Context, namespace s
 			Name:      "vdc-quota",
 			Namespace: namespace,
 			Labels: map[string]string{
-				"ssvirt.io/vdc-id":             vdc.ID,
+				"ssvirt.io/vdc":                k.sanitizeLabelValue(vdc.Name),
+				"ssvirt.io/vdc-id":             extractUUIDFromURN(vdc.ID),
 				"app.kubernetes.io/managed-by": "ssvirt",
+				"app.kubernetes.io/component":  "resource-quota",
+			},
+			Annotations: map[string]string{
+				"ssvirt.io/vdc-urn":         vdc.ID,
+				"ssvirt.io/vdc-description": vdc.Description,
+				"ssvirt.io/created-by":      "ssvirt-api-server",
 			},
 		},
 		Spec: corev1.ResourceQuotaSpec{
@@ -723,7 +730,7 @@ func (k *kubernetesService) sanitizeLabelValue(value string) string {
 	if value == "" {
 		return ""
 	}
-	
+
 	// Replace invalid characters with hyphens
 	sanitized := ""
 	for _, r := range value {
@@ -733,21 +740,21 @@ func (k *kubernetesService) sanitizeLabelValue(value string) string {
 			sanitized += "-"
 		}
 	}
-	
+
 	// Ensure it starts and ends with alphanumeric
 	sanitized = strings.Trim(sanitized, "-_.")
-	
+
 	// If empty after sanitization, provide a default
 	if sanitized == "" {
 		sanitized = "unknown"
 	}
-	
+
 	// Limit length to 63 characters (Kubernetes limit)
 	if len(sanitized) > 63 {
 		sanitized = sanitized[:63]
 		// Ensure it doesn't end with a non-alphanumeric character after truncation
 		sanitized = strings.TrimRight(sanitized, "-_.")
 	}
-	
+
 	return sanitized
 }

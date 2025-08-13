@@ -46,7 +46,7 @@ func TestVDCNamespaceUniqueness(t *testing.T) {
 			IsEnabled:       true,
 		}
 		require.NoError(t, db.DB.Create(vdc2).Error)
-		
+
 		// Should get the same namespace since the first one is soft-deleted
 		assert.Equal(t, "vdc-testorganization-testvdc", vdc2.Namespace)
 		assert.NotEqual(t, vdc1.ID, vdc2.ID) // Different VDCs
@@ -73,7 +73,7 @@ func TestVDCNamespaceUniqueness(t *testing.T) {
 			IsEnabled:       true,
 		}
 		require.NoError(t, db.DB.Create(vdc2).Error)
-		
+
 		// Should get a unique namespace with a suffix
 		assert.Equal(t, "vdc-testorganization-uniquetestvdc-1", vdc2.Namespace)
 		assert.NotEqual(t, vdc1.ID, vdc2.ID) // Different VDCs

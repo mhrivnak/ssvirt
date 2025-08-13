@@ -131,7 +131,7 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", v.OrganizationID).First(&org).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
-		
+
 		// Generate unique namespace name
 		namespace, err := generateUniqueNamespaceName(tx, org.Name, v.Name)
 		if err != nil {
@@ -155,7 +155,7 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, error) {
 	// Start with the base name
 	baseName := generateNamespaceName(orgName, vdcName)
-	
+
 	// Check if the base name is available
 	var existingVDC VDC
 	err := tx.Where("namespace = ?", baseName).First(&existingVDC).Error
@@ -167,11 +167,11 @@ func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, 
 		// Database error
 		return "", err
 	}
-	
+
 	// Base name is taken, try with incremental suffixes
 	for i := 1; i <= 999; i++ {
 		candidateName := fmt.Sprintf("%s-%d", baseName, i)
-		
+
 		err := tx.Where("namespace = ?", candidateName).First(&existingVDC).Error
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
@@ -183,7 +183,7 @@ func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, 
 		}
 		// This candidate is also taken, try the next one
 	}
-	
+
 	// If we get here, we couldn't find a unique name after 999 attempts
 	return "", fmt.Errorf("unable to generate unique namespace name for org '%s' and VDC '%s'", orgName, vdcName)
 }
