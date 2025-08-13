@@ -131,7 +131,13 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", v.OrganizationID).First(&org).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
-		v.Namespace = generateNamespaceName(org.Name, v.Name)
+		
+		// Generate unique namespace name
+		namespace, err := generateUniqueNamespaceName(tx, org.Name, v.Name)
+		if err != nil {
+			return fmt.Errorf("failed to generate unique namespace: %w", err)
+		}
+		v.Namespace = namespace
 	}
 
 	// Set default units if not provided
@@ -143,6 +149,43 @@ func (v *VDC) BeforeCreate(tx *gorm.DB) error {
 	}
 
 	return nil
+}
+
+// generateUniqueNamespaceName creates a unique Kubernetes-compliant namespace name
+func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, error) {
+	// Start with the base name
+	baseName := generateNamespaceName(orgName, vdcName)
+	
+	// Check if the base name is available
+	var existingVDC VDC
+	err := tx.Where("namespace = ?", baseName).First(&existingVDC).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// Base name is available
+			return baseName, nil
+		}
+		// Database error
+		return "", err
+	}
+	
+	// Base name is taken, try with incremental suffixes
+	for i := 1; i <= 999; i++ {
+		candidateName := fmt.Sprintf("%s-%d", baseName, i)
+		
+		err := tx.Where("namespace = ?", candidateName).First(&existingVDC).Error
+		if err != nil {
+			if err == gorm.ErrRecordNotFound {
+				// This candidate is available
+				return candidateName, nil
+			}
+			// Database error
+			return "", err
+		}
+		// This candidate is also taken, try the next one
+	}
+	
+	// If we get here, we couldn't find a unique name after 999 attempts
+	return "", fmt.Errorf("unable to generate unique namespace name for org '%s' and VDC '%s'", orgName, vdcName)
 }
 
 // generateNamespaceName creates a Kubernetes-compliant namespace name
