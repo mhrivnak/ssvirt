@@ -14,6 +14,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
+
 // MockVDCRepository extends the mock for VDC public API methods
 type MockVDCRepository struct {
 	mock.Mock
@@ -156,7 +157,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -201,7 +202,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -266,7 +267,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -295,7 +296,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -341,7 +342,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -381,7 +382,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -457,7 +458,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -491,7 +492,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 
@@ -525,7 +526,7 @@ func TestVDCPublicAPI(t *testing.T) {
 				Email:          "test@example.com",
 				FullName:       "Test User",
 				Enabled:        true,
-				OrganizationID: "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+				OrganizationID: stringPtr("urn:vcloud:org:12345678-1234-1234-1234-123456789abc"),
 			}
 			require.NoError(t, user.SetPassword("password123"))
 

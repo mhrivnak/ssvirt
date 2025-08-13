@@ -178,10 +178,14 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 		FullName:        req.FullName,
 		Email:           req.Email,
 		Description:     req.Description,
-		OrganizationID:  req.OrganizationID,
 		DeployedVmQuota: req.DeployedVmQuota,
 		StoredVmQuota:   req.StoredVmQuota,
 		ProviderType:    req.ProviderType,
+	}
+
+	// Set OrganizationID as pointer to allow NULL values
+	if req.OrganizationID != "" {
+		user.OrganizationID = &req.OrganizationID
 	}
 
 	// Set enabled flag (default true if not provided)
@@ -314,7 +318,7 @@ func (h *UserHandlers) UpdateUser(c *gin.Context) {
 	}
 
 	if req.OrganizationID != "" {
-		user.OrganizationID = req.OrganizationID
+		user.OrganizationID = &req.OrganizationID
 	}
 
 	if req.DeployedVmQuota != nil {

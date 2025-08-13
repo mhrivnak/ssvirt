@@ -11,7 +11,9 @@ import (
 
 	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+
 )
+
 
 func TestVMAPIEndpoints(t *testing.T) {
 	server, db, jwtManager := setupTestAPIServer(t)
@@ -32,7 +34,7 @@ func TestVMAPIEndpoints(t *testing.T) {
 		Email:          "testuser@example.com",
 		FullName:       "Test User",
 		Enabled:        true,
-		OrganizationID: org.ID,
+		OrganizationID: stringPtr(org.ID),
 	}
 	require.NoError(t, user.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(user).Error)
@@ -245,7 +247,7 @@ func TestVMAPIEndpoints(t *testing.T) {
 			Email:          "otheruser@example.com",
 			FullName:       "Other User",
 			Enabled:        true,
-			OrganizationID: otherOrg.ID,
+			OrganizationID: stringPtr(otherOrg.ID),
 		}
 		require.NoError(t, otherUser.SetPassword("password123"))
 		require.NoError(t, db.DB.Create(otherUser).Error)

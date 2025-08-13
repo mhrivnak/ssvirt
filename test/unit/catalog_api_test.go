@@ -13,7 +13,9 @@ import (
 
 	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
+
 )
+
 
 func TestCatalogAPIEndpoints(t *testing.T) {
 	server, db, jwtManager := setupTestAPIServer(t)

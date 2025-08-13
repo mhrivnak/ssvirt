@@ -9,6 +9,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
+
 func TestVDCNamespaceUniqueness(t *testing.T) {
 	server, db, _ := setupTestAPIServer(t)
 

@@ -15,6 +15,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
+
 func TestVDCAPIEndpoints(t *testing.T) {
 	server, db, jwtManager := setupTestAPIServer(t)
 	router := server.GetRouter()

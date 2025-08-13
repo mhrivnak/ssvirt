@@ -25,7 +25,7 @@ type User struct {
 	ProviderType     string         `gorm:"default:'LOCAL';not null;size:50" json:"providerType"`
 	Locked           bool           `gorm:"default:false;not null" json:"locked"`
 	Stranded         bool           `gorm:"default:false;not null" json:"stranded"`
-	OrganizationID   string         `gorm:"index;type:varchar(255)" json:"organizationId,omitempty"`
+	OrganizationID   *string        `gorm:"index;type:varchar(255)" json:"organizationId,omitempty"`
 	OrganizationName string         `gorm:"size:255" json:"organizationName,omitempty"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
@@ -36,7 +36,7 @@ type User struct {
 	OrgEntityRef   *EntityRef  `gorm:"-" json:"orgEntityRef,omitempty"`
 
 	// Relationships
-	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID" json:"organization,omitempty"`
+	Organization *Organization `gorm:"foreignKey:OrganizationID;references:ID;constraint:OnDelete:SET NULL" json:"organization,omitempty"`
 	Roles        []Role        `gorm:"many2many:user_roles;" json:"roles,omitempty"`
 }
 
@@ -60,16 +60,17 @@ func (u *User) BeforeUpdate(tx *gorm.DB) error {
 
 // normalizeOrgRef performs OrganizationID/OrganizationName population and clearing behavior
 func (u *User) normalizeOrgRef(tx *gorm.DB) error {
-	if u.OrganizationID != "" {
+	if u.OrganizationID != nil && *u.OrganizationID != "" {
 		// Load organization to populate OrganizationName
 		var org Organization
-		if err := tx.Where("id = ?", u.OrganizationID).First(&org).Error; err != nil {
+		if err := tx.Where("id = ?", *u.OrganizationID).First(&org).Error; err != nil {
 			return fmt.Errorf("failed to load organization: %w", err)
 		}
 		u.OrganizationName = org.Name
 	} else {
 		// Clear both OrganizationID and OrganizationName when no organization is specified
-		u.OrganizationID = ""
+		// This ensures NULL is stored instead of empty string to avoid foreign key constraint violations
+		u.OrganizationID = nil
 		u.OrganizationName = ""
 	}
 
