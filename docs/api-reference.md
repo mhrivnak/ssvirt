@@ -16,6 +16,7 @@ This document provides a comprehensive reference for all SSVirt API endpoints, o
 - [vApp Management](#vapp-management)
 - [Virtual Machine Operations](#virtual-machine-operations)
 - [Admin API](#admin-api)
+- [Legacy Endpoints](#legacy-endpoints)
 - [Error Responses](#error-responses)
 - [Data Types](#data-types)
 
@@ -23,6 +24,15 @@ This document provides a comprehensive reference for all SSVirt API endpoints, o
 
 - **Development:** `http://localhost:8080`
 - **Production:** `https://your-ssvirt-instance.com`
+
+**Setting the Base URL:**
+```bash
+# For development
+export SSVIRT_URL="http://localhost:8080"
+
+# For production
+export SSVIRT_URL="https://ssvirt.apps.your-cluster.com"
+```
 
 ## Authentication
 
@@ -32,16 +42,23 @@ SSVirt uses JWT-based authentication. Most endpoints require authentication via 
 
 Use the session creation endpoint to obtain a JWT token:
 
-```http
-POST /cloudapi/1.0.0/sessions
-Authorization: Basic <base64(username:password)>
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions \
+  -H "Authorization: Basic $(echo -n 'username:password' | base64)" \
+  -H "Content-Type: application/json"
+```
+
+After successful authentication, extract and store the token:
+```bash
+# Store the JWT token from the Authorization header
+export TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
 ## Health & Status
 
 ### Health Check
-```http
-GET /healthz
+```bash
+curl -X GET $SSVIRT_URL/healthz
 ```
 Basic health check endpoint.
 
@@ -56,8 +73,8 @@ Basic health check endpoint.
 ```
 
 ### Readiness Check
-```http
-GET /readyz
+```bash
+curl -X GET $SSVIRT_URL/readyz
 ```
 Kubernetes readiness probe endpoint.
 
@@ -75,8 +92,8 @@ Kubernetes readiness probe endpoint.
 ```
 
 ### Version Information
-```http
-GET /api/v1/version
+```bash
+curl -X GET $SSVIRT_URL/api/v1/version
 ```
 Returns version information.
 
@@ -84,44 +101,62 @@ Returns version information.
 ```json
 {
   "version": "1.0.0",
-  "build_time": "2024-01-15T09:00:00Z",
+  "build_time": "dev",
   "go_version": "go1.24.1",
-  "git_commit": "abc123def456"
+  "git_commit": "dev"
 }
 ```
 
 ## Session Management
 
 ### Create Session (Login)
-```http
-POST /cloudapi/1.0.0/sessions
-Authorization: Basic <base64(username:password)>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions \
+  -H "Authorization: Basic $(echo -n 'admin:password' | base64)" \
+  -H "Content-Type: application/json"
 ```
 
-**Request Body:**
-```json
-{}
-```
+**Request Body:** None required
 
 **Response:** `200 OK`
 ```json
 {
-  "sessionId": "urn:vcloud:session:12345678-1234-1234-1234-123456789abc",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "urn:vcloud:user:12345678-1234-1234-1234-123456789abc",
-    "username": "admin",
-    "fullName": "System Administrator"
+  "id": "urn:vcloud:session:12345678-1234-1234-1234-123456789abc",
+  "site": {
+    "name": "SSVirt",
+    "id": "urn:vcloud:site:12345678-1234-1234-1234-123456789abc"
   },
-  "expires": "2024-01-16T10:30:00Z"
+  "user": {
+    "name": "admin",
+    "id": "urn:vcloud:user:12345678-1234-1234-1234-123456789abc"
+  },
+  "org": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:11111111-1111-1111-1111-111111111111"
+  },
+  "operatingOrg": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:11111111-1111-1111-1111-111111111111"
+  },
+  "location": "",
+  "roles": ["System Administrator"],
+  "roleRefs": [
+    {
+      "name": "System Administrator",
+      "id": "urn:vcloud:role:87654321-4321-4321-4321-210987654321"
+    }
+  ],
+  "sessionIdleTimeoutMinutes": 30
 }
 ```
 
+**Response Headers:**
+- `Authorization: Bearer <jwt_token>` - Use this token for subsequent authenticated requests
+
 ### Get Session Details
-```http
-GET /cloudapi/1.0.0/sessions/{sessionId}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/sessions/urn:vcloud:session:12345678-1234-1234-1234-123456789abc \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
@@ -130,20 +165,39 @@ Authorization: Bearer <token>
 **Response:** `200 OK`
 ```json
 {
-  "sessionId": "urn:vcloud:session:12345678-1234-1234-1234-123456789abc",
-  "user": {
-    "id": "urn:vcloud:user:12345678-1234-1234-1234-123456789abc",
-    "username": "admin",
-    "fullName": "System Administrator"
+  "id": "urn:vcloud:session:12345678-1234-1234-1234-123456789abc",
+  "site": {
+    "name": "SSVirt",
+    "id": "urn:vcloud:site:12345678-1234-1234-1234-123456789abc"
   },
-  "expires": "2024-01-16T10:30:00Z"
+  "user": {
+    "name": "admin",
+    "id": "urn:vcloud:user:12345678-1234-1234-1234-123456789abc"
+  },
+  "org": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:11111111-1111-1111-1111-111111111111"
+  },
+  "operatingOrg": {
+    "name": "Provider",
+    "id": "urn:vcloud:org:11111111-1111-1111-1111-111111111111"
+  },
+  "location": "",
+  "roles": ["System Administrator"],
+  "roleRefs": [
+    {
+      "name": "System Administrator",
+      "id": "urn:vcloud:role:87654321-4321-4321-4321-210987654321"
+    }
+  ],
+  "sessionIdleTimeoutMinutes": 30
 }
 ```
 
 ### Delete Session (Logout)
-```http
-DELETE /cloudapi/1.0.0/sessions/{sessionId}
-Authorization: Bearer <token>
+```bash
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/sessions/urn:vcloud:session:12345678-1234-1234-1234-123456789abc \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Response:** `204 No Content`
@@ -151,9 +205,9 @@ Authorization: Bearer <token>
 ## User Management
 
 ### List Users
-```http
-GET /cloudapi/1.0.0/users
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/users?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Query Parameters:**
@@ -199,10 +253,22 @@ Authorization: Bearer <token>
 ```
 
 ### Create User
-```http
-POST /cloudapi/1.0.0/users
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/users \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "jane.smith",
+    "fullName": "Jane Smith",
+    "email": "jane.smith@example.com",
+    "password": "securepassword123",
+    "description": "Organization Administrator",
+    "organizationId": "urn:vcloud:org:11111111-1111-1111-1111-111111111111",
+    "deployedVmQuota": 5,
+    "storedVmQuota": 10,
+    "enabled": true,
+    "providerType": "LOCAL"
+  }'
 ```
 
 **Request Body:**
@@ -242,9 +308,9 @@ Content-Type: application/json
 ```
 
 ### Get User Details
-```http
-GET /cloudapi/1.0.0/users/{id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/users/urn:vcloud:user:12345678-1234-1234-1234-123456789abc \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
@@ -253,10 +319,18 @@ Authorization: Bearer <token>
 **Response:** `200 OK` - Same format as user object in list response
 
 ### Update User
-```http
-PUT /cloudapi/1.0.0/users/{id}
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X PUT $SSVIRT_URL/cloudapi/1.0.0/users/urn:vcloud:user:12345678-1234-1234-1234-123456789abc \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullName": "Jane Doe Smith",
+    "email": "jane.doe@example.com",
+    "description": "Senior Administrator",
+    "deployedVmQuota": 15,
+    "storedVmQuota": 25,
+    "enabled": false
+  }'
 ```
 
 **Request Body:** (All fields optional for partial updates)
@@ -278,9 +352,9 @@ Content-Type: application/json
 **Response:** `200 OK` - Updated user object
 
 ### Delete User
-```http
-DELETE /cloudapi/1.0.0/users/{id}
-Authorization: Bearer <token>
+```bash
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/users/urn:vcloud:user:12345678-1234-1234-1234-123456789abc \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Response:** `204 No Content`
@@ -288,9 +362,9 @@ Authorization: Bearer <token>
 ## Organization Management
 
 ### List Organizations
-```http
-GET /cloudapi/1.0.0/orgs
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/orgs?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Query Parameters:**
@@ -332,10 +406,19 @@ Authorization: Bearer <token>
 ```
 
 ### Create Organization
-```http
-POST /cloudapi/1.0.0/orgs
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/orgs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Engineering",
+    "displayName": "Engineering Department",
+    "description": "Engineering team organization",
+    "isEnabled": true,
+    "canManageOrgs": false,
+    "canPublish": true,
+    "maskedEventTaskUsername": "system"
+  }'
 ```
 
 **Request Body:**
@@ -373,9 +456,9 @@ Content-Type: application/json
 ```
 
 ### Get Organization Details
-```http
-GET /cloudapi/1.0.0/orgs/{id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/orgs/urn:vcloud:org:11111111-1111-1111-1111-111111111111 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
@@ -384,10 +467,15 @@ Authorization: Bearer <token>
 **Response:** `200 OK` - Same format as organization object in list response
 
 ### Update Organization
-```http
-PUT /cloudapi/1.0.0/orgs/{id}
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X PUT $SSVIRT_URL/cloudapi/1.0.0/orgs/urn:vcloud:org:11111111-1111-1111-1111-111111111111 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "displayName": "Engineering & DevOps",
+    "description": "Combined Engineering and DevOps teams",
+    "isEnabled": false
+  }'
 ```
 
 **Request Body:** (All fields optional for partial updates)
@@ -406,9 +494,9 @@ Content-Type: application/json
 **Response:** `200 OK` - Updated organization object
 
 ### Delete Organization
-```http
-DELETE /cloudapi/1.0.0/orgs/{id}
-Authorization: Bearer <token>
+```bash
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/orgs/urn:vcloud:org:33333333-3333-3333-3333-333333333333 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Response:** `204 No Content`
@@ -418,9 +506,9 @@ Authorization: Bearer <token>
 ## Role Management
 
 ### List Roles
-```http
-GET /cloudapi/1.0.0/roles
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/roles \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Response:** `200 OK`
@@ -458,9 +546,9 @@ Authorization: Bearer <token>
 ```
 
 ### Get Role Details
-```http
-GET /cloudapi/1.0.0/roles/{id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/roles/urn:vcloud:role:87654321-4321-4321-4321-210987654321 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
@@ -471,10 +559,14 @@ Authorization: Bearer <token>
 ## Virtual Data Centers (VDCs)
 
 ### List VDCs
-```http
-GET /cloudapi/1.0.0/vdcs
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/vdcs?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**Query Parameters:**
+- `page` (integer, default: 1) - Page number
+- `pageSize` (integer, default: 25, max: 100) - Items per page
 
 **Response:** `200 OK`
 ```json
@@ -489,19 +581,36 @@ Authorization: Bearer <token>
       "id": "urn:vcloud:vdc:44444444-4444-4444-4444-444444444444",
       "name": "production-vdc",
       "description": "Production environment VDC",
-      "orgEntityRef": {
-        "name": "Engineering",
-        "id": "urn:vcloud:org:33333333-3333-3333-3333-333333333333"
-      }
+      "allocationModel": "Flex",
+      "computeCapacity": {
+        "cpu": {
+          "allocated": 10000,
+          "limit": 20000,
+          "units": "MHz"
+        },
+        "memory": {
+          "allocated": 16384,
+          "limit": 32768,
+          "units": "MB"
+        }
+      },
+      "providerVdc": {
+        "id": "urn:vcloud:providervdc:67890"
+      },
+      "nicQuota": 100,
+      "networkQuota": 50,
+      "vdcStorageProfiles": {},
+      "isThinProvision": false,
+      "isEnabled": true
     }
   ]
 }
 ```
 
 ### Get VDC Details
-```http
-GET /cloudapi/1.0.0/vdcs/{vdc_id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
@@ -512,115 +621,498 @@ Authorization: Bearer <token>
 ## Catalog Management
 
 ### List Catalogs
-```http
-GET /cloudapi/1.0.0/catalogs
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/catalogs?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Query Parameters:**
+- `page` (integer, default: 1) - Page number
+- `pageSize` (integer, default: 25, max: 128) - Items per page
+
+**Response:** `200 OK`
+```json
+{
+  "resultTotal": 3,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
+  "values": [
+    {
+      "id": "urn:vcloud:catalog:55555555-5555-5555-5555-555555555555",
+      "name": "Public Templates",
+      "description": "Public template catalog",
+      "org": {
+        "name": "Provider",
+        "id": "urn:vcloud:org:11111111-1111-1111-1111-111111111111"
+      },
+      "isPublished": true,
+      "isSubscribed": false,
+      "creationDate": "2024-01-15T10:30:00Z",
+      "numberOfVAppTemplates": 5,
+      "numberOfMedia": 0,
+      "isLocal": true,
+      "version": 1
+    }
+  ]
+}
 ```
 
 ### Create Catalog
-```http
-POST /cloudapi/1.0.0/catalogs
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/catalogs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Templates",
+    "description": "Private template catalog",
+    "orgId": "urn:vcloud:org:11111111-1111-1111-1111-111111111111",
+    "isPublished": false
+  }'
 ```
+
+**Request Body:**
+```json
+{
+  "name": "My Templates",
+  "description": "Private template catalog",
+  "orgId": "urn:vcloud:org:11111111-1111-1111-1111-111111111111",
+  "isPublished": false
+}
+```
+
+**Response:** `201 Created` - Same format as catalog object in list response
 
 ### Get Catalog Details
-```http
-GET /cloudapi/1.0.0/catalogs/{catalogUrn}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/catalogs/urn:vcloud:catalog:55555555-5555-5555-5555-555555555555 \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**Parameters:**
+- `catalogUrn` (string) - Catalog URN ID
+
+**Response:** `200 OK` - Same format as catalog object in list response
 
 ### Delete Catalog
-```http
-DELETE /cloudapi/1.0.0/catalogs/{catalogUrn}
-Authorization: Bearer <token>
+```bash
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/catalogs/urn:vcloud:catalog:55555555-5555-5555-5555-555555555555 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
+**Response:** `204 No Content`
+
 ### List Catalog Items
-```http
-GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/catalogs/urn:vcloud:catalog:55555555-5555-5555-5555-555555555555/catalogItems?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Query Parameters:**
+- `page` (integer, default: 1) - Page number
+- `pageSize` (integer, default: 25) - Items per page
+
+**Response:** `200 OK`
+```json
+{
+  "resultTotal": 5,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
+  "values": [
+    {
+      "id": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+      "name": "Ubuntu Server 22.04",
+      "description": "Ubuntu Server 22.04 LTS template",
+      "catalog": {
+        "name": "Public Templates",
+        "id": "urn:vcloud:catalog:55555555-5555-5555-5555-555555555555"
+      },
+      "osType": "ubuntu64Guest",
+      "cpuCount": 2,
+      "memoryMB": 4096,
+      "diskSizeGB": 20,
+      "creationDate": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
 ```
 
 ### Get Catalog Item Details
-```http
-GET /cloudapi/1.0.0/catalogs/{catalogUrn}/catalogItems/{itemId}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/catalogs/urn:vcloud:catalog:55555555-5555-5555-5555-555555555555/catalogItems/urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666 \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**Parameters:**
+- `catalogUrn` (string) - Catalog URN ID
+- `itemId` (string) - Catalog Item URN ID
+
+**Response:** `200 OK` - Same format as catalog item object in list response
 
 ## vApp Management
 
 ### List vApps in VDC
-```http
-GET /cloudapi/1.0.0/vdcs/{vdc_id}/vapps
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444/vapps?page=1&pageSize=25" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Parameters:**
+- `vdc_id` (string) - VDC URN ID
+
+**Query Parameters:**
+- `page` (integer, default: 1) - Page number
+- `pageSize` (integer, default: 25) - Items per page
+
+**Response:** `200 OK`
+```json
+{
+  "resultTotal": 2,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
+  "values": [
+    {
+      "id": "urn:vcloud:vapp:77777777-7777-7777-7777-777777777777",
+      "name": "web-servers",
+      "description": "Web application servers",
+      "status": "RESOLVED",
+      "vdcId": "urn:vcloud:vdc:44444444-4444-4444-4444-444444444444",
+      "templateId": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "numberOfVMs": 2
+    }
+  ]
+}
 ```
 
 ### Get vApp Details
-```http
-GET /cloudapi/1.0.0/vapps/{vapp_id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/vapps/urn:vcloud:vapp:77777777-7777-7777-7777-777777777777 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Parameters:**
+- `vapp_id` (string) - vApp URN ID
+
+**Response:** `200 OK`
+```json
+{
+  "id": "urn:vcloud:vapp:77777777-7777-7777-7777-777777777777",
+  "name": "web-servers",
+  "description": "Web application servers",
+  "status": "RESOLVED",
+  "vdcId": "urn:vcloud:vdc:44444444-4444-4444-4444-444444444444",
+  "templateId": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T11:00:00Z",
+  "numberOfVMs": 2,
+  "vms": [
+    {
+      "name": "web-01",
+      "id": "urn:vcloud:vm:88888888-8888-8888-8888-888888888888"
+    },
+    {
+      "name": "web-02",
+      "id": "urn:vcloud:vm:99999999-9999-9999-9999-999999999999"
+    }
+  ]
+}
 ```
 
 ### Delete vApp
-```http
-DELETE /cloudapi/1.0.0/vapps/{vapp_id}
-Authorization: Bearer <token>
+```bash
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/vapps/urn:vcloud:vapp:77777777-7777-7777-7777-777777777777 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
+**Response:** `204 No Content`
+
 ### Instantiate Template (Create vApp)
-```http
-POST /cloudapi/1.0.0/vdcs/{vdc_id}/actions/instantiateTemplate
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444/actions/instantiateTemplate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-application",
+    "description": "My web application",
+    "catalogItem": {
+      "id": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+      "name": "Ubuntu Server 22.04"
+    }
+  }'
+```
+
+**Parameters:**
+- `vdc_id` (string) - VDC URN ID where the vApp will be created
+
+**Request Body:**
+```json
+{
+  "name": "my-application",
+  "description": "My web application",
+  "catalogItem": {
+    "id": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+    "name": "Ubuntu Server 22.04"
+  }
+}
+```
+
+**Response:** `201 Created`
+```json
+{
+  "id": "urn:vcloud:vapp:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "name": "my-application",
+  "description": "My web application",
+  "status": "RESOLVED",
+  "vdcId": "urn:vcloud:vdc:44444444-4444-4444-4444-444444444444",
+  "templateId": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+  "createdAt": "2024-01-15T15:30:00Z",
+  "numberOfVMs": 1,
+  "href": "/cloudapi/1.0.0/vapps/urn:vcloud:vapp:aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+}
 ```
 
 ## Virtual Machine Operations
 
 ### Get VM Details
-```http
-GET /cloudapi/1.0.0/vms/{vm_id}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 **Parameters:**
 - `vm_id` (string) - VM URN ID
+
+**Response:** `200 OK`
+```json
+{
+  "id": "urn:vcloud:vm:88888888-8888-8888-8888-888888888888",
+  "name": "web-01",
+  "description": "Web server VM",
+  "status": "POWERED_ON",
+  "vappId": "urn:vcloud:vapp:77777777-7777-7777-7777-777777777777",
+  "templateId": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T11:00:00Z",
+  "guestOs": "ubuntu64Guest",
+  "vmTools": {
+    "status": "guestToolsRunning",
+    "version": "12.0.0"
+  },
+  "hardware": {
+    "numCpus": 2,
+    "coresPerSocket": 1,
+    "memoryMB": 4096
+  },
+  "storageProfile": {
+    "name": "Default",
+    "id": "urn:vcloud:storageprofile:default"
+  },
+  "network": {
+    "networkConnectionSection": {
+      "primaryNetworkConnectionIndex": 0,
+      "networkConnection": [
+        {
+          "network": "default-net",
+          "networkConnectionIndex": 0,
+          "ipAddress": "192.168.1.100",
+          "isConnected": true,
+          "macAddress": "00:50:56:01:02:03",
+          "ipAddressAllocationMode": "DHCP"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## Admin API
 
 The Admin API endpoints require System Administrator role.
 
 ### List VDCs in Organization
-```http
-GET /api/admin/org/{orgId}/vdcs
-Authorization: Bearer <token>
+```bash
+curl -X GET "$SSVIRT_URL/api/admin/org/urn:vcloud:org:11111111-1111-1111-1111-111111111111/vdcs?page=1&page_size=25" \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**Parameters:**
+- `orgId` (string) - Organization URN ID
+
+**Query Parameters:**
+- `page` (integer, default: 1) - Page number
+- `page_size` (integer, default: 25, max: 100) - Items per page
+
+**Response:** `200 OK` - Same pagination format as other VDC endpoints
 
 ### Create VDC
-```http
-POST /api/admin/org/{orgId}/vdcs
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X POST $SSVIRT_URL/api/admin/org/urn:vcloud:org:11111111-1111-1111-1111-111111111111/vdcs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "development-vdc",
+    "description": "Development Virtual Data Center",
+    "allocationModel": "Flex",
+    "computeCapacity": {
+      "cpu": {
+        "allocated": 10000,
+        "limit": 20000,
+        "units": "MHz"
+      },
+      "memory": {
+        "allocated": 16384,
+        "limit": 32768,
+        "units": "MB"
+      }
+    },
+    "providerVdc": {
+      "id": "urn:vcloud:providervdc:67890"
+    },
+    "nicQuota": 100,
+    "networkQuota": 50,
+    "isThinProvision": false,
+    "isEnabled": true
+  }'
 ```
+
+**Request Body:**
+```json
+{
+  "name": "development-vdc",
+  "description": "Development Virtual Data Center",
+  "allocationModel": "Flex",
+  "computeCapacity": {
+    "cpu": {
+      "allocated": 10000,
+      "limit": 20000,
+      "units": "MHz"
+    },
+    "memory": {
+      "allocated": 16384,
+      "limit": 32768,
+      "units": "MB"
+    }
+  },
+  "providerVdc": {
+    "id": "urn:vcloud:providervdc:67890"
+  },
+  "nicQuota": 100,
+  "networkQuota": 50,
+  "isThinProvision": false,
+  "isEnabled": true
+}
+```
+
+**Response:** `201 Created` - VDC object with generated ID
 
 ### Get VDC Details (Admin)
-```http
-GET /api/admin/org/{orgId}/vdcs/{vdcId}
-Authorization: Bearer <token>
+```bash
+curl -X GET $SSVIRT_URL/api/admin/org/urn:vcloud:org:11111111-1111-1111-1111-111111111111/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444 \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+**Parameters:**
+- `orgId` (string) - Organization URN ID
+- `vdcId` (string) - VDC URN ID
+
+**Response:** `200 OK` - Complete VDC object with all administrative details
 
 ### Update VDC
-```http
-PUT /api/admin/org/{orgId}/vdcs/{vdcId}
-Authorization: Bearer <token>
-Content-Type: application/json
+```bash
+curl -X PUT $SSVIRT_URL/api/admin/org/urn:vcloud:org:11111111-1111-1111-1111-111111111111/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Updated Development Virtual Data Center",
+    "computeCapacity": {
+      "cpu": {
+        "allocated": 15000,
+        "limit": 25000,
+        "units": "MHz"
+      },
+      "memory": {
+        "allocated": 20480,
+        "limit": 40960,
+        "units": "MB"
+      }
+    },
+    "isEnabled": false
+  }'
 ```
 
-### Delete VDC
-```http
-DELETE /api/admin/org/{orgId}/vdcs/{vdcId}
-Authorization: Bearer <token>
+**Request Body:** (All fields optional for partial updates)
+```json
+{
+  "name": "new-vdc-name",
+  "description": "Updated description",
+  "allocationModel": "AllocationPool",
+  "computeCapacity": {
+    "cpu": {
+      "allocated": 15000,
+      "limit": 25000,
+      "units": "MHz"
+    },
+    "memory": {
+      "allocated": 20480,
+      "limit": 40960,
+      "units": "MB"
+    }
+  },
+  "providerVdc": {
+    "id": "urn:vcloud:providervdc:newprovider"
+  },
+  "nicQuota": 150,
+  "networkQuota": 75,
+  "isThinProvision": true,
+  "isEnabled": false
+}
 ```
+
+**Response:** `200 OK` - Updated VDC object
+
+### Delete VDC
+```bash
+curl -X DELETE $SSVIRT_URL/api/admin/org/urn:vcloud:org:11111111-1111-1111-1111-111111111111/vdcs/urn:vcloud:vdc:44444444-4444-4444-4444-444444444444 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Parameters:**
+- `orgId` (string) - Organization URN ID
+- `vdcId` (string) - VDC URN ID
+
+**Response:** `204 No Content`
+
+**Error Responses:**
+- `409 Conflict` - VDC contains vApps that must be deleted first
+
+## Legacy Endpoints
+
+### User Profile
+```bash
+curl -X GET $SSVIRT_URL/api/v1/user/profile \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response:** `200 OK`
+```json
+{
+  "success": true,
+  "data": {
+    "id": "urn:vcloud:user:12345678-1234-1234-1234-123456789abc",
+    "username": "admin",
+    "email": "admin@example.com",
+    "full_name": "System Administrator"
+  }
+}
+```
+
+**Note:** This is a legacy endpoint. Use the CloudAPI session endpoints for new integrations.
 
 ## Error Responses
 
@@ -630,7 +1122,10 @@ All API errors return JSON responses with the following format:
 
 ```json
 {
-  "error": "Descriptive error message"
+  "code": 400,
+  "error": "Bad Request",
+  "message": "Descriptive error message",
+  "details": "Additional error details (optional)"
 }
 ```
 
@@ -651,35 +1146,48 @@ All API errors return JSON responses with the following format:
 **Invalid URN Format:**
 ```json
 {
-  "error": "Invalid user ID format"
+  "code": 400,
+  "error": "Bad Request",
+  "message": "Invalid user ID format",
+  "details": "User ID must be a valid URN with prefix 'urn:vcloud:user:'"
 }
 ```
 
 **Authentication Required:**
 ```json
 {
-  "error": "Authentication required"
+  "code": 401,
+  "error": "Unauthorized",
+  "message": "Authentication required"
 }
 ```
 
 **Resource Not Found:**
 ```json
 {
-  "error": "User not found"
+  "code": 404,
+  "error": "Not Found",
+  "message": "User not found"
 }
 ```
 
 **Duplicate Resource:**
 ```json
 {
-  "error": "Username already exists"
+  "code": 409,
+  "error": "Conflict",
+  "message": "Username already exists",
+  "details": "A user with username 'john.doe' already exists"
 }
 ```
 
 **Insufficient Permissions:**
 ```json
 {
-  "error": "System Administrator role required"
+  "code": 403,
+  "error": "Forbidden",
+  "message": "System Administrator role required",
+  "details": "User management requires System Administrator privileges"
 }
 ```
 
@@ -699,6 +1207,8 @@ All entity IDs use the URN format: `urn:vcloud:{type}:{uuid}`
 - `vapp` - vApps
 - `vm` - Virtual machines
 - `session` - User sessions
+- `site` - Site references
+- `providervdc` - Provider VDCs
 
 **Example:** `urn:vcloud:user:12345678-1234-1234-1234-123456789abc`
 
