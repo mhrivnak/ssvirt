@@ -108,7 +108,7 @@ export TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 Check your current session:
 ```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
+curl -H "Authorization: Bearer $TOKEN" \
   "$SSVIRT_URL/cloudapi/1.0.0/sessions/urn:vcloud:session:5b486746-81ed-43a6-9a40-615034d19197"
 ```
 
@@ -159,19 +159,36 @@ curl -X DELETE -H "Authorization: Bearer $TOKEN" \
 ### List Your Organizations
 
 ```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/orgs
 ```
 
 Response:
 ```json
 {
+  "resultTotal": 1,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
   "values": [
     {
       "id": "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
       "name": "your-org",
       "displayName": "Your Organization",
-      "description": "Your organization description"
+      "description": "Your organization description",
+      "isEnabled": true,
+      "orgVdcCount": 2,
+      "catalogCount": 1,
+      "vappCount": 3,
+      "runningVMCount": 5,
+      "userCount": 10,
+      "diskCount": 15,
+      "canManageOrgs": false,
+      "canPublish": true,
+      "directlyManagedOrgCount": 0,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-20T14:45:00Z"
     }
   ]
 }
@@ -182,28 +199,55 @@ Response:
 ```bash
 export ORG_ID="urn:vcloud:org:12345678-1234-1234-1234-123456789abc"
 
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org/$ORG_ID
-```
-
-### List Virtual Data Centers
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org/$ORG_ID/vdcs/query
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/orgs/$ORG_ID
 ```
 
 Response:
 ```json
 {
+  "id": "urn:vcloud:org:12345678-1234-1234-1234-123456789abc",
+  "name": "your-org",
+  "displayName": "Your Organization", 
+  "description": "Your organization description",
+  "isEnabled": true,
+  "orgVdcCount": 2,
+  "catalogCount": 1,
+  "vappCount": 3,
+  "runningVMCount": 5,
+  "userCount": 10,
+  "diskCount": 15,
+  "canManageOrgs": false,
+  "canPublish": true,
+  "directlyManagedOrgCount": 0,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-20T14:45:00Z"
+}
+```
+
+### List Virtual Data Centers
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs
+```
+
+Response:
+```json
+{
+  "resultTotal": 2,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
   "values": [
     {
       "id": "urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321",
       "name": "production-vdc",
-      "status": "POWERED_ON",
-      "computePolicy": {
-        "cpuLimit": "10",
-        "memoryLimitMb": 20480
+      "description": "Production environment VDC",
+      "orgEntityRef": {
+        "name": "your-org",
+        "id": "urn:vcloud:org:12345678-1234-1234-1234-123456789abc"
       }
     }
   ]
@@ -215,8 +259,21 @@ Response:
 ```bash
 export VDC_ID="urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321"
 
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vdc/$VDC_ID
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID
+```
+
+Response:
+```json
+{
+  "id": "urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321",
+  "name": "production-vdc",
+  "description": "Production environment VDC",
+  "orgEntityRef": {
+    "name": "your-org",
+    "id": "urn:vcloud:org:12345678-1234-1234-1234-123456789abc"
+  }
+}
 ```
 
 ## Browsing Available Templates
@@ -226,82 +283,146 @@ installed. System administrators populate catalogs with templates that users can
 deploy. Users select from available templates rather than providing their own OS
 images.
 
-### List VM Templates
+### List Catalogs
 
-Browse available VM templates in the catalog:
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/catalogs/query?filter=name==public
-```
-
-### Get Template Details
+Browse available catalogs:
 
 ```bash
-export TEMPLATE_ID="urn:vcloud:catalogitem:11111111-2222-3333-4444-555555555555"
-
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/catalogs/public/templates/$TEMPLATE_ID
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs
 ```
 
 Response:
 ```json
 {
-  "id": "urn:vcloud:catalogitem:11111111-2222-3333-4444-555555555555",
-  "name": "rhel9-template",
-  "displayName": "Red Hat Enterprise Linux 9",
-  "description": "RHEL 9 virtual machine template",
-  "osType": "rhel9Server64Guest",
-  "defaultInstanceType": "medium"
-}
-```
-
-### List Instance Types
-
-See available VM sizes:
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/instanceTypes
-```
-
-Response:
-```json
-{
+  "resultTotal": 1,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
   "values": [
     {
-      "name": "small",
-      "cpu": {"guest": 1},
-      "memory": {"guest": "2Gi"}
-    },
-    {
-      "name": "medium", 
-      "cpu": {"guest": 2},
-      "memory": {"guest": "4Gi"}
-    },
-    {
-      "name": "large",
-      "cpu": {"guest": 4},
-      "memory": {"guest": "8Gi"}
+      "id": "urn:vcloud:catalog:11111111-2222-3333-4444-555555555555",
+      "name": "public",
+      "description": "Public catalog with VM templates",
+      "org": {
+        "name": "Provider",
+        "id": "urn:vcloud:org:9f372aca-56ce-4c4c-bf52-6582fe4b5c44"
+      },
+      "isPublished": true,
+      "isSubscribed": false,
+      "numberOfVAppTemplates": 5,
+      "numberOfMedia": 0,
+      "isLocal": true,
+      "version": 1
     }
   ]
 }
 ```
 
-## Creating Virtual Machines
+### List Catalog Items (VM Templates)
 
-### Create a vApp Container
-
-First, create a vApp to contain your VMs:
+Get available VM templates from a catalog:
 
 ```bash
-curl -k -X POST $SSVIRT_URL/api/vdc/$VDC_ID/vapps \
+export CATALOG_ID="urn:vcloud:catalog:11111111-2222-3333-4444-555555555555"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs/$CATALOG_ID/catalogItems
+```
+
+Response:
+```json
+{
+  "resultTotal": 3,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "values": [
+    {
+      "id": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+      "name": "rhel9-template",
+      "description": "Red Hat Enterprise Linux 9 template",
+      "catalogId": "urn:vcloud:catalog:11111111-2222-3333-4444-555555555555",
+      "isPublished": true,
+      "status": "RESOLVED",
+      "entity": {
+        "name": "rhel9-template",
+        "description": "Red Hat Enterprise Linux 9 template",
+        "type": "vAppTemplate",
+        "numberOfVMs": 1,
+        "numberOfCpus": 2,
+        "memoryAllocation": 4096,
+        "storageAllocation": 20480
+      },
+      "owner": {
+        "name": "admin",
+        "id": "urn:vcloud:user:5becfb1c-ef0f-4946-a304-9dcf0c969841"
+      },
+      "catalog": {
+        "name": "public",
+        "id": "urn:vcloud:catalog:11111111-2222-3333-4444-555555555555"
+      }
+    }
+  ]
+}
+```
+
+### Get Template Details
+
+```bash
+export TEMPLATE_ID="urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs/$CATALOG_ID/catalogItems/$TEMPLATE_ID
+```
+
+Response:
+```json
+{
+  "id": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+  "name": "rhel9-template",
+  "description": "Red Hat Enterprise Linux 9 template",
+  "catalogId": "urn:vcloud:catalog:11111111-2222-3333-4444-555555555555",
+  "isPublished": true,
+  "status": "RESOLVED",
+  "entity": {
+    "name": "rhel9-template",
+    "description": "Red Hat Enterprise Linux 9 template",
+    "type": "vAppTemplate",
+    "numberOfVMs": 1,
+    "numberOfCpus": 2,
+    "memoryAllocation": 4096,
+    "storageAllocation": 20480
+  },
+  "owner": {
+    "name": "admin",
+    "id": "urn:vcloud:user:5becfb1c-ef0f-4946-a304-9dcf0c969841"
+  },
+  "catalog": {
+    "name": "public",
+    "id": "urn:vcloud:catalog:11111111-2222-3333-4444-555555555555"
+  }
+}
+```
+
+## Creating Virtual Machines
+
+### Create a vApp from Template
+
+Create a vApp (virtual application) from a catalog template:
+
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID/actions/instantiateTemplate \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-web-app",
     "description": "Web application environment",
-    "powerOn": false
+    "catalogItem": {
+      "id": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+      "name": "rhel9-template"
+    }
   }'
 ```
 
@@ -310,253 +431,146 @@ Response:
 {
   "id": "urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
   "name": "my-web-app",
-  "status": "POWERED_OFF",
-  "href": "/api/vapp/urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+  "description": "Web application environment",
+  "status": "INSTANTIATING",
+  "vdcId": "urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321",
+  "templateId": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "numberOfVMs": 1,
+  "href": "/cloudapi/1.0.0/vapps/urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 }
 ```
 
-### Add VM to vApp
+### List vApps in VDC
 
-Create a VM within the vApp:
+List all vApps in a specific VDC:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID/vapps
+```
+
+Response:
+```json
+{
+  "resultTotal": 2,
+  "pageCount": 1,
+  "page": 1,
+  "pageSize": 25,
+  "values": [
+    {
+      "id": "urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "name": "my-web-app",
+      "description": "Web application environment",
+      "status": "RESOLVED",
+      "vdcId": "urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321",
+      "templateId": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "numberOfVMs": 1,
+      "href": "/cloudapi/1.0.0/vapps/urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    }
+  ]
+}
+```
+
+### Get vApp Details
+
+Get detailed information about a specific vApp including VMs:
 
 ```bash
 export VAPP_ID="urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-curl -k -X POST $SSVIRT_URL/api/vapp/$VAPP_ID/vms \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "web-server-01",
-    "description": "Primary web server",
-    "templateRef": "urn:vcloud:catalogitem:11111111-2222-3333-4444-555555555555",
-    "instanceType": "medium",
-    "powerOn": true,
-    "guestCustomization": {
-      "enabled": true,
-      "computerName": "web-server-01",
-      "adminPassword": "SecurePassword123!"
-    },
-    "networkConfig": {
-      "primaryNetworkConnection": {
-        "network": "default",
-        "ipAddressAllocationMode": "DHCP"
-      }
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vapps/$VAPP_ID
+```
+
+Response:
+```json
+{
+  "id": "urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "name": "my-web-app",
+  "description": "Web application environment",
+  "status": "RESOLVED",
+  "vdcId": "urn:vcloud:vdc:87654321-4321-4321-4321-cba987654321",
+  "templateId": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:32:00Z",
+  "numberOfVMs": 1,
+  "vms": [
+    {
+      "id": "urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj",
+      "name": "my-web-app-vm",
+      "status": "POWERED_ON",
+      "href": "/cloudapi/1.0.0/vms/urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
     }
-  }'
+  ],
+  "href": "/cloudapi/1.0.0/vapps/urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+}
+```
+
+## Managing Virtual Machines
+
+### Get VM Details
+
+Get detailed information about a specific virtual machine:
+
+```bash
+export VM_ID="urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vms/$VM_ID
 ```
 
 Response:
 ```json
 {
   "id": "urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj",
-  "name": "web-server-01",
-  "status": "POWERED_OFF",
-  "href": "/api/vapp/urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/vm/urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
+  "name": "my-web-app-vm",
+  "description": "Virtual machine my-web-app-vm",
+  "status": "POWERED_ON",
+  "vappId": "urn:vcloud:vapp:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "templateId": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:32:00Z",
+  "guestOs": "Ubuntu Linux (64-bit)",
+  "vmTools": {
+    "status": "RUNNING",
+    "version": "12.1.5"
+  },
+  "hardware": {
+    "numCpus": 2,
+    "numCoresPerSocket": 1,
+    "memoryMB": 4096
+  },
+  "storageProfile": {
+    "name": "default-storage-policy",
+    "href": "/cloudapi/1.0.0/storageProfiles/default-storage-policy"
+  },
+  "networkConnections": [
+    {
+      "networkName": "default-network",
+      "ipAddress": "192.168.1.100",
+      "macAddress": "00:50:56:12:34:56",
+      "connected": true
+    }
+  ],
+  "href": "/cloudapi/1.0.0/vms/urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
 }
 ```
 
-### Direct VM Creation (Alternative)
+### Delete vApp (and its VMs)
 
-You can also create a VM directly without a vApp:
-
-```bash
-curl -k -X POST $SSVIRT_URL/api/vdc/$VDC_ID/vms \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "database-server",
-    "description": "PostgreSQL database server",
-    "templateRef": "urn:vcloud:catalogitem:11111111-2222-3333-4444-555555555555",
-    "instanceType": "large",
-    "storageProfile": {
-      "diskSizeGb": 50
-    }
-  }'
-```
-
-### Advanced VM Configuration
-
-Create a VM with custom specifications:
+To delete virtual machines, you delete the vApp that contains them:
 
 ```bash
-curl -k -X POST $SSVIRT_URL/api/vdc/$VDC_ID/vms \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "custom-vm",
-    "templateRef": "urn:vcloud:catalogitem:22222222-3333-4444-5555-666666666666",
-    "computeConfig": {
-      "cpuCount": 4,
-      "memoryMb": 8192
-    },
-    "storageProfile": {
-      "diskSizeGb": 100,
-      "storageClass": "fast-ssd"
-    },
-    "networkConfig": {
-      "primaryNetworkConnection": {
-        "network": "production-network",
-        "ipAddressAllocationMode": "STATIC",
-        "ipAddress": "192.168.100.50"
-      }
-    },
-    "guestCustomization": {
-      "enabled": true,
-      "computerName": "custom-vm",
-      "adminPassword": "VerySecurePassword123!",
-      "customizationScript": "#!/bin/bash\necho \"VM initialized\" > /tmp/init.log"
-    }
-  }'
-```
-
-## Managing Virtual Machines
-
-### List Your VMs
-
-Get all VMs in your organization:
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vms/query
-```
-
-Get VMs in specific VDC:
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vdc/$VDC_ID/vms
-```
-
-### Get VM Details
-
-```bash
-export VM_ID="urn:vcloud:vm:ffffffff-gggg-hhhh-iiii-jjjjjjjjjjjj"
-
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID
-```
-
-### Power Operations
-
-**Power On VM:**
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/power/action/powerOn \
+curl -X DELETE $SSVIRT_URL/cloudapi/1.0.0/vapps/$VAPP_ID \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-**Power Off VM:**
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/power/action/powerOff \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Reboot VM:**
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/power/action/reboot \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Suspend VM:**
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/power/action/suspend \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Update VM Configuration
-
-**Resize VM:**
-```bash
-curl -k -X PUT $SSVIRT_URL/api/vm/$VM_ID \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "computeConfig": {
-      "cpuCount": 4,
-      "memoryMb": 8192
-    }
-  }'
-```
-
-**Add Disk:**
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/disks \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sizeGb": 20,
-    "storageClass": "standard"
-  }'
-```
-
-### Delete VM
+If the vApp contains running VMs, you can force deletion:
 
 ```bash
-curl -k -X DELETE $SSVIRT_URL/api/vm/$VM_ID \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-## Networking
-
-### List Available Networks
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org/$ORG_ID/networks
-```
-
-### Connect VM to Network
-
-```bash
-curl -k -X POST $SSVIRT_URL/api/vm/$VM_ID/networkConnections \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "network": "production-network",
-    "ipAddressAllocationMode": "DHCP",
-    "isConnected": true,
-    "isPrimary": false
-  }'
-```
-
-### Update Network Configuration
-
-```bash
-curl -k -X PUT $SSVIRT_URL/api/vm/$VM_ID/networkConnections/0 \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ipAddressAllocationMode": "STATIC",
-    "ipAddress": "192.168.100.100",
-    "netmask": "255.255.255.0",
-    "gateway": "192.168.100.1"
-  }'
-```
-
-## Storage Management
-
-### List VM Disks
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/disks
-```
-
-### Resize Disk
-
-```bash
-export DISK_ID="disk-001"
-
-curl -k -X PUT $SSVIRT_URL/api/vm/$VM_ID/disks/$DISK_ID \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sizeGb": 100
-  }'
-```
-
-### Remove Disk
-
-```bash
-curl -k -X DELETE $SSVIRT_URL/api/vm/$VM_ID/disks/$DISK_ID \
+curl -X DELETE "$SSVIRT_URL/cloudapi/1.0.0/vapps/$VAPP_ID?force=true" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -564,68 +578,55 @@ curl -k -X DELETE $SSVIRT_URL/api/vm/$VM_ID/disks/$DISK_ID \
 
 ### Check VM Status
 
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/status
-```
-
-### Get VM Console Access
+VM status is available through the VM details endpoint:
 
 ```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/console
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vms/$VM_ID
 ```
 
-Response:
-```json
-{
-  "consoleUrl": "https://console.apps.cluster.com/vm/console?token=...",
-  "protocol": "vnc"
-}
-```
-
-### View VM Metrics
-
-```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/metrics
-```
+The response includes comprehensive VM information including status, hardware configuration, and network details.
 
 ### Troubleshooting Common Issues
 
-**VM Won't Start:**
-1. Check VDC resource quotas
-2. Verify template availability
-3. Check network configuration
+**vApp Won't Instantiate:**
+1. Check catalog item exists and is accessible
+2. Verify VDC access permissions  
+3. Ensure template name follows DNS-1123 format
+4. Check for name conflicts in VDC
 
 ```bash
-# Check resource usage
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vdc/$VDC_ID/usage
+# Check available templates
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs/$CATALOG_ID/catalogItems
 
-# Check events
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/events
+# Check VDC access
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID
+
+# Check for existing vApps with same name
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID/vapps
 ```
 
-**Network Issues:**
+**Access Denied Errors:**
 ```bash
-# Verify network connectivity
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID/networkConnections
+# Verify organization membership
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/orgs
 
-# Check network policies
-curl -k -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org/$ORG_ID/networks/$NETWORK_ID
+# Check session details
+curl -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/sessions/$SESSION_ID
 ```
 
 ## API Reference
 
 ### Base URL Structure
 
-All API endpoints follow this pattern:
+CloudAPI endpoints follow this pattern:
 ```
-https://your-ssvirt-domain.com/api/{resource}/{id?}/{action?}
+https://your-ssvirt-domain.com/cloudapi/1.0.0/{resource}/{id?}/{action?}
 ```
 
 ### Common Headers
@@ -667,22 +668,30 @@ Accept: application/json
 List endpoints support pagination:
 
 ```bash
-curl -k -H "Authorization: Bearer $TOKEN" \
-  "$SSVIRT_URL/api/vms/query?page=1&pageSize=25&sortBy=name&sortOrder=asc"
+curl -H "Authorization: Bearer $TOKEN" \
+  "$SSVIRT_URL/cloudapi/1.0.0/orgs?page=1&pageSize=25"
+```
+
+Response format includes pagination metadata:
+```json
+{
+  "resultTotal": 50,
+  "pageCount": 2,
+  "page": 1,
+  "pageSize": 25,
+  "associations": [],
+  "values": [...]
+}
 ```
 
 ### Filtering
 
-Use OData-style filters:
+Some endpoints support filtering:
 
 ```bash
-# Filter VMs by status
-curl -k -H "Authorization: Bearer $TOKEN" \
-  "$SSVIRT_URL/api/vms/query?filter=status==POWERED_ON"
-
-# Multiple filters
-curl -k -H "Authorization: Bearer $TOKEN" \
-  "$SSVIRT_URL/api/vms/query?filter=status==POWERED_ON;name==*web*"
+# Filter vApps by status  
+curl -H "Authorization: Bearer $TOKEN" \
+  "$SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID/vapps?filter=status==RESOLVED"
 ```
 
 ## Best Practices
@@ -698,7 +707,7 @@ curl -k -H "Authorization: Bearer $TOKEN" \
 
 ## Example Workflows
 
-### Complete VM Creation Workflow
+### Complete vApp Creation Workflow
 
 ```bash
 #!/bin/bash
@@ -706,73 +715,70 @@ set -e
 
 # Configuration
 SSVIRT_URL="https://ssvirt.apps.your-cluster.com"
-USERNAME="your-username"
+USERNAME="admin"
 PASSWORD="your-password"
 
 # 1. Login
 echo "Logging in..."
-TOKEN=$(curl -sk -X POST $SSVIRT_URL/api/sessions \
-  -H "Content-Type: application/json" \
-  -d "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD\"}" | \
-  jq -r '.token')
+LOGIN_RESPONSE=$(curl -sk -u "$USERNAME" -X POST $SSVIRT_URL/cloudapi/1.0.0/sessions)
+TOKEN=$(echo $LOGIN_RESPONSE | jq -r '.id')
 
-# 2. Get organization and VDC
-echo "Getting organization info..."
-ORG_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org | jq -r '.values[0].id')
+# Extract session info
+SESSION_ID=$(echo $LOGIN_RESPONSE | jq -r '.id')
+ORG_ID=$(echo $LOGIN_RESPONSE | jq -r '.org.id')
 
+# 2. Get available VDC
+echo "Getting VDC info..."
 VDC_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/org/$ORG_ID/vdcs/query | jq -r '.values[0].id')
+  $SSVIRT_URL/cloudapi/1.0.0/vdcs | jq -r '.values[0].id')
 
-# 3. Create vApp
-echo "Creating vApp..."
-VAPP_RESPONSE=$(curl -sk -X POST $SSVIRT_URL/api/vdc/$VDC_ID/vapps \
+# 3. Get available catalog and template
+echo "Finding template..."
+CATALOG_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs | jq -r '.values[0].id')
+
+TEMPLATE_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+  $SSVIRT_URL/cloudapi/1.0.0/catalogs/$CATALOG_ID/catalogItems | jq -r '.values[0].id')
+
+# 4. Create vApp from template
+echo "Creating vApp from template..."
+VAPP_RESPONSE=$(curl -sk -X POST $SSVIRT_URL/cloudapi/1.0.0/vdcs/$VDC_ID/actions/instantiateTemplate \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "demo-app",
-    "description": "Demo application"
-  }')
+  -d "{
+    \"name\": \"demo-app\",
+    \"description\": \"Demo application\",
+    \"catalogItem\": {
+      \"id\": \"$TEMPLATE_ID\"
+    }
+  }")
 
 VAPP_ID=$(echo $VAPP_RESPONSE | jq -r '.id')
+echo "Created vApp: $VAPP_ID"
 
-# 4. Create VM
-echo "Creating VM..."
-VM_RESPONSE=$(curl -sk -X POST $SSVIRT_URL/api/vapp/$VAPP_ID/vms \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "demo-vm",
-    "templateRef": "urn:vcloud:catalogitem:11111111-2222-3333-4444-555555555555",
-    "instanceType": "medium",
-    "powerOn": true
-  }')
-
-VM_ID=$(echo $VM_RESPONSE | jq -r '.id')
-
-# 5. Wait for VM to be ready
-echo "Waiting for VM to start..."
+# 5. Wait for vApp to be ready
+echo "Waiting for vApp to be ready..."
 while true; do
-  STATUS=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-    $SSVIRT_URL/api/vm/$VM_ID | jq -r '.status')
+  VAPP_STATUS=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+    $SSVIRT_URL/cloudapi/1.0.0/vapps/$VAPP_ID | jq -r '.status')
   
-  if [ "$STATUS" = "POWERED_ON" ]; then
-    echo "VM is running!"
+  if [ "$VAPP_STATUS" = "RESOLVED" ]; then
+    echo "vApp is ready!"
     break
   fi
   
-  echo "Current status: $STATUS"
+  echo "Current status: $VAPP_STATUS"
   sleep 10
 done
 
-# 6. Get VM details
-echo "VM Details:"
+# 6. Get vApp details with VMs
+echo "vApp Details:"
 curl -sk -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/vm/$VM_ID | jq '.'
+  $SSVIRT_URL/cloudapi/1.0.0/vapps/$VAPP_ID | jq '.'
 
 # 7. Logout
 curl -sk -X DELETE -H "Authorization: Bearer $TOKEN" \
-  $SSVIRT_URL/api/sessions
+  $SSVIRT_URL/cloudapi/1.0.0/sessions/$SESSION_ID
 
 echo "Demo complete!"
 ```
