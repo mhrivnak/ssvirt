@@ -19,13 +19,15 @@ import (
 type VDCHandlers struct {
 	vdcRepo    *repositories.VDCRepository
 	orgRepo    *repositories.OrganizationRepository
+	userRepo   *repositories.UserRepository
 	k8sService services.KubernetesService
 }
 
-func NewVDCHandlers(vdcRepo *repositories.VDCRepository, orgRepo *repositories.OrganizationRepository, k8sService services.KubernetesService) *VDCHandlers {
+func NewVDCHandlers(vdcRepo *repositories.VDCRepository, orgRepo *repositories.OrganizationRepository, userRepo *repositories.UserRepository, k8sService services.KubernetesService) *VDCHandlers {
 	return &VDCHandlers{
 		vdcRepo:    vdcRepo,
 		orgRepo:    orgRepo,
+		userRepo:   userRepo,
 		k8sService: k8sService,
 	}
 }
@@ -529,7 +531,7 @@ func (h *VDCHandlers) toVDCResponse(vdc models.VDC) VDCResponse {
 }
 
 // RequireSystemAdmin middleware ensures only System Administrators can access VDC endpoints
-func RequireSystemAdmin() gin.HandlerFunc {
+func RequireSystemAdmin(userRepo *repositories.UserRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, exists := c.Get(auth.ClaimsContextKey)
 		if !exists {
@@ -553,8 +555,28 @@ func RequireSystemAdmin() gin.HandlerFunc {
 			return
 		}
 
+		// Get user with roles from database
+		user, err := userRepo.GetWithRoles(userClaims.UserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"Failed to verify user permissions",
+			))
+			c.Abort()
+			return
+		}
+
 		// Check if user has System Administrator role
-		if userClaims.Role == nil || *userClaims.Role != models.RoleSystemAdmin {
+		hasSystemAdminRole := false
+		for _, role := range user.Roles {
+			if role.Name == models.RoleSystemAdmin {
+				hasSystemAdminRole = true
+				break
+			}
+		}
+
+		if !hasSystemAdminRole {
 			c.JSON(http.StatusForbidden, NewAPIError(
 				http.StatusForbidden,
 				"Forbidden",

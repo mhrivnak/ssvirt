@@ -45,6 +45,9 @@ func TestVDCAPIEndpoints(t *testing.T) {
 	}
 	require.NoError(t, db.DB.Create(adminRole).Error)
 
+	// Assign System Administrator role to admin user
+	require.NoError(t, db.DB.Model(user).Association("Roles").Append(adminRole))
+
 	// Create test user without admin role (for authorization tests)
 	regularUser := &models.User{
 		Username: "regularuser",
@@ -61,11 +64,14 @@ func TestVDCAPIEndpoints(t *testing.T) {
 	}
 	require.NoError(t, db.DB.Create(userRole).Error)
 
-	// Generate tokens
-	adminToken, err := jwtManager.GenerateWithRole(user.ID, user.Username, org.ID, models.RoleSystemAdmin)
+	// Assign vApp User role to regular user
+	require.NoError(t, db.DB.Model(regularUser).Association("Roles").Append(userRole))
+
+	// Generate tokens (using session-style tokens like the real session handler)
+	adminToken, err := jwtManager.GenerateWithSessionID(user.ID, user.Username, "test-session-admin")
 	require.NoError(t, err)
 
-	regularToken, err := jwtManager.GenerateWithRole(regularUser.ID, regularUser.Username, org.ID, models.RoleVAppUser)
+	regularToken, err := jwtManager.GenerateWithSessionID(regularUser.ID, regularUser.Username, "test-session-regular")
 	require.NoError(t, err)
 
 	t.Run("Authorization Tests", func(t *testing.T) {
@@ -473,7 +479,17 @@ func TestVDCDependencyValidation(t *testing.T) {
 	require.NoError(t, user.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(user).Error)
 
-	adminToken, err := jwtManager.GenerateWithRole(user.ID, user.Username, org.ID, models.RoleSystemAdmin)
+	// Create and assign System Administrator role
+	adminRole := &models.Role{
+		Name:        models.RoleSystemAdmin,
+		Description: "System Administrator role",
+	}
+	require.NoError(t, db.DB.Create(adminRole).Error)
+
+	// Assign System Administrator role to user
+	require.NoError(t, db.DB.Model(user).Association("Roles").Append(adminRole))
+
+	adminToken, err := jwtManager.GenerateWithSessionID(user.ID, user.Username, "test-session-admin")
 	require.NoError(t, err)
 
 	// Create a VDC
