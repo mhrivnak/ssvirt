@@ -12,9 +12,7 @@ import (
 
 	"github.com/mhrivnak/ssvirt/pkg/api/handlers"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
-
 )
-
 
 func TestVMCreationAPIEndpoints(t *testing.T) {
 	server, db, jwtManager := setupTestAPIServer(t)

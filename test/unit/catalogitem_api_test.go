@@ -19,9 +19,7 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/api/types"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/services"
-
 )
-
 
 // MockCatalogItemRepository is a mock implementation of CatalogItemRepository
 type MockCatalogItemRepository struct {

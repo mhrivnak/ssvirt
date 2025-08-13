@@ -14,7 +14,6 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
 
-
 // MockVDCRepository extends the mock for VDC public API methods
 type MockVDCRepository struct {
 	mock.Mock
