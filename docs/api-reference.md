@@ -628,7 +628,7 @@ curl -X GET "$SSVIRT_URL/cloudapi/1.0.0/catalogs?page=1&pageSize=25" \
 
 **Query Parameters:**
 - `page` (integer, default: 1) - Page number
-- `pageSize` (integer, default: 25, max: 128) - Items per page
+- `pageSize` (integer, default: 25, max: 100) - Items per page
 
 **Response:** `200 OK`
 ```json
