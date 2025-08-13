@@ -72,66 +72,7 @@ func (db *DB) AutoMigrate() error {
 		return fmt.Errorf("failed to auto-migrate database: %w", err)
 	}
 
-	// Apply VDC namespace constraint fix for soft deletes
-	if err := db.fixVDCNamespaceConstraint(); err != nil {
-		log.Printf("Warning: Failed to apply VDC namespace constraint fix: %v", err)
-		// Don't fail the migration for this, as it might already be applied
-	}
-
 	log.Println("Database auto-migration completed successfully")
-	return nil
-}
-
-// fixVDCNamespaceConstraint applies the fix for VDC namespace unique constraint to work with soft deletes
-func (db *DB) fixVDCNamespaceConstraint() error {
-	log.Println("Applying VDC namespace constraint fix...")
-
-	// Check if the partial unique index already exists
-	var indexExists bool
-	err := db.DB.Raw(`
-		SELECT EXISTS (
-			SELECT 1 FROM pg_indexes 
-			WHERE indexname = 'idx_vdcs_namespace_unique'
-		)
-	`).Scan(&indexExists).Error
-	if err != nil {
-		return fmt.Errorf("failed to check if namespace index exists: %w", err)
-	}
-
-	if indexExists {
-		log.Println("VDC namespace constraint fix already applied")
-		return nil
-	}
-
-	// Execute the migration SQL
-	err = db.DB.Transaction(func(tx *gorm.DB) error {
-		// Drop the existing unique constraint on namespace
-		if err := tx.Exec("ALTER TABLE vdcs DROP CONSTRAINT IF EXISTS vdcs_namespace_key").Error; err != nil {
-			return fmt.Errorf("failed to drop namespace constraint: %w", err)
-		}
-
-		// Drop the existing index if it exists
-		if err := tx.Exec("DROP INDEX IF EXISTS idx_vdcs_namespace").Error; err != nil {
-			return fmt.Errorf("failed to drop namespace index: %w", err)
-		}
-
-		// Create a partial unique index that only applies to non-deleted records
-		if err := tx.Exec(`
-			CREATE UNIQUE INDEX idx_vdcs_namespace_unique 
-			ON vdcs(namespace) 
-			WHERE deleted_at IS NULL
-		`).Error; err != nil {
-			return fmt.Errorf("failed to create partial unique index: %w", err)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	log.Println("VDC namespace constraint fix applied successfully")
 	return nil
 }
 
