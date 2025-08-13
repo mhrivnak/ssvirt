@@ -36,7 +36,7 @@ type VDC struct {
 	IsEnabled       bool `gorm:"default:true" json:"isEnabled"`
 
 	// Kubernetes integration (hidden from JSON)
-	Namespace string `gorm:"uniqueIndex;size:253" json:"-"` // Kubernetes namespace for this VDC
+	Namespace string `gorm:"size:253" json:"-"` // Kubernetes namespace for this VDC
 
 	// Timestamps (hidden from JSON in VCD format)
 	CreatedAt time.Time      `json:"-"`
