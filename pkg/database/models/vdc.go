@@ -181,6 +181,11 @@ func generateUniqueNamespaceName(tx *gorm.DB, orgName, vdcName string) (string, 
 			trimmedBase = strings.TrimRight(trimmedBase, "-")
 		}
 
+		// Safety check: if trimmedBase is empty after truncation, use a safe fallback
+		if trimmedBase == "" {
+			trimmedBase = "vdc"
+		}
+
 		candidateName := trimmedBase + suffix
 
 		err := tx.Where("namespace = ?", candidateName).First(&existingVDC).Error
