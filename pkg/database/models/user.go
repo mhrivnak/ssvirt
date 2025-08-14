@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -47,6 +48,31 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 	if u.NameInSource == "" {
 		u.NameInSource = u.Username
 	}
+
+	// Normalize organization reference
+	return u.normalizeOrgRef(tx)
+}
+
+// BeforeUpdate ensures organization references are normalized before updates
+func (u *User) BeforeUpdate(tx *gorm.DB) error {
+	return u.normalizeOrgRef(tx)
+}
+
+// normalizeOrgRef performs OrganizationID/OrganizationName population and clearing behavior
+func (u *User) normalizeOrgRef(tx *gorm.DB) error {
+	if u.OrganizationID != "" {
+		// Load organization to populate OrganizationName
+		var org Organization
+		if err := tx.Where("id = ?", u.OrganizationID).First(&org).Error; err != nil {
+			return fmt.Errorf("failed to load organization: %w", err)
+		}
+		u.OrganizationName = org.Name
+	} else {
+		// Clear both OrganizationID and OrganizationName when no organization is specified
+		u.OrganizationID = ""
+		u.OrganizationName = ""
+	}
+
 	return nil
 }
 
