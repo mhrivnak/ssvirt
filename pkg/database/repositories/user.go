@@ -156,3 +156,40 @@ func (r *UserRepository) Count() (int64, error) {
 	err := r.db.Model(&models.User{}).Count(&count).Error
 	return count, err
 }
+
+// AssignRoles assigns roles to a user by role IDs
+func (r *UserRepository) AssignRoles(userID string, roleIDs []string) error {
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	user, err := r.GetByID(userID)
+	if err != nil {
+		return err
+	}
+
+	// Get the roles to assign
+	var roles []models.Role
+	err = r.db.Where("id IN ?", roleIDs).Find(&roles).Error
+	if err != nil {
+		return err
+	}
+
+	// Verify all requested roles were found
+	if len(roles) != len(roleIDs) {
+		return errors.New("one or more roles not found")
+	}
+
+	// Use association to assign roles (this replaces existing roles)
+	return r.db.Model(user).Association("Roles").Replace(&roles)
+}
+
+// ClearRoles removes all role assignments from a user
+func (r *UserRepository) ClearRoles(userID string) error {
+	user, err := r.GetByID(userID)
+	if err != nil {
+		return err
+	}
+
+	return r.db.Model(user).Association("Roles").Clear()
+}

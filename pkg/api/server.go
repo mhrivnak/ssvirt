@@ -84,7 +84,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		templateService: templateService,
 		k8sService:      k8sService,
 		// Initialize CloudAPI handlers
-		userHandlers:        handlers.NewUserHandlers(userRepo, orgRepo),
+		userHandlers:        handlers.NewUserHandlers(userRepo, orgRepo, roleRepo),
 		roleHandlers:        handlers.NewRoleHandlers(roleRepo),
 		orgHandlers:         handlers.NewOrgHandlers(orgRepo),
 		vdcHandlers:         handlers.NewVDCHandlers(vdcRepo, orgRepo, userRepo, k8sService),

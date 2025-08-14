@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,41 +19,45 @@ import (
 type UserHandlers struct {
 	userRepo *repositories.UserRepository
 	orgRepo  *repositories.OrganizationRepository
+	roleRepo *repositories.RoleRepository
 }
 
 // CreateUserRequest represents the request body for creating a user
 type CreateUserRequest struct {
-	Username        string `json:"username" binding:"required"`
-	FullName        string `json:"fullName" binding:"required"`
-	Email           string `json:"email" binding:"required,email"`
-	Password        string `json:"password" binding:"required,min=6"`
-	Description     string `json:"description"`
-	OrganizationID  string `json:"organizationId"`
-	DeployedVmQuota int    `json:"deployedVmQuota"`
-	StoredVmQuota   int    `json:"storedVmQuota"`
-	Enabled         *bool  `json:"enabled"`
-	ProviderType    string `json:"providerType"`
+	Username        string             `json:"username" binding:"required"`
+	FullName        string             `json:"fullName" binding:"required"`
+	Email           string             `json:"email" binding:"required,email"`
+	Password        string             `json:"password" binding:"required,min=6"`
+	Description     string             `json:"description"`
+	OrganizationID  string             `json:"organizationId"`
+	DeployedVmQuota int                `json:"deployedVmQuota"`
+	StoredVmQuota   int                `json:"storedVmQuota"`
+	Enabled         *bool              `json:"enabled"`
+	ProviderType    string             `json:"providerType"`
+	RoleEntityRefs  []models.EntityRef `json:"roleEntityRefs"`
 }
 
 // UpdateUserRequest represents the request body for updating a user
 type UpdateUserRequest struct {
-	Username        string `json:"username"`
-	FullName        string `json:"fullName"`
-	Email           string `json:"email"`
-	Password        string `json:"password,omitempty"`
-	Description     string `json:"description"`
-	OrganizationID  string `json:"organizationId"`
-	DeployedVmQuota *int   `json:"deployedVmQuota"`
-	StoredVmQuota   *int   `json:"storedVmQuota"`
-	Enabled         *bool  `json:"enabled"`
-	ProviderType    string `json:"providerType"`
+	Username        string             `json:"username"`
+	FullName        string             `json:"fullName"`
+	Email           string             `json:"email"`
+	Password        string             `json:"password,omitempty"`
+	Description     string             `json:"description"`
+	OrganizationID  string             `json:"organizationId"`
+	DeployedVmQuota *int               `json:"deployedVmQuota"`
+	StoredVmQuota   *int               `json:"storedVmQuota"`
+	Enabled         *bool              `json:"enabled"`
+	ProviderType    string             `json:"providerType"`
+	RoleEntityRefs  []models.EntityRef `json:"roleEntityRefs"`
 }
 
 // NewUserHandlers creates a new UserHandlers instance
-func NewUserHandlers(userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository) *UserHandlers {
+func NewUserHandlers(userRepo *repositories.UserRepository, orgRepo *repositories.OrganizationRepository, roleRepo *repositories.RoleRepository) *UserHandlers {
 	return &UserHandlers{
 		userRepo: userRepo,
 		orgRepo:  orgRepo,
+		roleRepo: roleRepo,
 	}
 }
 
@@ -206,6 +211,17 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 		return
 	}
 
+	// Validate and extract role IDs if provided
+	var roleIDs []string
+	if len(req.RoleEntityRefs) > 0 {
+		var err error
+		roleIDs, err = h.validateAndExtractRoleIDs(req.RoleEntityRefs)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role assignment: " + err.Error()})
+			return
+		}
+	}
+
 	// Create user in database
 	if err := h.userRepo.Create(user); err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
@@ -214,6 +230,14 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
+	}
+
+	// Assign roles if provided
+	if len(roleIDs) > 0 {
+		if err := h.userRepo.AssignRoles(user.ID, roleIDs); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign roles to user"})
+			return
+		}
 	}
 
 	// Get created user with entity references
@@ -345,6 +369,21 @@ func (h *UserHandlers) UpdateUser(c *gin.Context) {
 		}
 	}
 
+	// Validate and process role assignments if provided
+	var roleIDs []string
+	var shouldUpdateRoles bool
+	if req.RoleEntityRefs != nil { // Check if the field was provided in the request
+		shouldUpdateRoles = true
+		if len(req.RoleEntityRefs) > 0 {
+			var err error
+			roleIDs, err = h.validateAndExtractRoleIDs(req.RoleEntityRefs)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role assignment: " + err.Error()})
+				return
+			}
+		}
+	}
+
 	// Update user in database
 	if err := h.userRepo.Update(user); err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
@@ -353,6 +392,22 @@ func (h *UserHandlers) UpdateUser(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return
+	}
+
+	// Update role assignments if provided
+	if shouldUpdateRoles {
+		if len(roleIDs) > 0 {
+			if err := h.userRepo.AssignRoles(user.ID, roleIDs); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign roles to user"})
+				return
+			}
+		} else {
+			// Clear all roles if empty array was provided
+			if err := h.userRepo.ClearRoles(user.ID); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear user roles"})
+				return
+			}
+		}
 	}
 
 	// Get updated user with entity references
@@ -411,4 +466,41 @@ func (h *UserHandlers) DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusNoContent, nil)
+}
+
+// validateAndExtractRoleIDs validates role entity references and extracts role IDs
+func (h *UserHandlers) validateAndExtractRoleIDs(roleEntityRefs []models.EntityRef) ([]string, error) {
+	if len(roleEntityRefs) == 0 {
+		return nil, nil
+	}
+
+	var roleIDs []string
+	for _, roleRef := range roleEntityRefs {
+		// Validate role ID format
+		if roleRef.ID == "" {
+			return nil, errors.New("role ID cannot be empty")
+		}
+
+		if _, err := models.ParseURN(roleRef.ID); err != nil {
+			return nil, fmt.Errorf("invalid role ID format: %s", roleRef.ID)
+		}
+
+		urnType, err := models.GetURNType(roleRef.ID)
+		if err != nil || urnType != "role" {
+			return nil, fmt.Errorf("invalid role ID: expected role URN, got %s", roleRef.ID)
+		}
+
+		// Verify role exists
+		_, err = h.roleRepo.GetByID(roleRef.ID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("role not found: %s", roleRef.ID)
+			}
+			return nil, fmt.Errorf("failed to validate role: %s", roleRef.ID)
+		}
+
+		roleIDs = append(roleIDs, roleRef.ID)
+	}
+
+	return roleIDs, nil
 }
