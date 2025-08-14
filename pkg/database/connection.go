@@ -174,7 +174,7 @@ func (db *DB) createInitialAdminIdempotent(username, password, email, fullName s
 		}
 
 		// Set organization for the user and populate OrganizationName
-		user.OrganizationID = providerOrg.ID
+		user.OrganizationID = &providerOrg.ID
 		user.OrganizationName = providerOrg.Name
 
 		// Create the user with ON CONFLICT DO NOTHING behavior for username uniqueness

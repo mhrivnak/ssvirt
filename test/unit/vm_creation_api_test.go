@@ -33,7 +33,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 		Email:          "testuser@example.com",
 		FullName:       "Test User",
 		Enabled:        true,
-		OrganizationID: org.ID,
+		OrganizationID: stringPtr(org.ID),
 	}
 	require.NoError(t, user.SetPassword("password123"))
 	require.NoError(t, db.DB.Create(user).Error)
