@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -217,7 +218,8 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 		var err error
 		roleIDs, err = h.validateAndExtractRoleIDs(req.RoleEntityRefs)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role assignment: " + err.Error()})
+			log.Printf("Role validation error in CreateUser: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			return
 		}
 	}
@@ -375,7 +377,8 @@ func (h *UserHandlers) UpdateUser(c *gin.Context) {
 			var err error
 			roleIDs, err = h.validateAndExtractRoleIDs(req.RoleEntityRefs)
 			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role assignment: " + err.Error()})
+				log.Printf("Role validation error in UpdateUser: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 				return
 			}
 		}
