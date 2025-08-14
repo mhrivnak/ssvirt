@@ -155,6 +155,31 @@ func (r *RoleRepository) CreateDefaultRoles() error {
 	})
 }
 
+// ExistsByIDs checks which of the provided role IDs exist in the database
+// Returns a map where the key is the role ID and the value indicates if it exists
+func (r *RoleRepository) ExistsByIDs(roleIDs []string) (map[string]bool, error) {
+	if len(roleIDs) == 0 {
+		return make(map[string]bool), nil
+	}
+
+	var roles []models.Role
+	err := r.db.Select("id").Where("id IN ?", roleIDs).Find(&roles).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Build result map
+	result := make(map[string]bool)
+	for _, id := range roleIDs {
+		result[id] = false
+	}
+	for _, role := range roles {
+		result[role.ID] = true
+	}
+
+	return result, nil
+}
+
 // Count returns the total number of roles
 func (r *RoleRepository) Count() (int64, error) {
 	var count int64

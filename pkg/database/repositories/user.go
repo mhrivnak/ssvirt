@@ -38,6 +38,18 @@ func (r *UserRepository) AssignRolesTx(tx *gorm.DB, userID string, roleIDs []str
 		return nil
 	}
 
+	// Deduplicate role IDs to avoid false "roles not found" errors
+	uniqueRoleIDs := make(map[string]bool)
+	for _, roleID := range roleIDs {
+		uniqueRoleIDs[roleID] = true
+	}
+
+	// Convert back to slice
+	deduplicatedRoleIDs := make([]string, 0, len(uniqueRoleIDs))
+	for roleID := range uniqueRoleIDs {
+		deduplicatedRoleIDs = append(deduplicatedRoleIDs, roleID)
+	}
+
 	// Get user within transaction
 	user, err := r.getByIDTx(tx, userID)
 	if err != nil {
@@ -46,13 +58,13 @@ func (r *UserRepository) AssignRolesTx(tx *gorm.DB, userID string, roleIDs []str
 
 	// Get the roles to assign within transaction
 	var roles []models.Role
-	err = tx.Where("id IN ?", roleIDs).Find(&roles).Error
+	err = tx.Where("id IN ?", deduplicatedRoleIDs).Find(&roles).Error
 	if err != nil {
 		return err
 	}
 
 	// Verify all requested roles were found
-	if len(roles) != len(roleIDs) {
+	if len(roles) != len(deduplicatedRoleIDs) {
 		return errors.New("one or more roles not found")
 	}
 
@@ -230,26 +242,7 @@ func (r *UserRepository) AssignRoles(userID string, roleIDs []string) error {
 
 	// Use transaction to ensure atomicity
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		// Get user within transaction
-		user, err := r.getByIDTx(tx, userID)
-		if err != nil {
-			return err
-		}
-
-		// Get the roles to assign within transaction
-		var roles []models.Role
-		err = tx.Where("id IN ?", roleIDs).Find(&roles).Error
-		if err != nil {
-			return err
-		}
-
-		// Verify all requested roles were found
-		if len(roles) != len(roleIDs) {
-			return errors.New("one or more roles not found")
-		}
-
-		// Use association to assign roles (this replaces existing roles)
-		return tx.Model(user).Association("Roles").Replace(&roles)
+		return r.AssignRolesTx(tx, userID, roleIDs)
 	})
 }
 

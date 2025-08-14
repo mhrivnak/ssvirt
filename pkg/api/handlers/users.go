@@ -471,32 +471,47 @@ func (h *UserHandlers) validateAndExtractRoleIDs(roleEntityRefs []models.EntityR
 		return nil, nil
 	}
 
-	var roleIDs []string
+	// Build set of unique role IDs while validating format
+	uniqueRoleIDs := make(map[string]bool)
 	for _, roleRef := range roleEntityRefs {
-		// Validate role ID format
+		// Skip empty IDs
 		if roleRef.ID == "" {
-			return nil, errors.New("role ID cannot be empty")
+			continue
 		}
 
+		// Validate URN format
 		if _, err := models.ParseURN(roleRef.ID); err != nil {
 			return nil, fmt.Errorf("invalid role ID format: %s", roleRef.ID)
 		}
 
+		// Validate URN type
 		urnType, err := models.GetURNType(roleRef.ID)
 		if err != nil || urnType != "role" {
 			return nil, fmt.Errorf("invalid role ID: expected role URN, got %s", roleRef.ID)
 		}
 
-		// Verify role exists
-		_, err = h.roleRepo.GetByID(roleRef.ID)
+		uniqueRoleIDs[roleRef.ID] = true
+	}
+
+	// Convert to slice for batch existence check
+	roleIDs := make([]string, 0, len(uniqueRoleIDs))
+	for roleID := range uniqueRoleIDs {
+		roleIDs = append(roleIDs, roleID)
+	}
+
+	// Batch existence check
+	if len(roleIDs) > 0 {
+		existenceMap, err := h.roleRepo.ExistsByIDs(roleIDs)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, fmt.Errorf("role not found: %s", roleRef.ID)
-			}
-			return nil, fmt.Errorf("failed to validate role: %s", roleRef.ID)
+			return nil, fmt.Errorf("failed to validate roles: %v", err)
 		}
 
-		roleIDs = append(roleIDs, roleRef.ID)
+		// Check if all roles exist
+		for _, roleID := range roleIDs {
+			if !existenceMap[roleID] {
+				return nil, fmt.Errorf("role not found: %s", roleID)
+			}
+		}
 	}
 
 	return roleIDs, nil
