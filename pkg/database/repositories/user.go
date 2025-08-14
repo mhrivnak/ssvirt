@@ -24,9 +24,74 @@ func (r *UserRepository) Create(user *models.User) error {
 	return r.db.Create(user).Error
 }
 
+// CreateTx creates a user within a transaction
+func (r *UserRepository) CreateTx(tx *gorm.DB, user *models.User) error {
+	if user == nil {
+		return errors.New("user cannot be nil")
+	}
+	return tx.Create(user).Error
+}
+
+// AssignRolesTx assigns roles to a user by role IDs within a transaction
+func (r *UserRepository) AssignRolesTx(tx *gorm.DB, userID string, roleIDs []string) error {
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	// Get user within transaction
+	user, err := r.getByIDTx(tx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Get the roles to assign within transaction
+	var roles []models.Role
+	err = tx.Where("id IN ?", roleIDs).Find(&roles).Error
+	if err != nil {
+		return err
+	}
+
+	// Verify all requested roles were found
+	if len(roles) != len(roleIDs) {
+		return errors.New("one or more roles not found")
+	}
+
+	// Use association to assign roles (this replaces existing roles)
+	return tx.Model(user).Association("Roles").Replace(&roles)
+}
+
+// CreateUserWithRoles creates a user and assigns roles in a single transaction
+func (r *UserRepository) CreateUserWithRoles(user *models.User, roleIDs []string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Create user within transaction
+		if err := r.CreateTx(tx, user); err != nil {
+			return err
+		}
+
+		// Assign roles if provided
+		if len(roleIDs) > 0 {
+			if err := r.AssignRolesTx(tx, user.ID, roleIDs); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
 func (r *UserRepository) GetByID(id string) (*models.User, error) {
 	var user models.User
 	err := r.db.Where("id = ?", id).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// getByIDTx gets a user by ID within a transaction
+func (r *UserRepository) getByIDTx(tx *gorm.DB, id string) (*models.User, error) {
+	var user models.User
+	err := tx.Where("id = ?", id).First(&user).Error
 	if err != nil {
 		return nil, err
 	}
@@ -163,33 +228,41 @@ func (r *UserRepository) AssignRoles(userID string, roleIDs []string) error {
 		return nil
 	}
 
-	user, err := r.GetByID(userID)
-	if err != nil {
-		return err
-	}
+	// Use transaction to ensure atomicity
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Get user within transaction
+		user, err := r.getByIDTx(tx, userID)
+		if err != nil {
+			return err
+		}
 
-	// Get the roles to assign
-	var roles []models.Role
-	err = r.db.Where("id IN ?", roleIDs).Find(&roles).Error
-	if err != nil {
-		return err
-	}
+		// Get the roles to assign within transaction
+		var roles []models.Role
+		err = tx.Where("id IN ?", roleIDs).Find(&roles).Error
+		if err != nil {
+			return err
+		}
 
-	// Verify all requested roles were found
-	if len(roles) != len(roleIDs) {
-		return errors.New("one or more roles not found")
-	}
+		// Verify all requested roles were found
+		if len(roles) != len(roleIDs) {
+			return errors.New("one or more roles not found")
+		}
 
-	// Use association to assign roles (this replaces existing roles)
-	return r.db.Model(user).Association("Roles").Replace(&roles)
+		// Use association to assign roles (this replaces existing roles)
+		return tx.Model(user).Association("Roles").Replace(&roles)
+	})
 }
 
 // ClearRoles removes all role assignments from a user
 func (r *UserRepository) ClearRoles(userID string) error {
-	user, err := r.GetByID(userID)
-	if err != nil {
-		return err
-	}
+	// Use transaction to ensure atomicity
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Get user within transaction
+		user, err := r.getByIDTx(tx, userID)
+		if err != nil {
+			return err
+		}
 
-	return r.db.Model(user).Association("Roles").Clear()
+		return tx.Model(user).Association("Roles").Clear()
+	})
 }

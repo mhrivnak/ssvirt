@@ -222,22 +222,19 @@ func (h *UserHandlers) CreateUser(c *gin.Context) {
 		}
 	}
 
-	// Create user in database
-	if err := h.userRepo.Create(user); err != nil {
+	// Create user and assign roles in a single transaction
+	err := h.userRepo.CreateUserWithRoles(user, roleIDs)
+	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			c.JSON(http.StatusConflict, gin.H{"error": "User with username or email already exists"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-		return
-	}
-
-	// Assign roles if provided
-	if len(roleIDs) > 0 {
-		if err := h.userRepo.AssignRoles(user.ID, roleIDs); err != nil {
+		if strings.Contains(err.Error(), "role") {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign roles to user"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
 	}
 
 	// Get created user with entity references
