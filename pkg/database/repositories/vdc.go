@@ -190,11 +190,33 @@ func (r *VDCRepository) DeleteWithValidation(id string) error {
 func (r *VDCRepository) ListAccessibleVDCs(ctx context.Context, userID string, limit, offset int) ([]models.VDC, error) {
 	var vdcs []models.VDC
 
-	// First get the user's organization ID(s)
-	// For now, users have one organization, but this approach can be extended for multi-org users
+	// Check if user is a system administrator - they have access to all VDCs
+	var isSystemAdmin bool
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT EXISTS(
+			SELECT 1 FROM users u
+			JOIN user_roles ur ON u.id = ur.user_id
+			JOIN roles r ON ur.role_id = r.id
+			WHERE u.id = ? AND r.name = ? AND u.deleted_at IS NULL AND r.deleted_at IS NULL
+		)`, userID, models.RoleSystemAdmin).Scan(&isSystemAdmin).Error
+	if err != nil {
+		return nil, err
+	}
+
+	if isSystemAdmin {
+		// System administrators can access all VDCs
+		err := r.db.WithContext(ctx).
+			Limit(limit).
+			Offset(offset).
+			Order("created_at DESC, id DESC").
+			Find(&vdcs).Error
+		return vdcs, err
+	}
+
+	// For non-system administrators, check organization membership
 	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.WithContext(ctx).Where("organization_id IN (?)", subquery).
+	err = r.db.WithContext(ctx).Where("organization_id IN (?)", subquery).
 		Limit(limit).
 		Offset(offset).
 		Order("created_at DESC, id DESC").
@@ -207,10 +229,29 @@ func (r *VDCRepository) ListAccessibleVDCs(ctx context.Context, userID string, l
 func (r *VDCRepository) CountAccessibleVDCs(ctx context.Context, userID string) (int64, error) {
 	var count int64
 
-	// First get the user's organization ID(s)
+	// Check if user is a system administrator - they have access to all VDCs
+	var isSystemAdmin bool
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT EXISTS(
+			SELECT 1 FROM users u
+			JOIN user_roles ur ON u.id = ur.user_id
+			JOIN roles r ON ur.role_id = r.id
+			WHERE u.id = ? AND r.name = ? AND u.deleted_at IS NULL AND r.deleted_at IS NULL
+		)`, userID, models.RoleSystemAdmin).Scan(&isSystemAdmin).Error
+	if err != nil {
+		return 0, err
+	}
+
+	if isSystemAdmin {
+		// System administrators can access all VDCs
+		err := r.db.WithContext(ctx).Model(&models.VDC{}).Count(&count).Error
+		return count, err
+	}
+
+	// For non-system administrators, check organization membership
 	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.WithContext(ctx).Model(&models.VDC{}).Where("organization_id IN (?)", subquery).Count(&count).Error
+	err = r.db.WithContext(ctx).Model(&models.VDC{}).Where("organization_id IN (?)", subquery).Count(&count).Error
 	return count, err
 }
 
@@ -218,10 +259,29 @@ func (r *VDCRepository) CountAccessibleVDCs(ctx context.Context, userID string) 
 func (r *VDCRepository) GetAccessibleVDC(ctx context.Context, userID, vdcID string) (*models.VDC, error) {
 	var vdc models.VDC
 
-	// First get the user's organization ID(s)
+	// Check if user is a system administrator - they have access to all VDCs
+	var isSystemAdmin bool
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT EXISTS(
+			SELECT 1 FROM users u
+			JOIN user_roles ur ON u.id = ur.user_id
+			JOIN roles r ON ur.role_id = r.id
+			WHERE u.id = ? AND r.name = ? AND u.deleted_at IS NULL AND r.deleted_at IS NULL
+		)`, userID, models.RoleSystemAdmin).Scan(&isSystemAdmin).Error
+	if err != nil {
+		return nil, err
+	}
+
+	if isSystemAdmin {
+		// System administrators can access any VDC
+		err := r.db.WithContext(ctx).Where("id = ?", vdcID).First(&vdc).Error
+		return &vdc, err
+	}
+
+	// For non-system administrators, check organization membership
 	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
-	err := r.db.WithContext(ctx).Where("id = ? AND organization_id IN (?)", vdcID, subquery).First(&vdc).Error
+	err = r.db.WithContext(ctx).Where("id = ? AND organization_id IN (?)", vdcID, subquery).First(&vdc).Error
 	if err != nil {
 		return nil, err
 	}
