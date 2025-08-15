@@ -156,12 +156,28 @@ func (r *CatalogRepository) DeleteWithValidation(urn string) error {
 
 // ValidateUserCatalogAccess checks if a user has access to any catalogs for template instantiation
 func (r *CatalogRepository) ValidateUserCatalogAccess(ctx context.Context, userID string) error {
+	// First, check if the user is a System Administrator - they have access to all catalogs
+	var systemAdminCount int64
+	err := r.db.WithContext(ctx).Table("user_roles").
+		Joins("JOIN roles ON user_roles.role_id = roles.id").
+		Where("user_roles.user_id = ? AND roles.name = ?", userID, models.RoleSystemAdmin).
+		Count(&systemAdminCount).Error
+	if err != nil {
+		return err
+	}
+
+	// System Administrators have access to all catalogs
+	if systemAdminCount > 0 {
+		return nil
+	}
+
+	// For non-System Administrators, check organization and published catalog access
 	// Get the user's organization ID using a subquery approach similar to VDC access
 	subquery := r.db.WithContext(ctx).Model(&models.User{}).Select("organization_id").Where("id = ? AND organization_id IS NOT NULL", userID)
 
 	// Check if user has access to any catalogs in their organization or published catalogs
 	var catalogCount int64
-	err := r.db.WithContext(ctx).
+	err = r.db.WithContext(ctx).
 		Model(&models.Catalog{}).
 		Where("organization_id IN (?) OR is_published = true", subquery).
 		Count(&catalogCount).Error

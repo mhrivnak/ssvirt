@@ -22,6 +22,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -138,12 +139,34 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		return
 	}
 
-	// Validate catalog item URN format using proper URN validation
+	// Validate catalog item URN format - catalog items have special format rules
 	if !strings.HasPrefix(req.CatalogItem.ID, models.URNPrefixCatalogItem) {
 		c.JSON(http.StatusBadRequest, NewAPIError(
 			http.StatusBadRequest,
 			"Bad Request",
-			"Invalid catalog item ID format",
+			"Invalid catalog item ID format: must start with urn:vcloud:catalogitem:",
+		))
+		return
+	}
+
+	// Validate catalog item URN has some content after the prefix
+	catalogItemSuffix := strings.TrimPrefix(req.CatalogItem.ID, models.URNPrefixCatalogItem)
+	if catalogItemSuffix == "" {
+		c.JSON(http.StatusBadRequest, NewAPIError(
+			http.StatusBadRequest,
+			"Bad Request",
+			"Invalid catalog item URN: missing item identifier",
+		))
+		return
+	}
+
+	// Basic validation: catalog item URN should not contain invalid characters
+	// Allow letters, numbers, hyphens, underscores, and colons (for 5-part format)
+	if !catalogItemURNRegex.MatchString(catalogItemSuffix) {
+		c.JSON(http.StatusBadRequest, NewAPIError(
+			http.StatusBadRequest,
+			"Bad Request",
+			"Invalid catalog item URN format",
 		))
 		return
 	}
@@ -206,11 +229,20 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 	}
 
 	// Create vApp
+	// Note: TemplateID is not set because catalog items are virtual entities
+	// that represent OpenShift templates, not database VAppTemplate records.
+	// The catalog item ID is stored in the description for reference.
+	description := req.Description
+	if description != "" {
+		description += "\n"
+	}
+	description += fmt.Sprintf("CatalogItem: %s", req.CatalogItem.ID)
+
 	vapp := &models.VApp{
 		Name:        req.Name,
-		Description: req.Description,
+		Description: description,
 		VDCID:       vdcID,
-		TemplateID:  &req.CatalogItem.ID,
+		TemplateID:  nil,
 		Status:      "INSTANTIATING",
 	}
 
@@ -251,6 +283,22 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		if colonIndex := strings.LastIndex(catalogItemSuffix, ":"); colonIndex != -1 {
 			// 5-part format: urn:vcloud:catalogitem:<catalog-id>:<item-name>
 			catalogUUID := catalogItemSuffix[:colonIndex]
+
+			// Validate that the catalog UUID is properly formatted
+			if _, err := models.ParseURN(models.URNPrefixCatalog + catalogUUID); err != nil {
+				// Cleanup vApp and return error
+				if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+					// Log cleanup error but don't fail the request
+					_ = cleanupErr
+				}
+				c.JSON(http.StatusBadRequest, NewAPIError(
+					http.StatusBadRequest,
+					"Bad Request",
+					"Invalid catalog UUID in catalog item URN",
+				))
+				return
+			}
+
 			catalogID = models.URNPrefixCatalog + catalogUUID
 			itemName = catalogItemSuffix[colonIndex+1:]
 
@@ -258,6 +306,11 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 			var err error
 			itemName, err = url.QueryUnescape(itemName)
 			if err != nil {
+				// Cleanup vApp and return error
+				if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+					// Log cleanup error but don't fail the request
+					_ = cleanupErr
+				}
 				c.JSON(http.StatusBadRequest, NewAPIError(
 					http.StatusBadRequest,
 					"Bad Request",
@@ -267,25 +320,48 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 			}
 		} else {
 			// 4-part format: urn:vcloud:catalogitem:<item-name>
-			// TODO: This is legacy format support - catalog ID is not available
-			catalogID = "" // Will need to be handled by the repository
+			// This is legacy format support - catalog ID is not available
+			// For 4-part URNs, we skip catalog item validation since we don't have catalog information
+			catalogID = ""
 			itemName = catalogItemSuffix
 		}
 
-		catalogItem, err := h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemName)
-		if err != nil {
-			// Cleanup vApp and return error
-			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
-				// Log cleanup error but don't fail the request
-				_ = cleanupErr
+		// Only validate catalog item for 5-part URNs (when we have a catalog ID)
+		var catalogItem *models.CatalogItem
+		if catalogID != "" {
+			var err error
+			catalogItem, err = h.catalogItemRepo.GetByID(c.Request.Context(), catalogID, itemName)
+			if err != nil {
+				// Cleanup vApp and return error
+				if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+					// Log cleanup error but don't fail the request
+					_ = cleanupErr
+				}
+
+				// Check if this is a "not found" error vs validation error vs other types of errors
+				if errors.Is(err, gorm.ErrRecordNotFound) || strings.Contains(err.Error(), "not found") {
+					c.JSON(http.StatusNotFound, NewAPIError(
+						http.StatusNotFound,
+						"Not Found",
+						"Catalog item not found",
+					))
+				} else if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "malformed") ||
+					strings.Contains(err.Error(), "bad format") || strings.Contains(err.Error(), "parse") {
+					// This covers cases where the catalog item ID format is invalid and causes parsing errors
+					c.JSON(http.StatusBadRequest, NewAPIError(
+						http.StatusBadRequest,
+						"Bad Request",
+						"Invalid catalog item URN format",
+					))
+				} else {
+					c.JSON(http.StatusInternalServerError, NewAPIError(
+						http.StatusInternalServerError,
+						"Internal Server Error",
+						"Failed to retrieve catalog item details",
+					))
+				}
+				return
 			}
-			c.JSON(http.StatusInternalServerError, NewAPIError(
-				http.StatusInternalServerError,
-				"Internal Server Error",
-				"Failed to retrieve catalog item details",
-				err.Error(),
-			))
-			return
 		}
 
 		// Get VDC to determine namespace
@@ -305,11 +381,33 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 			return
 		}
 
+		// Check if VDC has a valid namespace
+		if vdc.Namespace == "" {
+			// Cleanup vApp and return error
+			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
+				// Log cleanup error but don't fail the request
+				_ = cleanupErr
+			}
+			c.JSON(http.StatusInternalServerError, NewAPIError(
+				http.StatusInternalServerError,
+				"Internal Server Error",
+				"VDC namespace is not configured",
+			))
+			return
+		}
+
 		// Create template instance request
+		// For 4-part URNs, catalogItem will be nil, so use the name from the request
+		// For 5-part URNs, use the catalogItem.Name (which should match the request name)
+		templateName := req.CatalogItem.Name
+		if catalogItem != nil {
+			templateName = catalogItem.Name
+		}
+
 		templateInstanceReq := &services.TemplateInstanceRequest{
 			Name:         req.Name,
-			Namespace:    fmt.Sprintf("vdc-%s", vdc.ID[strings.LastIndex(vdc.ID, ":")+1:]), // Extract ID from URN
-			TemplateName: catalogItem.Name,
+			Namespace:    vdc.Namespace, // Use the VDC's actual Kubernetes namespace
+			TemplateName: templateName,
 			Parameters:   []services.TemplateInstanceParam{}, // Empty parameters for now
 		}
 
@@ -386,6 +484,18 @@ func (h *VMCreationHandlers) toVAppResponse(vapp models.VApp) VAppResponse {
 	templateID := ""
 	if vapp.TemplateID != nil {
 		templateID = *vapp.TemplateID
+	} else {
+		// Extract catalog item ID from description if present
+		// Format: "CatalogItem: urn:vcloud:catalogitem:..."
+		if strings.Contains(vapp.Description, "CatalogItem: ") {
+			start := strings.Index(vapp.Description, "CatalogItem: ") + len("CatalogItem: ")
+			end := strings.Index(vapp.Description[start:], "\n")
+			if end == -1 {
+				templateID = vapp.Description[start:]
+			} else {
+				templateID = vapp.Description[start : start+end]
+			}
+		}
 	}
 
 	return VAppResponse{

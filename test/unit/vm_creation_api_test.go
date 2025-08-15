@@ -94,7 +94,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, "test-vapp", response.Name)
-			assert.Equal(t, "Test vApp from template", response.Description)
+			assert.Equal(t, "Test vApp from template\nCatalogItem: urn:vcloud:catalogitem:template-123", response.Description)
 			assert.Equal(t, "RESOLVED", response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
 			assert.Equal(t, "urn:vcloud:catalogitem:template-123", response.TemplateID)
@@ -231,6 +231,156 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 			assert.Contains(t, response["message"], "Invalid request format")
+		})
+
+		t.Run("Instantiate template with invalid catalog item URN returns 400", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "urn:vcloud:catalogitem:", // Missing item identifier
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "missing item identifier")
+		})
+
+		t.Run("Instantiate template with wrong URN type returns 400", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "urn:vcloud:user:template-123", // Wrong URN type
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "must start with urn:vcloud:catalogitem:")
+		})
+
+		t.Run("Instantiate template with catalog item URN containing invalid characters returns 400", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp",
+				CatalogItem: handlers.CatalogItem{
+					ID: "urn:vcloud:catalogitem:invalid@#$%characters", // Invalid characters
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Invalid catalog item URN format")
+		})
+
+		t.Run("Instantiate template with invalid catalog item format returns 400", func(t *testing.T) {
+			requestData := handlers.InstantiateTemplateRequest{
+				Name: "test-vapp-invalid-format",
+				CatalogItem: handlers.CatalogItem{
+					ID: "urn:vcloud:catalogitem:invalid@format#with$special%chars", // Invalid characters in catalog item
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+			assert.Contains(t, response["message"], "Invalid catalog item URN format")
+		})
+
+		t.Run("System Administrator can instantiate template with valid data returns 201", func(t *testing.T) {
+			// Create test user with System Administrator role
+			adminUser := &models.User{
+				Username:       "sysadmin",
+				Email:          "sysadmin@example.com",
+				FullName:       "System Administrator",
+				Enabled:        true,
+				OrganizationID: stringPtr(org.ID),
+			}
+			require.NoError(t, adminUser.SetPassword("password123"))
+			require.NoError(t, db.DB.Create(adminUser).Error)
+
+			// Create and assign System Administrator role
+			systemAdminRole := &models.Role{
+				Name:        models.RoleSystemAdmin,
+				Description: "System Administrator role",
+			}
+			require.NoError(t, db.DB.Create(systemAdminRole).Error)
+
+			// Assign System Administrator role to admin user
+			err := db.DB.Exec("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)", adminUser.ID, systemAdminRole.ID).Error
+			require.NoError(t, err)
+
+			// Generate token for system admin
+			adminToken, err := jwtManager.GenerateWithRole(adminUser.ID, adminUser.Username, org.ID, models.RoleSystemAdmin)
+			require.NoError(t, err)
+
+			requestData := handlers.InstantiateTemplateRequest{
+				Name:        "sysadmin-test-vapp",
+				Description: "Test vApp from template by System Admin",
+				CatalogItem: handlers.CatalogItem{
+					ID:   "urn:vcloud:catalogitem:admin-template-123",
+					Name: "Admin Ubuntu Template",
+				},
+			}
+
+			jsonData, _ := json.Marshal(requestData)
+			req, _ := http.NewRequest("POST", "/cloudapi/1.0.0/vdcs/"+vdc.ID+"/actions/instantiateTemplate", bytes.NewBuffer(jsonData))
+			req.Header.Set("Authorization", "Bearer "+adminToken)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusCreated, w.Code)
+
+			var response handlers.VAppResponse
+			err = json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			assert.Equal(t, "sysadmin-test-vapp", response.Name)
+			assert.Equal(t, "Test vApp from template by System Admin\nCatalogItem: urn:vcloud:catalogitem:admin-template-123", response.Description)
+			assert.Equal(t, "RESOLVED", response.Status)
+			assert.Equal(t, vdc.ID, response.VDCID)
+			assert.Equal(t, "urn:vcloud:catalogitem:admin-template-123", response.TemplateID)
+			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
+			assert.Contains(t, response.Href, "/cloudapi/1.0.0/vapps/")
 		})
 	})
 }

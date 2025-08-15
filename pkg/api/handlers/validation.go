@@ -20,4 +20,9 @@ var (
 	// - Must start and end with alphanumeric characters
 	// - Must be 1-63 characters long
 	dns1123LabelRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$`)
+
+	// catalogItemURNRegex validates catalog item URN suffix format.
+	// Allows alphanumeric characters, hyphens, underscores, and colons.
+	// Supports both legacy 4-part format (item-name) and 5-part format (catalog-id:item-name)
+	catalogItemURNRegex = regexp.MustCompile(`^[a-zA-Z0-9\-_:]+$`)
 )

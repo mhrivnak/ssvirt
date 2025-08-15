@@ -70,6 +70,10 @@ rules:
 - apiGroups: ["template.openshift.io"]
   resources: ["templateinstances"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Template configurations for VM creation
+- apiGroups: ["template.openshift.io"]
+  resources: ["templateconfigs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
