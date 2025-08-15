@@ -209,3 +209,73 @@ commonLabels: {}
 # Additional annotations to add to all resources
 commonAnnotations: {}
 
+# VM Controller configuration - for VM status synchronization
+vmController:
+  # Enable VM controller deployment
+  enabled: true
+  
+  # Singleton deployment - DO NOT CHANGE
+  replicaCount: 1
+  
+  # Image configuration (same as main API server)
+  # Uses same image but different binary: ssvirt-vm-controller
+  
+  # Resource limits for controller
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Leader election configuration (ensures singleton operation)
+  leaderElection: true
+  
+  # Metrics and health probe addresses
+  metricsAddr: ":8080"
+  probeAddr: ":8081"
+  metricsPort: 8080
+  probePort: 8081
+  
+  # Enable pprof for debugging (disable in production)
+  enablePprof: false
+  
+  # Service configuration for metrics
+  service:
+    type: ClusterIP
+    metricsPort: 8080
+    healthPort: 8081
+    annotations: {}
+  
+  # Pod configuration
+  podAnnotations: {}
+  podSecurityContext:
+    runAsNonRoot: true
+  
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+  
+  # Environment variables
+  env: []
+  
+  # Node selector, affinity, and tolerations
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  # Enable anti-affinity to prevent multiple controllers on same node
+  enableAntiAffinity: true
+  
+  # Additional volumes and volume mounts
+  volumes: []
+  volumeMounts: []
+  
+  # Deployment annotations
+  annotations: {}
+

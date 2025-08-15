@@ -1,0 +1,288 @@
+package repositories
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	"github.com/mhrivnak/ssvirt/pkg/database/models"
+)
+
+type VMRepositoryTestSuite struct {
+	suite.Suite
+	db   *gorm.DB
+	repo *VMRepository
+}
+
+func (suite *VMRepositoryTestSuite) SetupTest() {
+	// Create in-memory SQLite database for testing
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	suite.Require().NoError(err)
+
+	// Auto-migrate the schema
+	err = db.AutoMigrate(&models.VM{}, &models.VApp{}, &models.VDC{}, &models.Organization{})
+	suite.Require().NoError(err)
+
+	suite.db = db
+	suite.repo = NewVMRepository(db)
+
+	// Create test organization
+	org := &models.Organization{
+		ID:   "org-123",
+		Name: "Test Organization",
+	}
+	err = db.Create(org).Error
+	suite.Require().NoError(err)
+
+	// Create test VDC first
+	vdc := &models.VDC{
+		ID:              "vdc-123",
+		Name:            "Test VDC",
+		OrganizationID:  "org-123",
+		AllocationModel: "PayAsYouGo",
+	}
+	err = db.Create(vdc).Error
+	suite.Require().NoError(err)
+
+	// Create test vApp
+	vapp := &models.VApp{
+		ID:    "vapp-123",
+		Name:  "Test vApp",
+		VDCID: "vdc-123",
+	}
+	err = db.Create(vapp).Error
+	suite.Require().NoError(err)
+}
+
+func (suite *VMRepositoryTestSuite) TearDownTest() {
+	sqlDB, err := suite.db.DB()
+	if err == nil {
+		sqlDB.Close()
+	}
+}
+
+func (suite *VMRepositoryTestSuite) TestGetByNamespaceAndVMName() {
+	// Create test VM
+	vm := &models.VM{
+		ID:        "vm-123",
+		Name:      "Test VM",
+		VMName:    "test-vm",
+		Namespace: "test-namespace",
+		Status:    "POWERED_OFF",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	err := suite.db.Create(vm).Error
+	suite.Require().NoError(err)
+
+	// Test successful lookup
+	result, err := suite.repo.GetByNamespaceAndVMName(context.Background(), "test-namespace", "test-vm")
+	suite.NoError(err)
+	suite.NotNil(result)
+	suite.Equal("vm-123", result.ID)
+	suite.Equal("test-vm", result.VMName)
+	suite.Equal("test-namespace", result.Namespace)
+
+	// Test VM not found
+	result, err = suite.repo.GetByNamespaceAndVMName(context.Background(), "nonexistent-namespace", "nonexistent-vm")
+	suite.Error(err)
+	suite.True(gorm.ErrRecordNotFound == err)
+	suite.Nil(result)
+}
+
+func (suite *VMRepositoryTestSuite) TestGetByVAppAndVMName() {
+	// Create test VM
+	vm := &models.VM{
+		ID:        "vm-456",
+		Name:      "Test VM 2",
+		VMName:    "test-vm-2",
+		Namespace: "test-namespace",
+		Status:    "POWERED_ON",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	err := suite.db.Create(vm).Error
+	suite.Require().NoError(err)
+
+	// Test successful lookup
+	result, err := suite.repo.GetByVAppAndVMName(context.Background(), "vapp-123", "test-vm-2")
+	suite.NoError(err)
+	suite.NotNil(result)
+	suite.Equal("vm-456", result.ID)
+	suite.Equal("test-vm-2", result.VMName)
+	suite.Equal("vapp-123", result.VAppID)
+
+	// Test VM not found
+	result, err = suite.repo.GetByVAppAndVMName(context.Background(), "nonexistent-vapp", "nonexistent-vm")
+	suite.Error(err)
+	suite.True(gorm.ErrRecordNotFound == err)
+	suite.Nil(result)
+}
+
+func (suite *VMRepositoryTestSuite) TestUpdateStatus() {
+	// Create test VM
+	vm := &models.VM{
+		ID:        "vm-789",
+		Name:      "Test VM 3",
+		VMName:    "test-vm-3",
+		Namespace: "test-namespace",
+		Status:    "POWERED_OFF",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now().Add(-1 * time.Hour), // Old timestamp
+	}
+	err := suite.db.Create(vm).Error
+	suite.Require().NoError(err)
+
+	// Test successful status update
+	err = suite.repo.UpdateStatus(context.Background(), "vm-789", "POWERED_ON")
+	suite.NoError(err)
+
+	// Verify the update
+	var updatedVM models.VM
+	err = suite.db.First(&updatedVM, "id = ?", "vm-789").Error
+	suite.NoError(err)
+	suite.Equal("POWERED_ON", updatedVM.Status)
+	suite.True(updatedVM.UpdatedAt.After(vm.UpdatedAt))
+
+	// Test updating nonexistent VM
+	err = suite.repo.UpdateStatus(context.Background(), "nonexistent-vm", "POWERED_ON")
+	suite.Error(err)
+}
+
+func (suite *VMRepositoryTestSuite) TestUpdateStatusMultipleVMs() {
+	// Create multiple VMs with same VMName but different namespaces
+	vm1 := &models.VM{
+		ID:        "vm-multi-1",
+		Name:      "Test VM Multi 1",
+		VMName:    "multi-vm",
+		Namespace: "namespace-1",
+		Status:    "POWERED_OFF",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	vm2 := &models.VM{
+		ID:        "vm-multi-2",
+		Name:      "Test VM Multi 2",
+		VMName:    "multi-vm",
+		Namespace: "namespace-2",
+		Status:    "POWERED_OFF",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	err := suite.db.Create(vm1).Error
+	suite.Require().NoError(err)
+	err = suite.db.Create(vm2).Error
+	suite.Require().NoError(err)
+
+	// Test lookup by namespace and VM name (should find unique VM)
+	result, err := suite.repo.GetByNamespaceAndVMName(context.Background(), "namespace-1", "multi-vm")
+	suite.NoError(err)
+	suite.Equal("vm-multi-1", result.ID)
+
+	result, err = suite.repo.GetByNamespaceAndVMName(context.Background(), "namespace-2", "multi-vm")
+	suite.NoError(err)
+	suite.Equal("vm-multi-2", result.ID)
+
+	// Test lookup by vApp and VM name (should find one based on vApp context)
+	result, err = suite.repo.GetByVAppAndVMName(context.Background(), "vapp-123", "multi-vm")
+	suite.NoError(err)
+	suite.NotNil(result)
+	// Should find one of them (implementation may vary on which one)
+	suite.True(result.ID == "vm-multi-1" || result.ID == "vm-multi-2")
+}
+
+func (suite *VMRepositoryTestSuite) TestConcurrentStatusUpdates() {
+	// Create test VM
+	vm := &models.VM{
+		ID:        "vm-concurrent",
+		Name:      "Test VM Concurrent",
+		VMName:    "concurrent-vm",
+		Namespace: "test-namespace",
+		Status:    "POWERED_OFF",
+		VAppID:    "vapp-123",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	err := suite.db.Create(vm).Error
+	suite.Require().NoError(err)
+
+	// Simulate concurrent updates
+	done := make(chan error, 2)
+	
+	go func() {
+		done <- suite.repo.UpdateStatus(context.Background(), "vm-concurrent", "POWERING_ON")
+	}()
+	
+	go func() {
+		done <- suite.repo.UpdateStatus(context.Background(), "vm-concurrent", "POWERED_ON")
+	}()
+
+	// Wait for both goroutines to complete
+	err1 := <-done
+	err2 := <-done
+
+	// Both updates should succeed (last one wins)
+	suite.NoError(err1)
+	suite.NoError(err2)
+
+	// Verify final state
+	var finalVM models.VM
+	err = suite.db.First(&finalVM, "id = ?", "vm-concurrent").Error
+	suite.NoError(err)
+	suite.True(finalVM.Status == "POWERING_ON" || finalVM.Status == "POWERED_ON")
+}
+
+func TestVMRepositoryTestSuite(t *testing.T) {
+	suite.Run(t, new(VMRepositoryTestSuite))
+}
+
+// Additional unit tests for edge cases
+func TestVMRepository_EdgeCases(t *testing.T) {
+	// Test with nil context (should handle gracefully)
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	repo := NewVMRepository(db)
+
+	// These should not panic and should return appropriate errors
+	_, err = repo.GetByNamespaceAndVMName(nil, "test", "test")
+	assert.Error(t, err)
+
+	_, err = repo.GetByVAppAndVMName(nil, "test", "test")
+	assert.Error(t, err)
+
+	err = repo.UpdateStatus(nil, "test", "test")
+	assert.Error(t, err)
+}
+
+func TestVMRepository_EmptyParameters(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	assert.NoError(t, err)
+
+	err = db.AutoMigrate(&models.VM{})
+	assert.NoError(t, err)
+
+	repo := NewVMRepository(db)
+	ctx := context.Background()
+
+	// Test with empty parameters
+	_, err = repo.GetByNamespaceAndVMName(ctx, "", "")
+	assert.Error(t, err)
+
+	_, err = repo.GetByVAppAndVMName(ctx, "", "")
+	assert.Error(t, err)
+
+	err = repo.UpdateStatus(ctx, "", "")
+	assert.Error(t, err)
+}

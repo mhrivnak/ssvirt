@@ -250,3 +250,22 @@ func (r *VAppRepository) applyFilter(query *gorm.DB, filter string) *gorm.DB {
 	// Fall back to simple name substring matching for backward compatibility
 	return query.Where("name LIKE ?", fmt.Sprintf("%%%s%%", filter))
 }
+
+// Controller-specific methods
+
+// GetByNameInVDC finds a VApp by name within a specific VDC (for controller)
+func (r *VAppRepository) GetByNameInVDC(ctx context.Context, vdcID, name string) (*models.VApp, error) {
+	var vapp models.VApp
+	err := r.db.WithContext(ctx).
+		Where("vdc_id = ? AND name = ?", vdcID, name).
+		First(&vapp).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vapp, nil
+}
+
+// CreateVApp creates a new VApp record (for controller)
+func (r *VAppRepository) CreateVApp(ctx context.Context, vapp *models.VApp) error {
+	return r.db.WithContext(ctx).Create(vapp).Error
+}

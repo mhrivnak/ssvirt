@@ -1,0 +1,190 @@
+{{- if .Values.vmController.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vm-controller
+  {{- with .Values.vmController.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  # SINGLETON DEPLOYMENT - exactly one replica with leader election
+  replicas: {{ .Values.vmController.replicaCount | default 1 }}
+  strategy:
+    type: Recreate  # Ensure no two controllers run simultaneously
+  selector:
+    matchLabels:
+      {{- include "ssvirt.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: vm-controller
+  template:
+    metadata:
+      labels:
+        {{- include "ssvirt.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: vm-controller
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.vmController.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "ssvirt.fullname" . }}-vm-controller
+      securityContext:
+        {{- toYaml .Values.vmController.podSecurityContext | nindent 8 }}
+      containers:
+      - name: vm-controller
+        image: {{ include "ssvirt.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        # Use the VM controller binary instead of API server
+        command:
+        - /usr/local/bin/ssvirt-vm-controller
+        args:
+        - --config=/etc/ssvirt/config.yaml
+        - --metrics-bind-address={{ .Values.vmController.metricsAddr | default ":8080" }}
+        - --health-probe-bind-address={{ .Values.vmController.probeAddr | default ":8081" }}
+        - --leader-elect={{ .Values.vmController.leaderElection | default true }}
+        {{- if .Values.vmController.enablePprof }}
+        - --enable-pprof=true
+        {{- end }}
+        env:
+        - name: CONTROLLER_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: SSVIRT_DATABASE_HOST
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-host
+        - name: SSVIRT_DATABASE_PORT
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-port
+        - name: SSVIRT_DATABASE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-username
+        - name: SSVIRT_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              {{- if .Values.postgresql.enabled }}
+              name: {{ .Release.Name }}-postgresql
+              key: postgres-password
+              {{- else }}
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-password
+              {{- end }}
+        - name: SSVIRT_DATABASE_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-database
+        - name: SSVIRT_DATABASE_SSLMODE
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-sslmode
+        - name: SSVIRT_LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: log-level
+        - name: SSVIRT_LOG_FORMAT
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: log-format
+        - name: SSVIRT_DATABASE_MAX_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-max-connections
+        - name: SSVIRT_DATABASE_MAX_IDLE_CONNECTIONS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-max-idle-connections
+        - name: SSVIRT_DATABASE_CONN_MAX_LIFETIME
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-conn-max-lifetime
+        - name: SSVIRT_DATABASE_CONN_MAX_IDLE_TIME
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ssvirt.fullname" . }}-config
+              key: database-conn-max-idle-time
+        {{- with .Values.vmController.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        ports:
+        - containerPort: {{ .Values.vmController.metricsPort | default 8080 }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.vmController.probePort | default 8081 }}
+          name: health
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.vmController.resources | nindent 10 }}
+        securityContext:
+          {{- toYaml .Values.vmController.securityContext | nindent 10 }}
+        volumeMounts:
+        - name: config
+          mountPath: /etc/ssvirt
+          readOnly: true
+        {{- with .Values.vmController.volumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      - name: config
+        configMap:
+          name: {{ include "ssvirt.fullname" . }}-config
+      {{- with .Values.vmController.volumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.vmController.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.vmController.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Affinity configuration - merge custom affinity with anti-affinity if needed
+      {{- if or .Values.vmController.affinity .Values.vmController.enableAntiAffinity }}
+      affinity:
+        {{- if .Values.vmController.affinity }}
+        {{- toYaml .Values.vmController.affinity | nindent 8 }}
+        {{- end }}
+        {{- if and .Values.vmController.enableAntiAffinity (not .Values.vmController.affinity.podAntiAffinity) }}
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                {{- include "ssvirt.selectorLabels" . | nindent 16 }}
+                app.kubernetes.io/component: vm-controller
+            topologyKey: kubernetes.io/hostname
+        {{- end }}
+      {{- end }}
+{{- end }}
