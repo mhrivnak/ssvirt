@@ -254,6 +254,57 @@ func TestPowerOnHandler_InvalidUUID(t *testing.T) {
 	assert.Equal(t, "Invalid VM ID format", response["message"])
 }
 
+func TestPowerOnHandler_ValidURN(t *testing.T) {
+	router, mockRepo, k8sClient := setupTest()
+
+	// Create test VM
+	vmID := uuid.New().String()
+	vm := &models.VM{
+		ID:        vmID,
+		Name:      "test-vm",
+		VMName:    "test-vm",
+		Namespace: "test-namespace",
+		Status:    "POWERED_OFF",
+	}
+
+	// Create VirtualMachine resource in fake client
+	vmResource := &kubevirtv1.VirtualMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-vm",
+			Namespace: "test-namespace",
+		},
+		Spec: kubevirtv1.VirtualMachineSpec{
+			RunStrategy: &[]kubevirtv1.VirtualMachineRunStrategy{kubevirtv1.RunStrategyHalted}[0],
+		},
+	}
+	err := k8sClient.Create(context.Background(), vmResource)
+	assert.NoError(t, err)
+
+	// Setup mock expectations
+	mockRepo.On("GetByID", vmID).Return(vm, nil)
+
+	// Make request with VM URN format
+	vmURN := fmt.Sprintf("urn:vcloud:vm:%s", vmID)
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOn", vmURN), bytes.NewBuffer([]byte("{}")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assertions
+	assert.Equal(t, http.StatusAccepted, w.Code)
+
+	var response PowerOperationResponse
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("urn:vcloud:vm:%s", vmID), response.ID)
+	assert.Equal(t, "test-vm", response.Name)
+	assert.Equal(t, "POWERING_ON", response.Status)
+	assert.Equal(t, "POWERING_ON", response.PowerState)
+	assert.Equal(t, fmt.Sprintf("/cloudapi/1.0.0/vms/urn:vcloud:vm:%s", vmID), response.Href)
+
+	mockRepo.AssertExpectations(t)
+}
+
 func TestPowerOffHandler_Success(t *testing.T) {
 	router, mockRepo, k8sClient := setupTest()
 
@@ -388,12 +439,75 @@ func TestIsValidUUID(t *testing.T) {
 			uuid:     "123456781234123412341234567890ab",
 			expected: true,
 		},
+		{
+			name:     "valid URN format",
+			uuid:     "urn:vcloud:vm:12345678-1234-1234-1234-123456789abc",
+			expected: true,
+		},
+		{
+			name:     "invalid URN format",
+			uuid:     "urn:vcloud:vm:invalid-uuid",
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isValidUUID(tt.uuid)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestParseVMIDParam(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "valid UUID",
+			input:       "12345678-1234-1234-1234-123456789abc",
+			expected:    "12345678-1234-1234-1234-123456789abc",
+			expectError: false,
+		},
+		{
+			name:        "valid URN format",
+			input:       "urn:vcloud:vm:12345678-1234-1234-1234-123456789abc",
+			expected:    "12345678-1234-1234-1234-123456789abc",
+			expectError: false,
+		},
+		{
+			name:        "valid hyphenless UUID",
+			input:       "123456781234123412341234567890ab",
+			expected:    "12345678-1234-1234-1234-1234567890ab",
+			expectError: false,
+		},
+		{
+			name:        "invalid UUID",
+			input:       "invalid-uuid",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "invalid URN",
+			input:       "urn:vcloud:vm:invalid-uuid",
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parseVMIDParam(tt.input)
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Equal(t, tt.expected, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
 		})
 	}
 }

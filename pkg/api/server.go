@@ -207,9 +207,11 @@ func (s *Server) setupRoutes() {
 			// VMs API
 			cloudAPI.GET("/vms/:vm_id", s.vmHandlers.GetVM) // GET /cloudapi/1.0.0/vms/{vm_id} - get VM
 
-			// VM Power Management API
-			cloudAPI.POST("/vms/:id/actions/powerOn", s.powerMgmtHandlers.PowerOn)   // POST /cloudapi/1.0.0/vms/{id}/actions/powerOn - power on VM
-			cloudAPI.POST("/vms/:id/actions/powerOff", s.powerMgmtHandlers.PowerOff) // POST /cloudapi/1.0.0/vms/{id}/actions/powerOff - power off VM
+			// VM Power Management API (only register if k8sService is available)
+			if s.k8sService != nil {
+				cloudAPI.POST("/vms/:id/actions/powerOn", s.powerMgmtHandlers.PowerOn)   // POST /cloudapi/1.0.0/vms/{id}/actions/powerOn - power on VM
+				cloudAPI.POST("/vms/:id/actions/powerOff", s.powerMgmtHandlers.PowerOff) // POST /cloudapi/1.0.0/vms/{id}/actions/powerOff - power off VM
+			}
 		}
 
 	}

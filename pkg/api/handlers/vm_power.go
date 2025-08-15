@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -51,14 +52,25 @@ type PowerOperationResponse struct {
 // PowerOn handles VM power on requests
 func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 	ctx := c.Request.Context()
-	vmID := c.Param("id")
+	vmIDParam := c.Param("id")
 
-	// Validate VM ID format
-	if !isValidUUID(vmID) {
+	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
+	vmID, err := parseVMIDParam(vmIDParam)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"error":   "Bad Request",
 			"message": "Invalid VM ID format",
+		})
+		return
+	}
+
+	// Defensive check for Kubernetes client
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    503,
+			"error":   "Service Unavailable",
+			"message": "Kubernetes client not initialized",
 		})
 		return
 	}
@@ -172,7 +184,7 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 		Name:       vm.Name,
 		Status:     "POWERING_ON",
 		PowerState: "POWERING_ON",
-		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", vmID),
+		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", formatVMURN(vmID)),
 	}
 
 	c.JSON(http.StatusAccepted, response)
@@ -181,14 +193,25 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 // PowerOff handles VM power off requests
 func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 	ctx := c.Request.Context()
-	vmID := c.Param("id")
+	vmIDParam := c.Param("id")
 
-	// Validate VM ID format
-	if !isValidUUID(vmID) {
+	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
+	vmID, err := parseVMIDParam(vmIDParam)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
 			"error":   "Bad Request",
 			"message": "Invalid VM ID format",
+		})
+		return
+	}
+
+	// Defensive check for Kubernetes client
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"code":    503,
+			"error":   "Service Unavailable",
+			"message": "Kubernetes client not initialized",
 		})
 		return
 	}
@@ -302,15 +325,57 @@ func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 		Name:       vm.Name,
 		Status:     "POWERING_OFF",
 		PowerState: "POWERING_OFF",
-		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", vmID),
+		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", formatVMURN(vmID)),
 	}
 
 	c.JSON(http.StatusAccepted, response)
 }
 
-// isValidUUID validates UUID format
+// parseVMIDParam normalizes VM ID parameter from URN or hyphenless format to canonical UUID
+func parseVMIDParam(param string) (string, error) {
+	// Handle URN format: urn:vcloud:vm:{uuid}
+	if strings.HasPrefix(param, "urn:vcloud:vm:") {
+		uuidPart := strings.TrimPrefix(param, "urn:vcloud:vm:")
+		_, err := uuid.Parse(uuidPart)
+		if err != nil {
+			return "", fmt.Errorf("invalid UUID in URN: %w", err)
+		}
+		return uuidPart, nil
+	}
+
+	// Handle hyphenless 32-hex format (32 characters)
+	if len(param) == 32 && isHex(param) {
+		// Insert hyphens to make it a valid UUID format
+		formatted := fmt.Sprintf("%s-%s-%s-%s-%s",
+			param[0:8], param[8:12], param[12:16], param[16:20], param[20:32])
+		_, err := uuid.Parse(formatted)
+		if err != nil {
+			return "", fmt.Errorf("invalid hyphenless UUID: %w", err)
+		}
+		return formatted, nil
+	}
+
+	// Handle regular UUID format
+	_, err := uuid.Parse(param)
+	if err != nil {
+		return "", fmt.Errorf("invalid UUID format: %w", err)
+	}
+	return param, nil
+}
+
+// isHex checks if a string contains only hexadecimal characters
+func isHex(s string) bool {
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+// isValidUUID validates UUID format using parseVMIDParam
 func isValidUUID(u string) bool {
-	_, err := uuid.Parse(u)
+	_, err := parseVMIDParam(u)
 	return err == nil
 }
 
