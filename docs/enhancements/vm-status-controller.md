@@ -228,7 +228,88 @@ type VMInfo struct {
 }
 ```
 
-### 4. Database Operations
+### 4. Automatic Label Management
+
+The controller automatically manages the `vapp.ssvirt` label on VirtualMachine resources to establish proper ownership tracking between OpenShift VMs and SSVirt vApps.
+
+#### ensureVAppLabel Behavior
+
+The `ensureVAppLabel` function implements idempotent label management with the following logic:
+
+```go
+func (r *VMStatusController) ensureVAppLabel(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
+    // Check if vapp.ssvirt label already exists
+    if vm.Labels != nil {
+        if _, exists := vm.Labels["vapp.ssvirt"]; exists {
+            // Label already exists, no-op
+            return nil, nil
+        }
+    }
+
+    // Look for template instance owner label
+    templateInstanceUID, hasTemplateLabel := vm.Labels["template.openshift.io/template-instance-owner"]
+    if !hasTemplateLabel || templateInstanceUID == "" {
+        // No template instance, skip label management
+        return nil, nil
+    }
+
+    // Find the TemplateInstance by UID
+    templateInstance, err := r.findTemplateInstanceByUID(ctx, templateInstanceUID)
+    if err != nil {
+        if k8serrors.IsNotFound(err) {
+            // TemplateInstance not found, skip
+            return nil, nil
+        }
+        return nil, err
+    }
+
+    // Create a copy to modify and set the label
+    vmCopy := vm.DeepCopy()
+    if vmCopy.Labels == nil {
+        vmCopy.Labels = make(map[string]string)
+    }
+    vmCopy.Labels["vapp.ssvirt"] = templateInstance.Name
+
+    // Update the VirtualMachine
+    err = r.Update(ctx, vmCopy)
+    if err != nil {
+        return nil, err
+    }
+
+    return vmCopy, nil
+}
+```
+
+#### Input/Output Specification
+
+**Inputs:**
+- `vm`: VirtualMachine resource to process
+- Expected labels:
+  - `template.openshift.io/template-instance-owner`: UID of TemplateInstance (required)
+  - `vapp.ssvirt`: Existing label value (optional, causes no-op if present)
+
+**Outputs:**
+- `nil, nil`: No update needed (label exists or no template instance)
+- `*VirtualMachine, nil`: Updated VM with new `vapp.ssvirt` label
+- `nil, error`: Update failed or TemplateInstance lookup error
+
+#### Error Cases
+
+1. **TemplateInstance Lookup Failure**: Returns error when TemplateInstance exists but cannot be retrieved
+2. **VM Update Failure**: Returns error when Kubernetes API update fails
+3. **TemplateInstance Not Found**: Returns nil (no-op) when UID points to non-existent TemplateInstance
+
+#### Idempotency and Usage
+
+The function is idempotent - multiple calls with the same VM will not cause additional updates if the label already exists. This ensures:
+
+- Safe retries during controller restarts
+- No unnecessary API calls when processing unchanged VMs
+- Proper behavior during leader election transitions
+
+The `vapp.ssvirt` label enables efficient vApp ownership tracking by providing direct name-based lookup without requiring UID-based TemplateInstance queries during normal operations.
+
+### 5. Database Operations
 
 ```go
 // handleVMStatusUpdate processes VirtualMachine status changes
@@ -309,7 +390,7 @@ func (r *VMStatusController) handleVMDeletion(ctx context.Context, namespacedNam
 }
 ```
 
-### 5. Controller Setup and Registration
+### 6. Controller Setup and Registration
 
 ```go
 // SetupVMStatusController sets up the controller with the Manager
@@ -507,6 +588,15 @@ var (
         []string{"namespace", "error_type"},
     )
 )
+
+func init() {
+    // Register metrics with controller-runtime
+    metrics.Registry.MustRegister(
+        vmStatusUpdates,
+        vmStatusUpdateDuration,
+        vmReconcileErrors,
+    )
+}
 ```
 
 ### Logging
@@ -825,17 +915,17 @@ subjects:
 ```go
 // Add to go.mod
 require (
-    sigs.k8s.io/controller-runtime v0.18.4
-    kubevirt.io/api v1.2.0
-    k8s.io/apimachinery v0.30.3
-    k8s.io/client-go v0.30.3
+    sigs.k8s.io/controller-runtime v0.21.0
+    kubevirt.io/api v1.6.0
+    k8s.io/apimachinery v0.33.3
+    k8s.io/client-go v0.33.0
 )
 ```
 
 ### OpenShift Version Requirements
 
 - **Required**: OpenShift 4.19+ (for latest VirtualMachine API and controller-runtime features)
-- **KubeVirt**: Compatible with KubeVirt 1.2+ (included in OpenShift Virtualization 4.19+)
+- **KubeVirt**: Compatible with KubeVirt v1.6.0+ (included in OpenShift Virtualization 4.19+)
 - **Kubernetes**: 1.29+ (included with OpenShift 4.19+)
 
 ## Conclusion

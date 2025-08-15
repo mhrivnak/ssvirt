@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	templatev1 "github.com/openshift/api/template/v1"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -104,6 +105,7 @@ func TestVMStatusController_Reconcile(t *testing.T) {
 	scheme := runtime.NewScheme()
 	_ = kubevirtv1.AddToScheme(scheme)
 	_ = corev1.AddToScheme(scheme)
+	_ = templatev1.AddToScheme(scheme)
 
 	// Reset metrics for clean test state
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
@@ -519,6 +521,159 @@ func TestFindVMRecord(t *testing.T) {
 			}
 
 			mockVMRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestEnsureVAppLabel(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = kubevirtv1.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
+	_ = templatev1.AddToScheme(scheme)
+
+	tests := []struct {
+		name          string
+		vm            *kubevirtv1.VirtualMachine
+		templateInst  *templatev1.TemplateInstance
+		expectedLabel string
+		expectUpdate  bool
+		expectError   bool
+	}{
+		{
+			name: "VM already has vapp.ssvirt label - no update",
+			vm: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						"vapp.ssvirt": "existing-vapp",
+					},
+				},
+			},
+			expectedLabel: "existing-vapp",
+			expectUpdate:  false,
+			expectError:   false,
+		},
+		{
+			name: "VM with template instance owner - should update label",
+			vm: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						"template.openshift.io/template-instance-owner": "test-template-uid",
+					},
+				},
+			},
+			templateInst: &templatev1.TemplateInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "my-template-instance",
+					Namespace: "test-namespace",
+					UID:       "test-template-uid",
+				},
+			},
+			expectedLabel: "my-template-instance",
+			expectUpdate:  true,
+			expectError:   false,
+		},
+		{
+			name: "VM without template instance owner - no update",
+			vm: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "test-namespace",
+					Labels:    map[string]string{},
+				},
+			},
+			expectedLabel: "",
+			expectUpdate:  false,
+			expectError:   false,
+		},
+		{
+			name: "VM with template instance owner but TemplateInstance not found - no update",
+			vm: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "test-namespace",
+					Labels: map[string]string{
+						"template.openshift.io/template-instance-owner": "non-existent-uid",
+					},
+				},
+			},
+			expectedLabel: "",
+			expectUpdate:  false,
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			// Create fake client with objects
+			var objs []client.Object
+			objs = append(objs, tt.vm)
+			if tt.templateInst != nil {
+				objs = append(objs, tt.templateInst)
+			}
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(objs...).
+				Build()
+
+			// Create controller with fake client
+			mockRecorder := &MockEventRecorder{}
+			controller := &VMStatusController{
+				Client:   fakeClient,
+				Scheme:   scheme,
+				Recorder: mockRecorder,
+			}
+
+			// Call ensureVAppLabel
+			updatedVM, err := controller.ensureVAppLabel(ctx, tt.vm)
+
+			// Check error expectation
+			if tt.expectError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+
+			// Check update expectation
+			if tt.expectUpdate {
+				assert.NotNil(t, updatedVM, "Expected updated VM to be returned")
+				assert.Equal(t, tt.expectedLabel, updatedVM.Labels["vapp.ssvirt"])
+
+				// Verify the VM was actually updated in the fake client
+				var vmInClient kubevirtv1.VirtualMachine
+				err = fakeClient.Get(ctx, types.NamespacedName{
+					Name:      tt.vm.Name,
+					Namespace: tt.vm.Namespace,
+				}, &vmInClient)
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedLabel, vmInClient.Labels["vapp.ssvirt"])
+			} else {
+				assert.Nil(t, updatedVM, "Expected no update, but got updated VM")
+
+				// Verify original VM labels are unchanged
+				var vmInClient kubevirtv1.VirtualMachine
+				err = fakeClient.Get(ctx, types.NamespacedName{
+					Name:      tt.vm.Name,
+					Namespace: tt.vm.Namespace,
+				}, &vmInClient)
+				assert.NoError(t, err)
+
+				if tt.expectedLabel != "" {
+					// Case where label should remain unchanged
+					assert.Equal(t, tt.expectedLabel, vmInClient.Labels["vapp.ssvirt"])
+				} else {
+					// Case where no vapp.ssvirt label should exist
+					_, hasLabel := vmInClient.Labels["vapp.ssvirt"]
+					assert.False(t, hasLabel, "Expected no vapp.ssvirt label")
+				}
+			}
 		})
 	}
 }

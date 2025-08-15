@@ -167,17 +167,17 @@ spec:
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.vmController.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.vmController.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      # Anti-affinity to prevent multiple controller instances on same node
-      {{- if .Values.vmController.enableAntiAffinity }}
+      # Affinity configuration - merge custom affinity with anti-affinity if needed
+      {{- if or .Values.vmController.affinity .Values.vmController.enableAntiAffinity }}
       affinity:
+        {{- if .Values.vmController.affinity }}
+        {{- toYaml .Values.vmController.affinity | nindent 8 }}
+        {{- end }}
+        {{- if and .Values.vmController.enableAntiAffinity (not .Values.vmController.affinity.podAntiAffinity) }}
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
           - labelSelector:
@@ -185,5 +185,6 @@ spec:
                 {{- include "ssvirt.selectorLabels" . | nindent 16 }}
                 app.kubernetes.io/component: vm-controller
             topologyKey: kubernetes.io/hostname
+        {{- end }}
       {{- end }}
 {{- end }}

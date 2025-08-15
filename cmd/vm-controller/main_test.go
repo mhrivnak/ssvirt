@@ -142,8 +142,15 @@ func TestManagerCreation(t *testing.T) {
 			assert.NotNil(t, tt.config.Scheme)
 			assert.NotEmpty(t, tt.config.HealthProbeBindAddress)
 
+			// Get config safely without panicking
+			config, err := ctrl.GetConfig()
+			if err != nil || config == nil {
+				t.Skipf("Skipping test: no kubeconfig/in-cluster config available: %v", err)
+				return
+			}
+
 			// Try to create manager - this may succeed or fail depending on environment
-			_, err := ctrl.NewManager(ctrl.GetConfigOrDie(), tt.config)
+			_, err = ctrl.NewManager(config, tt.config)
 			if !tt.expectError {
 				// For valid configs, either success or connection failure is acceptable
 				// The important thing is our config structure is correct
