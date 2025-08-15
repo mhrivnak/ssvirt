@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -84,6 +85,11 @@ func (s *TemplateService) ListCatalogItems(ctx context.Context, catalogID string
 		catalogItem := s.mapper.TemplateToCatalogItem(&template, catalogID)
 		catalogItems = append(catalogItems, *catalogItem)
 	}
+
+	// Sort catalog items alphabetically by name for deterministic ordering
+	sort.Slice(catalogItems, func(i, j int) bool {
+		return catalogItems[i].Name < catalogItems[j].Name
+	})
 
 	// Apply pagination
 	start := offset
