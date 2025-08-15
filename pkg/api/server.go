@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime"
@@ -50,6 +51,7 @@ type Server struct {
 	vmCreationHandlers  *handlers.VMCreationHandlers
 	vappHandlers        *handlers.VAppHandlers
 	vmHandlers          *handlers.VMHandlers
+	powerMgmtHandlers   *handlers.PowerManagementHandler
 	router              *gin.Engine
 	httpServer          *http.Server
 }
@@ -95,6 +97,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo, k8sService),
 		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo),
 		vmHandlers:          handlers.NewVMHandlers(vmRepo, vappRepo, vdcRepo),
+		powerMgmtHandlers:   createPowerManagementHandler(vmRepo, k8sService),
 	}
 
 	// Configure gin mode based on log level
@@ -106,6 +109,15 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 
 	server.setupRoutes()
 	return server
+}
+
+// createPowerManagementHandler creates a power management handler, handling nil k8sService case
+func createPowerManagementHandler(vmRepo *repositories.VMRepository, k8sService services.KubernetesService) *handlers.PowerManagementHandler {
+	if k8sService == nil {
+		// For tests without k8s service, create with nil client
+		return handlers.NewPowerManagementHandler(vmRepo, nil, slog.Default())
+	}
+	return handlers.NewPowerManagementHandler(vmRepo, k8sService.GetClient(), slog.Default())
 }
 
 // setupRoutes configures all API routes
@@ -194,6 +206,10 @@ func (s *Server) setupRoutes() {
 
 			// VMs API
 			cloudAPI.GET("/vms/:vm_id", s.vmHandlers.GetVM) // GET /cloudapi/1.0.0/vms/{vm_id} - get VM
+
+			// VM Power Management API
+			cloudAPI.POST("/vms/:id/actions/powerOn", s.powerMgmtHandlers.PowerOn)   // POST /cloudapi/1.0.0/vms/{id}/actions/powerOn - power on VM
+			cloudAPI.POST("/vms/:id/actions/powerOff", s.powerMgmtHandlers.PowerOff) // POST /cloudapi/1.0.0/vms/{id}/actions/powerOff - power off VM
 		}
 
 	}

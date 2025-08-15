@@ -49,6 +49,9 @@ type KubernetesService interface {
 
 	// Resource management
 	EnsureNamespaceResources(ctx context.Context, namespace string, vdc *models.VDC) error
+
+	// Client access for power management operations
+	GetClient() client.Client
 }
 
 // TemplateInfo represents an OpenShift template available for instantiation
@@ -757,4 +760,9 @@ func (k *kubernetesService) sanitizeLabelValue(value string) string {
 	}
 
 	return sanitized
+}
+
+// GetClient returns the Kubernetes client for power management operations
+func (k *kubernetesService) GetClient() client.Client {
+	return k.client
 }
