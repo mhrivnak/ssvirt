@@ -126,6 +126,28 @@ func TestCatalogItemAPIEndpoints(t *testing.T) {
 			assert.Equal(t, 10, response.PageSize)
 		})
 
+		t.Run("List catalog items returns results sorted alphabetically by name", func(t *testing.T) {
+			req, _ := http.NewRequest("GET", fmt.Sprintf("/cloudapi/1.0.0/catalogs/%s/catalogItems", catalog.ID), nil)
+			req.Header.Set("Authorization", "Bearer "+userToken)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+
+			var response types.Page[models.CatalogItem]
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			require.NoError(t, err)
+
+			// Verify that results are sorted alphabetically by name
+			// If there are multiple items, check that they are in alphabetical order
+			if len(response.Values) > 1 {
+				for i := 1; i < len(response.Values); i++ {
+					assert.LessOrEqual(t, response.Values[i-1].Name, response.Values[i].Name,
+						"Catalog items should be sorted alphabetically by name")
+				}
+			}
+		})
+
 		t.Run("List catalog items with invalid catalog URN returns 400", func(t *testing.T) {
 			req, _ := http.NewRequest("GET", "/cloudapi/1.0.0/catalogs/invalid-urn/catalogItems", nil)
 			req.Header.Set("Authorization", "Bearer "+userToken)
