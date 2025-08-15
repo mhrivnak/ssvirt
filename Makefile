@@ -6,6 +6,7 @@ all: build
 build:
 	go build -o bin/api-server ./cmd/api-server
 	go build -o bin/user-admin ./cmd/user-admin
+	go build -o bin/vm-controller ./cmd/vm-controller
 
 test:
 	go test $(shell go list ./... | grep -v '.disabled')

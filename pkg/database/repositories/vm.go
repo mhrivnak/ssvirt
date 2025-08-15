@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -179,4 +180,53 @@ func (r *VMRepository) GetWithVAppContext(ctx context.Context, vmID string) (*mo
 		return nil, err
 	}
 	return &vm, nil
+}
+
+// Controller-specific methods for VM status synchronization
+
+// GetByNamespaceAndVMName finds a VM by its namespace and VM name (for controller)
+func (r *VMRepository) GetByNamespaceAndVMName(ctx context.Context, namespace, vmName string) (*models.VM, error) {
+	var vm models.VM
+	err := r.db.WithContext(ctx).
+		Where("namespace = ? AND vm_name = ?", namespace, vmName).
+		First(&vm).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vm, nil
+}
+
+// GetByVAppAndVMName finds a VM by its vApp ID and VM name (for controller)
+func (r *VMRepository) GetByVAppAndVMName(ctx context.Context, vappID, vmName string) (*models.VM, error) {
+	var vm models.VM
+	err := r.db.WithContext(ctx).
+		Where("v_app_id = ? AND vm_name = ?", vappID, vmName).
+		First(&vm).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vm, nil
+}
+
+// UpdateStatus updates only the status and updated_at fields of a VM (for controller)
+func (r *VMRepository) UpdateStatus(ctx context.Context, vmID string, status string) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.VM{}).
+		Where("id = ?", vmID).
+		Updates(map[string]interface{}{
+			"status":     status,
+			"updated_at": time.Now(),
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// CreateVM creates a new VM record (for controller)
+func (r *VMRepository) CreateVM(ctx context.Context, vm *models.VM) error {
+	return r.db.WithContext(ctx).Create(vm).Error
 }

@@ -98,4 +98,89 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "ssvirt.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+
+{{- if .Values.vmController.enabled }}
+---
+# VM Controller RBAC - for VM status synchronization
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vm-controller
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
+  annotations:
+    {{- toYaml $mergedAnnotations | nindent 4 }}
+  {{- end }}
+rules:
+# Watch and update VirtualMachine resources across all namespaces
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachines"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+# Read VM status and specs
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachines/status"]
+  verbs: ["get", "list"]
+# Access TemplateInstances to lookup vApp names
+- apiGroups: ["template.openshift.io"]
+  resources: ["templateinstances"]
+  verbs: ["get", "list", "watch"]
+# Create events for tracking and debugging
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+# Access to all VDC namespaces (managed by SSVirt)
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+# Leader election coordination
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vm-controller
+  {{- $rbacAnnotations := .Values.rbac.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $rbacAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
+  annotations:
+    {{- toYaml $mergedAnnotations | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+  namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ssvirt.fullname" . }}-vm-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssvirt.labels" . | nindent 4 }}
+    app.kubernetes.io/component: vm-controller
+  {{- $saAnnotations := .Values.serviceAccount.annotations | default dict }}
+  {{- $commonAnnotations := include "ssvirt.annotations" . | fromYaml | default dict }}
+  {{- $mergedAnnotations := merge $saAnnotations $commonAnnotations }}
+  {{- if $mergedAnnotations }}
+  annotations:
+    {{- toYaml $mergedAnnotations | nindent 4 }}
+  {{- end }}
+{{- end }}
 {{- end }}
