@@ -209,8 +209,8 @@ func (s *Server) setupRoutes() {
 
 			// VM Power Management API (only register if k8sService is available)
 			if s.k8sService != nil {
-				cloudAPI.POST("/vms/:id/actions/powerOn", s.powerMgmtHandlers.PowerOn)   // POST /cloudapi/1.0.0/vms/{id}/actions/powerOn - power on VM
-				cloudAPI.POST("/vms/:id/actions/powerOff", s.powerMgmtHandlers.PowerOff) // POST /cloudapi/1.0.0/vms/{id}/actions/powerOff - power off VM
+				cloudAPI.POST("/vms/:vm_id/actions/powerOn", s.powerMgmtHandlers.PowerOn)   // POST /cloudapi/1.0.0/vms/{vm_id}/actions/powerOn - power on VM
+				cloudAPI.POST("/vms/:vm_id/actions/powerOff", s.powerMgmtHandlers.PowerOff) // POST /cloudapi/1.0.0/vms/{vm_id}/actions/powerOff - power off VM
 			}
 		}
 

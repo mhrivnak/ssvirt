@@ -52,7 +52,7 @@ type PowerOperationResponse struct {
 // PowerOn handles VM power on requests
 func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 	ctx := c.Request.Context()
-	vmIDParam := c.Param("id")
+	vmIDParam := c.Param("vm_id")
 
 	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
 	vmID, err := parseVMIDParam(vmIDParam)
@@ -193,7 +193,7 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 // PowerOff handles VM power off requests
 func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 	ctx := c.Request.Context()
-	vmIDParam := c.Param("id")
+	vmIDParam := c.Param("vm_id")
 
 	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
 	vmID, err := parseVMIDParam(vmIDParam)

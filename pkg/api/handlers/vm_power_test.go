@@ -55,8 +55,8 @@ func setupTest() (*gin.Engine, *MockVMRepository, client.Client) {
 
 	// Setup router
 	router := gin.New()
-	router.POST("/cloudapi/1.0.0/vms/:id/actions/powerOn", handler.PowerOn)
-	router.POST("/cloudapi/1.0.0/vms/:id/actions/powerOff", handler.PowerOff)
+	router.POST("/cloudapi/1.0.0/vms/:vm_id/actions/powerOn", handler.PowerOn)
+	router.POST("/cloudapi/1.0.0/vms/:vm_id/actions/powerOff", handler.PowerOff)
 
 	return router, mockRepo, fakeClient
 }
