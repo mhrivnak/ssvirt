@@ -367,6 +367,9 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		// Get VDC to determine namespace
 		vdc, err := h.vdcRepo.GetByIDString(c.Request.Context(), vdcID)
 		if err != nil {
+			// Log detailed error for debugging but don't expose to client
+			fmt.Printf("Error retrieving VDC details for ID %s: %v\n", vdcID, err)
+
 			// Cleanup vApp and return error
 			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
 				// Log cleanup error but don't fail the request
@@ -376,7 +379,6 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 				http.StatusInternalServerError,
 				"Internal Server Error",
 				"Failed to retrieve VDC details",
-				err.Error(),
 			))
 			return
 		}
