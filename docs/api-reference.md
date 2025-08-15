@@ -895,6 +895,7 @@ curl -X GET $SSVIRT_URL/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888
   "name": "web-01",
   "description": "Web server VM",
   "status": "POWERED_ON",
+  "powerState": "POWERED_ON",
   "vappId": "urn:vcloud:vapp:77777777-7777-7777-7777-777777777777",
   "templateId": "urn:vcloud:catalogitem:66666666-6666-6666-6666-666666666666",
   "createdAt": "2024-01-15T10:30:00Z",
@@ -927,6 +928,116 @@ curl -X GET $SSVIRT_URL/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888
         }
       ]
     }
+  },
+  "href": "/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888"
+}
+```
+
+### Power On VM
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888/actions/powerOn \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Parameters:**
+- `vm_id` (string) - VM URN ID
+
+**Request Body:**
+```json
+{}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "id": "urn:vcloud:vm:88888888-8888-8888-8888-888888888888",
+  "name": "web-01",
+  "status": "POWERING_ON",
+  "powerState": "POWERING_ON",
+  "href": "/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - VM is already powered on or in invalid state
+- `404 Not Found` - VM not found
+- `409 Conflict` - VM is in a conflicting state (e.g., being deleted)
+
+**Error Examples:**
+
+*VM Already Powered On:*
+```json
+{
+  "code": 400,
+  "error": "Bad Request",
+  "message": "VM is already powered on or powering on"
+}
+```
+
+*VM Not Found:*
+```json
+{
+  "code": 404,
+  "error": "Not Found",
+  "message": "VM not found"
+}
+```
+
+### Power Off VM
+```bash
+curl -X POST $SSVIRT_URL/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888/actions/powerOff \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Parameters:**
+- `vm_id` (string) - VM URN ID
+
+**Request Body:**
+```json
+{}
+```
+
+**Response:** `202 Accepted`
+```json
+{
+  "id": "urn:vcloud:vm:88888888-8888-8888-8888-888888888888",
+  "name": "web-01",
+  "status": "POWERING_OFF",
+  "powerState": "POWERING_OFF",
+  "href": "/cloudapi/1.0.0/vms/urn:vcloud:vm:88888888-8888-8888-8888-888888888888"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - VM is already powered off or in invalid state
+- `404 Not Found` - VM not found
+- `409 Conflict` - VM is in a conflicting state (e.g., being deleted)
+
+**Error Examples:**
+
+*VM Already Powered Off:*
+```json
+{
+  "code": 400,
+  "error": "Bad Request",
+  "message": "VM is already powered off or powering off"
+}
+```
+
+*Conflicting State:*
+```json
+{
+  "code": 409,
+  "error": "Conflict",
+  "message": "VM is in a conflicting state",
+  "details": {
+    "vmId": "urn:vcloud:vm:88888888-8888-8888-8888-888888888888",
+    "currentStatus": "DELETING",
+    "requestedOperation": "powerOff"
   }
 }
 ```
