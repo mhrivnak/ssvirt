@@ -65,9 +65,10 @@ func TestPowerOnHandler_Success(t *testing.T) {
 	router, mockRepo, k8sClient := setupTest()
 
 	// Create test VM
-	vmID := uuid.New().String()
+	vmUUID := uuid.New().String()
+	vmURN := fmt.Sprintf("urn:vcloud:vm:%s", vmUUID)
 	vm := &models.VM{
-		ID:        vmID,
+		ID:        vmURN, // Use URN format as stored in database
 		Name:      "test-vm",
 		VMName:    "test-vm",
 		Namespace: "test-namespace",
@@ -87,11 +88,11 @@ func TestPowerOnHandler_Success(t *testing.T) {
 	err := k8sClient.Create(context.Background(), vmResource)
 	assert.NoError(t, err)
 
-	// Setup mock expectations
-	mockRepo.On("GetByID", vmID).Return(vm, nil)
+	// Setup mock expectations - expect the URN format as stored in database
+	mockRepo.On("GetByID", vmURN).Return(vm, nil)
 
 	// Make request
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOn", vmID), bytes.NewBuffer([]byte("{}")))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOn", vmURN), bytes.NewBuffer([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -102,7 +103,7 @@ func TestPowerOnHandler_Success(t *testing.T) {
 	var response PowerOperationResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf("urn:vcloud:vm:%s", vmID), response.ID)
+	assert.Equal(t, vmURN, response.ID) // Expect URN format in response
 	assert.Equal(t, "test-vm", response.Name)
 	assert.Equal(t, "POWERING_ON", response.Status)
 	assert.Equal(t, "POWERING_ON", response.PowerState)
@@ -258,9 +259,10 @@ func TestPowerOnHandler_ValidURN(t *testing.T) {
 	router, mockRepo, k8sClient := setupTest()
 
 	// Create test VM
-	vmID := uuid.New().String()
+	vmUUID := uuid.New().String()
+	vmURN := fmt.Sprintf("urn:vcloud:vm:%s", vmUUID)
 	vm := &models.VM{
-		ID:        vmID,
+		ID:        vmURN, // Use URN format as stored in database
 		Name:      "test-vm",
 		VMName:    "test-vm",
 		Namespace: "test-namespace",
@@ -280,11 +282,10 @@ func TestPowerOnHandler_ValidURN(t *testing.T) {
 	err := k8sClient.Create(context.Background(), vmResource)
 	assert.NoError(t, err)
 
-	// Setup mock expectations
-	mockRepo.On("GetByID", vmID).Return(vm, nil)
+	// Setup mock expectations - expect the URN format as stored in database
+	mockRepo.On("GetByID", vmURN).Return(vm, nil)
 
 	// Make request with VM URN format
-	vmURN := fmt.Sprintf("urn:vcloud:vm:%s", vmID)
 	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOn", vmURN), bytes.NewBuffer([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -296,11 +297,11 @@ func TestPowerOnHandler_ValidURN(t *testing.T) {
 	var response PowerOperationResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf("urn:vcloud:vm:%s", vmID), response.ID)
+	assert.Equal(t, vmURN, response.ID) // Expect URN format in response
 	assert.Equal(t, "test-vm", response.Name)
 	assert.Equal(t, "POWERING_ON", response.Status)
 	assert.Equal(t, "POWERING_ON", response.PowerState)
-	assert.Equal(t, fmt.Sprintf("/cloudapi/1.0.0/vms/urn:vcloud:vm:%s", vmID), response.Href)
+	assert.Equal(t, fmt.Sprintf("/cloudapi/1.0.0/vms/%s", vmURN), response.Href)
 
 	mockRepo.AssertExpectations(t)
 }
@@ -309,9 +310,10 @@ func TestPowerOffHandler_Success(t *testing.T) {
 	router, mockRepo, k8sClient := setupTest()
 
 	// Create test VM
-	vmID := uuid.New().String()
+	vmUUID := uuid.New().String()
+	vmURN := fmt.Sprintf("urn:vcloud:vm:%s", vmUUID)
 	vm := &models.VM{
-		ID:        vmID,
+		ID:        vmURN, // Use URN format as stored in database
 		Name:      "test-vm",
 		VMName:    "test-vm",
 		Namespace: "test-namespace",
@@ -331,11 +333,11 @@ func TestPowerOffHandler_Success(t *testing.T) {
 	err := k8sClient.Create(context.Background(), vmResource)
 	assert.NoError(t, err)
 
-	// Setup mock expectations
-	mockRepo.On("GetByID", vmID).Return(vm, nil)
+	// Setup mock expectations - expect the URN format as stored in database
+	mockRepo.On("GetByID", vmURN).Return(vm, nil)
 
 	// Make request
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOff", vmID), bytes.NewBuffer([]byte("{}")))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/cloudapi/1.0.0/vms/%s/actions/powerOff", vmURN), bytes.NewBuffer([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -346,7 +348,7 @@ func TestPowerOffHandler_Success(t *testing.T) {
 	var response PowerOperationResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf("urn:vcloud:vm:%s", vmID), response.ID)
+	assert.Equal(t, vmURN, response.ID) // Expect URN format in response
 	assert.Equal(t, "test-vm", response.Name)
 	assert.Equal(t, "POWERING_OFF", response.Status)
 	assert.Equal(t, "POWERING_OFF", response.PowerState)

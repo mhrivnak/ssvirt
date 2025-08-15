@@ -54,8 +54,8 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 	ctx := c.Request.Context()
 	vmIDParam := c.Param("vm_id")
 
-	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
-	vmID, err := parseVMIDParam(vmIDParam)
+	// Validate VM ID parameter format but preserve original for database lookup
+	normalizedID, err := parseVMIDParam(vmIDParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -64,6 +64,12 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 		})
 		return
 	}
+
+	// Use the original parameter for database lookup (preserves URN format)
+	dbLookupID := vmIDParam
+
+	// Use normalized ID for Kubernetes operations (UUID only)
+	vmID := normalizedID
 
 	// Defensive check for Kubernetes client
 	if h.k8sClient == nil {
@@ -76,7 +82,7 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 	}
 
 	// Find VM record in database
-	vm, err := h.vmRepo.GetByID(vmID)
+	vm, err := h.vmRepo.GetByID(dbLookupID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -180,11 +186,11 @@ func (h *PowerManagementHandler) PowerOn(c *gin.Context) {
 
 	// Return response (status will be updated by VM Status Controller)
 	response := PowerOperationResponse{
-		ID:         formatVMURN(vmID),
+		ID:         dbLookupID, // Use the original ID format from database
 		Name:       vm.Name,
 		Status:     "POWERING_ON",
 		PowerState: "POWERING_ON",
-		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", formatVMURN(vmID)),
+		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", dbLookupID),
 	}
 
 	c.JSON(http.StatusAccepted, response)
@@ -195,8 +201,8 @@ func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 	ctx := c.Request.Context()
 	vmIDParam := c.Param("vm_id")
 
-	// Normalize VM ID parameter (URN, hyphenless, or regular UUID)
-	vmID, err := parseVMIDParam(vmIDParam)
+	// Validate VM ID parameter format but preserve original for database lookup
+	normalizedID, err := parseVMIDParam(vmIDParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    400,
@@ -205,6 +211,12 @@ func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 		})
 		return
 	}
+
+	// Use the original parameter for database lookup (preserves URN format)
+	dbLookupID := vmIDParam
+
+	// Use normalized ID for Kubernetes operations (UUID only)
+	vmID := normalizedID
 
 	// Defensive check for Kubernetes client
 	if h.k8sClient == nil {
@@ -217,7 +229,7 @@ func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 	}
 
 	// Find VM record in database
-	vm, err := h.vmRepo.GetByID(vmID)
+	vm, err := h.vmRepo.GetByID(dbLookupID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -321,11 +333,11 @@ func (h *PowerManagementHandler) PowerOff(c *gin.Context) {
 
 	// Return response (status will be updated by VM Status Controller)
 	response := PowerOperationResponse{
-		ID:         formatVMURN(vmID),
+		ID:         dbLookupID, // Use the original ID format from database
 		Name:       vm.Name,
 		Status:     "POWERING_OFF",
 		PowerState: "POWERING_OFF",
-		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", formatVMURN(vmID)),
+		Href:       fmt.Sprintf("/cloudapi/1.0.0/vms/%s", dbLookupID),
 	}
 
 	c.JSON(http.StatusAccepted, response)
