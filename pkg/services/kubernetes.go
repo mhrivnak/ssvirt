@@ -16,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	templatev1 "github.com/openshift/api/template/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
@@ -160,6 +161,10 @@ func NewKubernetesService(templateNamespace string, logger Logger) (KubernetesSe
 
 	if err := templatev1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to add template/v1 to scheme: %w", err)
+	}
+
+	if err := kubevirtv1.AddToScheme(scheme); err != nil {
+		return nil, fmt.Errorf("failed to add kubevirt/v1 to scheme: %w", err)
 	}
 
 	// Create cache for read operations
