@@ -23,10 +23,13 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize database connection
-	db, err := database.NewConnection(cfg)
+	// Initialize database connection with retry logic
+	ctx := context.Background()
+	retryConfig := database.RetryConfigFromConfig(cfg)
+	log.Printf("Initializing database connection with retry logic (max attempts: %d)...", retryConfig.MaxAttempts)
+	db, err := database.NewConnectionWithRetry(ctx, cfg, retryConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to database after retries: %v", err)
 	}
 
 	// Run database migrations

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
@@ -66,10 +67,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup database connection
-	db, err := database.NewConnection(cfg)
+	// Setup database connection with retry logic
+	dbCtx := context.Background()
+	retryConfig := database.RetryConfigFromConfig(cfg)
+	setupLog.Info("Initializing database connection with retry logic", "maxAttempts", retryConfig.MaxAttempts)
+	db, err := database.NewConnectionWithRetry(dbCtx, cfg, retryConfig)
 	if err != nil {
-		setupLog.Error(err, "Unable to connect to database")
+		setupLog.Error(err, "Unable to connect to database after retries")
 		os.Exit(1)
 	}
 	defer func() {

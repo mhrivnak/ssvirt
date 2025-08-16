@@ -24,6 +24,12 @@ type Config struct {
 		MaxIdleConns    int           `mapstructure:"max_idle_connections"`
 		ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 		ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
+		Retry           struct {
+			MaxAttempts     int           `mapstructure:"max_attempts"`
+			InitialDelay    time.Duration `mapstructure:"initial_delay"`
+			MaxDelay        time.Duration `mapstructure:"max_delay"`
+			BackoffMultiple float64       `mapstructure:"backoff_multiple"`
+		} `mapstructure:"retry"`
 	} `mapstructure:"database"`
 
 	API struct {
@@ -76,6 +82,10 @@ func Load() (*Config, error) {
 	viper.SetDefault("database.max_idle_connections", 10)
 	viper.SetDefault("database.conn_max_lifetime", "1h")
 	viper.SetDefault("database.conn_max_idle_time", "10m")
+	viper.SetDefault("database.retry.max_attempts", 30)
+	viper.SetDefault("database.retry.initial_delay", "2s")
+	viper.SetDefault("database.retry.max_delay", "30s")
+	viper.SetDefault("database.retry.backoff_multiple", 1.5)
 	viper.SetDefault("api.port", 8080)
 	// JWT secret MUST be explicitly configured - no insecure default
 	if os.Getenv("SSVIRT_AUTH_JWT_SECRET") == "" {
