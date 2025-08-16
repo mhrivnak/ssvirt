@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
@@ -50,6 +52,11 @@ func (m *MockVMRepository) UpdateStatus(ctx context.Context, vmID string, status
 
 func (m *MockVMRepository) CreateVM(ctx context.Context, vm *models.VM) error {
 	args := m.Called(ctx, vm)
+	return args.Error(0)
+}
+
+func (m *MockVMRepository) UpdateVMData(ctx context.Context, vmID string, cpuCount *int, memoryMB *int, guestOS string) error {
+	args := m.Called(ctx, vmID, cpuCount, memoryMB, guestOS)
 	return args.Error(0)
 }
 
@@ -676,4 +683,412 @@ func TestEnsureVAppLabel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractVMIData(t *testing.T) {
+	tests := []struct {
+		name     string
+		vmi      *kubevirtv1.VirtualMachineInstance
+		expected VMIData
+	}{
+		{
+			name: "Complete VMI with all data",
+			vmi: &kubevirtv1.VirtualMachineInstance{
+				Status: kubevirtv1.VirtualMachineInstanceStatus{
+					CurrentCPUTopology: &kubevirtv1.CPUTopology{
+						Cores:   2,
+						Sockets: 1,
+						Threads: 1,
+					},
+					Memory: &kubevirtv1.MemoryStatus{
+						GuestCurrent: resourceQuantityPtr(4 * 1024 * 1024 * 1024), // 4GB in bytes
+					},
+					GuestOSInfo: kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+						PrettyName: "CentOS Stream 9",
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+		},
+		{
+			name: "VMI with partial data",
+			vmi: &kubevirtv1.VirtualMachineInstance{
+				Status: kubevirtv1.VirtualMachineInstanceStatus{
+					CurrentCPUTopology: &kubevirtv1.CPUTopology{
+						Cores:   4,
+						Sockets: 2,
+						Threads: 1,
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: intPtr(8), // 4 cores * 2 sockets * 1 thread
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+		},
+		{
+			name: "VMI with guest OS name and version",
+			vmi: &kubevirtv1.VirtualMachineInstance{
+				Status: kubevirtv1.VirtualMachineInstanceStatus{
+					GuestOSInfo: kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+						Name:    "Ubuntu",
+						Version: "22.04",
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: nil,
+				MemoryMB: nil,
+				GuestOS:  "Ubuntu 22.04",
+			},
+		},
+		{
+			name: "Empty VMI",
+			vmi: &kubevirtv1.VirtualMachineInstance{
+				Status: kubevirtv1.VirtualMachineInstanceStatus{},
+			},
+			expected: VMIData{
+				CPUCount: nil,
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractVMIData(tt.vmi)
+			assert.Equal(t, tt.expected.CPUCount, result.CPUCount)
+			assert.Equal(t, tt.expected.MemoryMB, result.MemoryMB)
+			assert.Equal(t, tt.expected.GuestOS, result.GuestOS)
+		})
+	}
+}
+
+func TestExtractVMSpecData(t *testing.T) {
+	tests := []struct {
+		name     string
+		vm       *kubevirtv1.VirtualMachine
+		expected VMIData
+	}{
+		{
+			name: "VM with complete spec",
+			vm: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"vm.kubevirt.io/os": "rhel9",
+					},
+				},
+				Spec: kubevirtv1.VirtualMachineSpec{
+					Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+						Spec: kubevirtv1.VirtualMachineInstanceSpec{
+							Domain: kubevirtv1.DomainSpec{
+								CPU: &kubevirtv1.CPU{
+									Cores:   2,
+									Sockets: 1,
+									Threads: 1,
+								},
+								Memory: &kubevirtv1.Memory{
+									Guest: resourceQuantityPtr(2 * 1024 * 1024 * 1024), // 2GB
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(2048),
+				GuestOS:  "rhel9",
+			},
+		},
+		{
+			name: "VM with multi-socket CPU",
+			vm: &kubevirtv1.VirtualMachine{
+				Spec: kubevirtv1.VirtualMachineSpec{
+					Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+						Spec: kubevirtv1.VirtualMachineInstanceSpec{
+							Domain: kubevirtv1.DomainSpec{
+								CPU: &kubevirtv1.CPU{
+									Cores:   2,
+									Sockets: 2,
+									Threads: 2,
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: intPtr(8), // 2 cores * 2 sockets * 2 threads
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+		},
+		{
+			name: "VM with no spec data",
+			vm: &kubevirtv1.VirtualMachine{
+				Spec: kubevirtv1.VirtualMachineSpec{
+					Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+						Spec: kubevirtv1.VirtualMachineInstanceSpec{
+							Domain: kubevirtv1.DomainSpec{},
+						},
+					},
+				},
+			},
+			expected: VMIData{
+				CPUCount: nil,
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractVMSpecData(tt.vm)
+			assert.Equal(t, tt.expected.CPUCount, result.CPUCount)
+			assert.Equal(t, tt.expected.MemoryMB, result.MemoryMB)
+			assert.Equal(t, tt.expected.GuestOS, result.GuestOS)
+		})
+	}
+}
+
+func TestFormatGuestOS(t *testing.T) {
+	tests := []struct {
+		name     string
+		osInfo   *kubevirtv1.VirtualMachineInstanceGuestOSInfo
+		expected string
+	}{
+		{
+			name: "Pretty name available",
+			osInfo: &kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+				PrettyName: "CentOS Stream 9",
+				Name:       "centos",
+				Version:    "9",
+			},
+			expected: "CentOS Stream 9",
+		},
+		{
+			name: "Name and version available",
+			osInfo: &kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+				Name:    "Ubuntu",
+				Version: "22.04",
+			},
+			expected: "Ubuntu 22.04",
+		},
+		{
+			name: "Only name available",
+			osInfo: &kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+				Name: "Fedora",
+			},
+			expected: "Fedora",
+		},
+		{
+			name: "Only ID available",
+			osInfo: &kubevirtv1.VirtualMachineInstanceGuestOSInfo{
+				ID: "rhel",
+			},
+			expected: "rhel",
+		},
+		{
+			name:     "Empty OS info",
+			osInfo:   &kubevirtv1.VirtualMachineInstanceGuestOSInfo{},
+			expected: "Unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatGuestOS(tt.osInfo)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNeedsVMDataUpdate(t *testing.T) {
+	controller := &VMStatusController{}
+
+	tests := []struct {
+		name     string
+		vmRecord *models.VM
+		newData  VMIData
+		expected bool
+	}{
+		{
+			name: "CPU count change needed",
+			vmRecord: &models.VM{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			newData: VMIData{
+				CPUCount: intPtr(4),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			expected: true,
+		},
+		{
+			name: "Memory change needed",
+			vmRecord: &models.VM{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(2048),
+				GuestOS:  "CentOS Stream 9",
+			},
+			newData: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			expected: true,
+		},
+		{
+			name: "Guest OS change needed",
+			vmRecord: &models.VM{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 8",
+			},
+			newData: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			expected: true,
+		},
+		{
+			name: "No change needed",
+			vmRecord: &models.VM{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			newData: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			expected: false,
+		},
+		{
+			name: "New data has nil values - no change",
+			vmRecord: &models.VM{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			newData: VMIData{
+				CPUCount: nil,
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+			expected: false,
+		},
+		{
+			name: "VM has nil values but new data has values - change needed",
+			vmRecord: &models.VM{
+				CPUCount: nil,
+				MemoryMB: nil,
+				GuestOS:  "",
+			},
+			newData: VMIData{
+				CPUCount: intPtr(2),
+				MemoryMB: intPtr(4096),
+				GuestOS:  "CentOS Stream 9",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := controller.needsVMDataUpdate(tt.vmRecord, tt.newData)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestMapVMIToVM(t *testing.T) {
+	controller := &VMStatusController{}
+
+	tests := []struct {
+		name     string
+		obj      client.Object
+		expected []reconcile.Request
+	}{
+		{
+			name: "VMI with VM owner reference",
+			obj: &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vmi",
+					Namespace: "test-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind:       "VirtualMachine",
+							APIVersion: "kubevirt.io/v1",
+							Name:       "test-vm",
+						},
+					},
+				},
+			},
+			expected: []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Namespace: "test-namespace",
+						Name:      "test-vm",
+					},
+				},
+			},
+		},
+		{
+			name: "VMI without VM owner reference",
+			obj: &kubevirtv1.VirtualMachineInstance{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vmi",
+					Namespace: "test-namespace",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Kind:       "ReplicaSet",
+							APIVersion: "apps/v1",
+							Name:       "test-rs",
+						},
+					},
+				},
+			},
+			expected: nil,
+		},
+		{
+			name: "Non-VMI object",
+			obj: &kubevirtv1.VirtualMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-vm",
+					Namespace: "test-namespace",
+				},
+			},
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := controller.mapVMIToVM(context.Background(), tt.obj)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// Helper functions for tests
+func intPtr(i int) *int {
+	return &i
+}
+
+func resourceQuantityPtr(bytes int64) *resource.Quantity {
+	q := resource.NewQuantity(bytes, resource.BinarySI)
+	return q
 }

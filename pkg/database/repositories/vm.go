@@ -230,3 +230,33 @@ func (r *VMRepository) UpdateStatus(ctx context.Context, vmID string, status str
 func (r *VMRepository) CreateVM(ctx context.Context, vm *models.VM) error {
 	return r.db.WithContext(ctx).Create(vm).Error
 }
+
+// UpdateVMData updates the CPU, memory, and guest OS fields for a VM
+func (r *VMRepository) UpdateVMData(ctx context.Context, vmID string, cpuCount *int, memoryMB *int, guestOS string) error {
+	updates := map[string]interface{}{
+		"updated_at": time.Now(),
+	}
+
+	// Update fields with new values, allowing changes from existing values
+	if cpuCount != nil {
+		updates["cpu_count"] = *cpuCount
+	}
+	if memoryMB != nil {
+		updates["memory_mb"] = *memoryMB
+	}
+	if guestOS != "" {
+		updates["guest_os"] = guestOS
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&models.VM{}).
+		Where("id = ?", vmID).
+		Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}

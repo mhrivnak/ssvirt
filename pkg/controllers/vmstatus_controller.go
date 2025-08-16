@@ -15,7 +15,9 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 )
@@ -25,6 +27,7 @@ type VMRepositoryInterface interface {
 	GetByNamespaceAndVMName(ctx context.Context, namespace, vmName string) (*models.VM, error)
 	GetByVAppAndVMName(ctx context.Context, vappID, vmName string) (*models.VM, error)
 	UpdateStatus(ctx context.Context, vmID string, status string) error
+	UpdateVMData(ctx context.Context, vmID string, cpuCount *int, memoryMB *int, guestOS string) error
 	CreateVM(ctx context.Context, vm *models.VM) error
 }
 
@@ -59,6 +62,13 @@ type VMInfo struct {
 	UpdatedAt time.Time
 }
 
+// VMIData represents the data we extract from VirtualMachineInstance
+type VMIData struct {
+	CPUCount *int   // From status.currentCPUTopology.cores
+	MemoryMB *int   // From status.memory.guestCurrent (converted to MB)
+	GuestOS  string // From status.guestOSInfo (formatted string)
+}
+
 // SetupVMStatusController sets up the controller with the Manager
 func SetupVMStatusController(mgr ctrl.Manager, vmRepo VMRepositoryInterface, vappRepo VAppRepositoryInterface, vdcRepo VDCRepositoryInterface) error {
 	controller := &VMStatusController{
@@ -72,12 +82,16 @@ func SetupVMStatusController(mgr ctrl.Manager, vmRepo VMRepositoryInterface, vap
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kubevirtv1.VirtualMachine{}).
+		Watches(&kubevirtv1.VirtualMachineInstance{},
+			handler.EnqueueRequestsFromMapFunc(controller.mapVMIToVM)).
 		Complete(controller)
 }
 
 // Reconcile handles VirtualMachine resource changes
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines/status,verbs=get
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachineinstances,verbs=get;list;watch
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachineinstances/status,verbs=get
 //+kubebuilder:rbac:groups=template.openshift.io,resources=templateinstances,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -110,7 +124,27 @@ func (r *VMStatusController) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Handle VM status update
-	return r.handleVMStatusUpdate(ctx, vm)
+	statusResult, err := r.handleVMStatusUpdate(ctx, vm)
+	if err != nil {
+		return statusResult, err
+	}
+
+	// Handle VMI data update
+	vmiResult, err := r.handleVMIDataUpdate(ctx, vm)
+	if err != nil {
+		return vmiResult, err
+	}
+
+	// Return the more restrictive result
+	if statusResult.RequeueAfter > 0 || vmiResult.RequeueAfter > 0 {
+		requeue := statusResult.RequeueAfter
+		if vmiResult.RequeueAfter > 0 && (requeue == 0 || vmiResult.RequeueAfter < requeue) {
+			requeue = vmiResult.RequeueAfter
+		}
+		return ctrl.Result{RequeueAfter: requeue}, nil
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // handleVMStatusUpdate processes VirtualMachine status changes
@@ -213,6 +247,94 @@ func (r *VMStatusController) handleVMDeletion(ctx context.Context, namespacedNam
 
 	recordVMDeletion(namespace, vmName, "success")
 	logger.Info("Successfully updated VM status to DELETED", "vmID", vmRecord.ID)
+	return ctrl.Result{}, nil
+}
+
+// handleVMIDataUpdate processes VirtualMachineInstance data for existing fields
+func (r *VMStatusController) handleVMIDataUpdate(ctx context.Context, vm *kubevirtv1.VirtualMachine) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("vm", vm.Name, "namespace", vm.Namespace)
+
+	// Find corresponding database record
+	vmRecord, err := r.findOrCreateVMRecord(ctx, vm)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// VM not managed by SSVirt, skip
+			logger.V(1).Info("VirtualMachine not managed by SSVirt, skipping VMI data update")
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "Failed to find VM record for VMI data update")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// Try to find corresponding VMI
+	vmi := &kubevirtv1.VirtualMachineInstance{}
+	err = r.Get(ctx, types.NamespacedName{Namespace: vm.Namespace, Name: vm.Name}, vmi)
+
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			// VMI doesn't exist - VM is not running, use VM spec defaults
+			return r.handleVMSpecData(ctx, vm, vmRecord)
+		}
+		logger.Error(err, "Failed to get VirtualMachineInstance")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// Extract data from VMI
+	vmiData := extractVMIData(vmi)
+
+	// Check if update is needed
+	if !r.needsVMDataUpdate(vmRecord, vmiData) {
+		logger.V(1).Info("VMI data unchanged, skipping update")
+		return ctrl.Result{}, nil
+	}
+
+	// Update database record with VMI data
+	err = r.VMRepo.UpdateVMData(ctx, vmRecord.ID, vmiData.CPUCount, vmiData.MemoryMB, vmiData.GuestOS)
+	if err != nil {
+		r.Recorder.Event(vm, "Warning", "VMDataUpdateFailed",
+			fmt.Sprintf("Failed to update VM data: %v", err))
+		logger.Error(err, "Failed to update VM data in database")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	logger.Info("Updated VM data from VMI",
+		"vmID", vmRecord.ID,
+		"cpuCount", vmiData.CPUCount,
+		"memoryMB", vmiData.MemoryMB,
+		"guestOS", vmiData.GuestOS)
+
+	r.Recorder.Event(vm, "Normal", "VMDataUpdated",
+		"VM data updated from VirtualMachineInstance")
+
+	return ctrl.Result{}, nil
+}
+
+// handleVMSpecData extracts data from VirtualMachine spec when VMI doesn't exist
+func (r *VMStatusController) handleVMSpecData(ctx context.Context, vm *kubevirtv1.VirtualMachine, vmRecord *models.VM) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("vm", vm.Name, "namespace", vm.Namespace)
+
+	// Extract data from VM spec
+	specData := extractVMSpecData(vm)
+
+	// Check if update is needed
+	if !r.needsVMDataUpdate(vmRecord, specData) {
+		logger.V(1).Info("VM spec data unchanged, skipping update")
+		return ctrl.Result{}, nil
+	}
+
+	// Update database record with VM spec data
+	err := r.VMRepo.UpdateVMData(ctx, vmRecord.ID, specData.CPUCount, specData.MemoryMB, specData.GuestOS)
+	if err != nil {
+		logger.Error(err, "Failed to update VM data from spec")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	logger.Info("Updated VM data from VM spec",
+		"vmID", vmRecord.ID,
+		"cpuCount", specData.CPUCount,
+		"memoryMB", specData.MemoryMB,
+		"guestOS", specData.GuestOS)
+
 	return ctrl.Result{}, nil
 }
 
@@ -493,4 +615,134 @@ func (r *VMStatusController) findTemplateInstanceByUID(ctx context.Context, uid 
 	}
 
 	return nil, k8serrors.NewNotFound(templatev1.Resource("templateinstance"), uid)
+}
+
+// mapVMIToVM maps VirtualMachineInstance events to VirtualMachine reconcile requests
+func (r *VMStatusController) mapVMIToVM(ctx context.Context, obj client.Object) []reconcile.Request {
+	vmi, ok := obj.(*kubevirtv1.VirtualMachineInstance)
+	if !ok {
+		return nil
+	}
+
+	// VMI should have OwnerReference to VirtualMachine
+	for _, owner := range vmi.OwnerReferences {
+		if owner.Kind == "VirtualMachine" && owner.APIVersion == "kubevirt.io/v1" {
+			return []reconcile.Request{
+				{
+					NamespacedName: types.NamespacedName{
+						Namespace: vmi.Namespace,
+						Name:      owner.Name,
+					},
+				},
+			}
+		}
+	}
+
+	// No owner reference found - skip processing
+	return nil
+}
+
+// extractVMIData extracts relevant data from VirtualMachineInstance
+func extractVMIData(vmi *kubevirtv1.VirtualMachineInstance) VMIData {
+	data := VMIData{}
+
+	// Extract CPU count from current topology
+	if vmi.Status.CurrentCPUTopology != nil {
+		totalCores := int(vmi.Status.CurrentCPUTopology.Cores *
+			vmi.Status.CurrentCPUTopology.Sockets *
+			vmi.Status.CurrentCPUTopology.Threads)
+		data.CPUCount = &totalCores
+	}
+
+	// Extract memory from current allocation
+	if vmi.Status.Memory != nil && vmi.Status.Memory.GuestCurrent != nil {
+		// Convert from resource.Quantity to MB
+		memoryBytes := vmi.Status.Memory.GuestCurrent.Value()
+		memoryMB := int(memoryBytes / (1024 * 1024))
+		data.MemoryMB = &memoryMB
+	}
+
+	// Extract guest OS information
+	if vmi.Status.GuestOSInfo.Name != "" || vmi.Status.GuestOSInfo.PrettyName != "" || vmi.Status.GuestOSInfo.ID != "" {
+		guestOS := formatGuestOS(&vmi.Status.GuestOSInfo)
+		data.GuestOS = guestOS
+	}
+
+	return data
+}
+
+// extractVMSpecData extracts data from VirtualMachine specification when VMI doesn't exist
+func extractVMSpecData(vm *kubevirtv1.VirtualMachine) VMIData {
+	data := VMIData{}
+
+	// Extract CPU from VM spec
+	if vm.Spec.Template != nil && vm.Spec.Template.Spec.Domain.CPU != nil {
+		cores := vm.Spec.Template.Spec.Domain.CPU.Cores
+		sockets := vm.Spec.Template.Spec.Domain.CPU.Sockets
+		threads := vm.Spec.Template.Spec.Domain.CPU.Threads
+
+		totalCores := int(cores * sockets * threads)
+		data.CPUCount = &totalCores
+	}
+
+	// Extract memory from VM spec
+	if vm.Spec.Template != nil && vm.Spec.Template.Spec.Domain.Memory != nil && vm.Spec.Template.Spec.Domain.Memory.Guest != nil {
+		memoryBytes := vm.Spec.Template.Spec.Domain.Memory.Guest.Value()
+		memoryMB := int(memoryBytes / (1024 * 1024))
+		data.MemoryMB = &memoryMB
+	}
+
+	// For guest OS, check annotations or labels for OS hints
+	if vm.Annotations != nil {
+		if osHint, exists := vm.Annotations["vm.kubevirt.io/os"]; exists {
+			data.GuestOS = osHint
+		}
+	}
+
+	return data
+}
+
+// formatGuestOS creates a formatted string from guest OS info
+func formatGuestOS(osInfo *kubevirtv1.VirtualMachineInstanceGuestOSInfo) string {
+	if osInfo.PrettyName != "" {
+		return osInfo.PrettyName
+	}
+
+	if osInfo.Name != "" && osInfo.Version != "" {
+		return fmt.Sprintf("%s %s", osInfo.Name, osInfo.Version)
+	}
+
+	if osInfo.Name != "" {
+		return osInfo.Name
+	}
+
+	if osInfo.ID != "" {
+		return osInfo.ID
+	}
+
+	return "Unknown"
+}
+
+// needsVMDataUpdate checks if database update is actually needed
+func (r *VMStatusController) needsVMDataUpdate(vmRecord *models.VM, newData VMIData) bool {
+	// Check CPU count change
+	if newData.CPUCount != nil {
+		if vmRecord.CPUCount == nil || *vmRecord.CPUCount != *newData.CPUCount {
+			return true
+		}
+	}
+
+	// Check memory change
+	if newData.MemoryMB != nil {
+		if vmRecord.MemoryMB == nil || *vmRecord.MemoryMB != *newData.MemoryMB {
+			return true
+		}
+	}
+
+	// Check guest OS change
+	if newData.GuestOS != "" && vmRecord.GuestOS != newData.GuestOS {
+		return true
+	}
+
+	return false
 }
