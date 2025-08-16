@@ -179,15 +179,8 @@ func (r *VMStatusController) mapVMIToVM(ctx context.Context, obj client.Object) 
         }
     }
     
-    // Fallback: assume VMI name matches VM name
-    return []reconcile.Request{
-        {
-            NamespacedName: types.NamespacedName{
-                Namespace: vmi.Namespace,
-                Name:      vmi.Name,
-            },
-        },
-    }
+    // No owner reference found - skip processing
+    return nil
 }
 ```
 
