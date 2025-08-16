@@ -125,6 +125,14 @@ rules:
 - apiGroups: ["kubevirt.io"]
   resources: ["virtualmachines/status"]
   verbs: ["get", "list"]
+# Watch VirtualMachineInstance resources for runtime data
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachineinstances"]
+  verbs: ["get", "list", "watch"]
+# Read VMI status for runtime information
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachineinstances/status"]
+  verbs: ["get", "list"]
 # Access TemplateInstances to lookup vApp names
 - apiGroups: ["template.openshift.io"]
   resources: ["templateinstances"]
