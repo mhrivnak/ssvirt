@@ -416,7 +416,7 @@ func (r *VMRepository) UpdateVMData(ctx context.Context, vmID string, cpuCount *
         "updated_at": time.Now(),
     }
     
-    // Only update non-nil values
+    // Update fields with new values, allowing changes from existing values
     if cpuCount != nil {
         updates["cpu_count"] = *cpuCount
     }
