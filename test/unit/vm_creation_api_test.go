@@ -94,10 +94,10 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, "test-vapp", response.Name)
-			assert.Equal(t, "Test vApp from template\nCatalogItem: urn:vcloud:catalogitem:template-123", response.Description)
+			assert.Equal(t, "Test vApp from template", response.Description)
 			assert.Equal(t, "RESOLVED", response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
-			assert.Equal(t, "urn:vcloud:catalogitem:template-123", response.TemplateID)
+			assert.Equal(t, "", response.TemplateID) // No longer auto-generated from description
 			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
 			assert.Contains(t, response.Href, "/cloudapi/1.0.0/vapps/")
 		})
@@ -375,10 +375,10 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, "sysadmin-test-vapp", response.Name)
-			assert.Equal(t, "Test vApp from template by System Admin\nCatalogItem: urn:vcloud:catalogitem:admin-template-123", response.Description)
+			assert.Equal(t, "Test vApp from template by System Admin", response.Description)
 			assert.Equal(t, "RESOLVED", response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
-			assert.Equal(t, "urn:vcloud:catalogitem:admin-template-123", response.TemplateID)
+			assert.Equal(t, "", response.TemplateID) // No longer auto-generated from description
 			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
 			assert.Contains(t, response.Href, "/cloudapi/1.0.0/vapps/")
 		})
