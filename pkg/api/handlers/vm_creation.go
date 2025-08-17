@@ -231,16 +231,10 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 	// Create vApp
 	// Note: TemplateID is not set because catalog items are virtual entities
 	// that represent OpenShift templates, not database VAppTemplate records.
-	// The catalog item ID is stored in the description for reference.
-	description := req.Description
-	if description != "" {
-		description += "\n"
-	}
-	description += fmt.Sprintf("CatalogItem: %s", req.CatalogItem.ID)
-
+	// The catalog item reference is tracked internally but not added to the description.
 	vapp := &models.VApp{
 		Name:        req.Name,
-		Description: description,
+		Description: req.Description,
 		VDCID:       vdcID,
 		TemplateID:  nil,
 		Status:      "INSTANTIATING",
@@ -414,7 +408,7 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		}
 
 		// Create the template instance
-		result, err := h.k8sService.CreateTemplateInstance(c.Request.Context(), templateInstanceReq)
+		_, err = h.k8sService.CreateTemplateInstance(c.Request.Context(), templateInstanceReq)
 		if err != nil {
 			// Cleanup vApp and return error
 			if cleanupErr := h.vappRepo.DeleteWithValidation(c.Request.Context(), vapp.ID, true); cleanupErr != nil {
@@ -432,8 +426,7 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 
 		// Update vApp with template instance details
 		vapp.Status = "INSTANTIATING"
-		// Store the template instance name for future reference
-		vapp.Description = fmt.Sprintf("%s\nTemplateInstance: %s", vapp.Description, result.Name)
+		// Template instance name is tracked internally but not added to description
 	} else {
 		// No k8s service available, set to resolved as placeholder
 		vapp.Status = "RESOLVED"
@@ -486,19 +479,8 @@ func (h *VMCreationHandlers) toVAppResponse(vapp models.VApp) VAppResponse {
 	templateID := ""
 	if vapp.TemplateID != nil {
 		templateID = *vapp.TemplateID
-	} else {
-		// Extract catalog item ID from description if present
-		// Format: "CatalogItem: urn:vcloud:catalogitem:..."
-		if strings.Contains(vapp.Description, "CatalogItem: ") {
-			start := strings.Index(vapp.Description, "CatalogItem: ") + len("CatalogItem: ")
-			end := strings.Index(vapp.Description[start:], "\n")
-			if end == -1 {
-				templateID = vapp.Description[start:]
-			} else {
-				templateID = vapp.Description[start : start+end]
-			}
-		}
 	}
+	// Note: Catalog item references are no longer stored in description
 
 	return VAppResponse{
 		ID:          vapp.ID,
