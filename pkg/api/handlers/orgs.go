@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/mhrivnak/ssvirt/pkg/api/types"
+	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
 )
@@ -50,6 +51,19 @@ func NewOrgHandlers(orgRepo *repositories.OrganizationRepository) *OrgHandlers {
 
 // ListOrgs handles GET /cloudapi/1.0.0/orgs
 func (h *OrgHandlers) ListOrgs(c *gin.Context) {
+	// Extract user ID from JWT claims
+	claims, exists := c.Get(auth.ClaimsContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication token"})
+		return
+	}
+
 	// Parse query parameters
 	limitStr := c.DefaultQuery("page_size", "25")
 	offsetStr := c.DefaultQuery("page", "1")
@@ -69,15 +83,15 @@ func (h *OrgHandlers) ListOrgs(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	// Get total count of organizations
-	totalCount, err := h.orgRepo.Count()
+	// Get total count of accessible organizations
+	totalCount, err := h.orgRepo.CountAccessibleOrgs(c.Request.Context(), userClaims.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count organizations"})
 		return
 	}
 
-	// Get organizations with entity references populated
-	orgs, err := h.orgRepo.ListWithEntityRefs(limit, offset)
+	// Get organizations accessible to the user
+	orgs, err := h.orgRepo.ListAccessibleOrgs(c.Request.Context(), userClaims.UserID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve organizations"})
 		return
@@ -91,6 +105,19 @@ func (h *OrgHandlers) ListOrgs(c *gin.Context) {
 
 // GetOrg handles GET /cloudapi/1.0.0/orgs/{id}
 func (h *OrgHandlers) GetOrg(c *gin.Context) {
+	// Extract user ID from JWT claims
+	claims, exists := c.Get(auth.ClaimsContextKey)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+		return
+	}
+
+	userClaims, ok := claims.(*auth.Claims)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid authentication token"})
+		return
+	}
+
 	id := c.Param("id")
 
 	// Validate URN format
@@ -110,10 +137,10 @@ func (h *OrgHandlers) GetOrg(c *gin.Context) {
 		return
 	}
 
-	// Get organization with entity references populated
-	org, err := h.orgRepo.GetWithEntityRefs(id)
+	// Get organization if user has access
+	org, err := h.orgRepo.GetAccessibleOrg(c.Request.Context(), userClaims.UserID, id)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Organization not found"})
 			return
 		}
