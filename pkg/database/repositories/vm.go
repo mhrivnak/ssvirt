@@ -75,7 +75,7 @@ func (r *VMRepository) GetByOrganizationIDs(orgIDs []string) ([]models.VM, error
 
 	var vms []models.VM
 	err := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
-		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN v_apps ON vms.vapp_id = v_apps.id").
 		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
 		Where("vdcs.organization_id IN ?", orgIDs).
 		Find(&vms).Error
@@ -89,13 +89,13 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []string, vappID *
 
 	// Build the base query
 	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
-		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN v_apps ON vms.vapp_id = v_apps.id").
 		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
 		Where("vdcs.organization_id IN ?", orgIDs)
 
 	// Apply filters
 	if vappID != nil {
-		query = query.Where("vms.v_app_id = ?", *vappID)
+		query = query.Where("vms.vapp_id = ?", *vappID)
 	}
 	if status != "" {
 		query = query.Where("vms.status = ?", status)
@@ -104,12 +104,12 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []string, vappID *
 	// Count total records
 	var total int64
 	countQuery := r.db.Table("vms").
-		Joins("JOIN v_apps ON vms.v_app_id = v_apps.id").
+		Joins("JOIN v_apps ON vms.vapp_id = v_apps.id").
 		Joins("JOIN vdcs ON v_apps.vdc_id = vdcs.id").
 		Where("vdcs.organization_id IN ?", orgIDs)
 
 	if vappID != nil {
-		countQuery = countQuery.Where("vms.v_app_id = ?", *vappID)
+		countQuery = countQuery.Where("vms.vapp_id = ?", *vappID)
 	}
 	if status != "" {
 		countQuery = countQuery.Where("vms.status = ?", status)
@@ -135,7 +135,7 @@ func (r *VMRepository) GetByOrganizationIDsWithFilters(orgIDs []string, vappID *
 func (r *VMRepository) GetByVAppIDWithFilters(vappID string, status string, limit, offset int) ([]models.VM, int64, error) {
 	// Build the base query for specific vApp
 	query := r.db.Preload("VApp").Preload("VApp.VDC").Preload("VApp.VDC.Organization").
-		Where("v_app_id = ?", vappID)
+		Where("vapp_id = ?", vappID)
 
 	// Apply status filter
 	if status != "" {
@@ -144,7 +144,7 @@ func (r *VMRepository) GetByVAppIDWithFilters(vappID string, status string, limi
 
 	// Count total records
 	var total int64
-	countQuery := r.db.Table("vms").Where("v_app_id = ?", vappID)
+	countQuery := r.db.Table("vms").Where("vapp_id = ?", vappID)
 	if status != "" {
 		countQuery = countQuery.Where("status = ?", status)
 	}
@@ -200,7 +200,7 @@ func (r *VMRepository) GetByNamespaceAndVMName(ctx context.Context, namespace, v
 func (r *VMRepository) GetByVAppAndVMName(ctx context.Context, vappID, vmName string) (*models.VM, error) {
 	var vm models.VM
 	err := r.db.WithContext(ctx).
-		Where("v_app_id = ? AND vm_name = ?", vappID, vmName).
+		Where("vapp_id = ? AND vm_name = ?", vappID, vmName).
 		First(&vm).Error
 	if err != nil {
 		return nil, err

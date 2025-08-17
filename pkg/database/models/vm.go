@@ -10,7 +10,7 @@ type VM struct {
 	ID          string         `gorm:"type:varchar(255);primary_key" json:"id"`
 	Name        string         `gorm:"not null" json:"name"`
 	Description string         `json:"description"`
-	VAppID      string         `gorm:"type:varchar(255);not null;index" json:"vapp_id"`
+	VAppID      string         `gorm:"column:vapp_id;type:varchar(255);not null;index" json:"vapp_id"`
 	VMName      string         `json:"vm_name"`   // OpenShift VM resource name
 	Namespace   string         `json:"namespace"` // OpenShift namespace
 	Status      string         `json:"status"`
