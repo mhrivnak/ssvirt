@@ -280,7 +280,23 @@ func (r *VAppRepository) UpdateStatus(ctx context.Context, vappID string, status
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
+		// No rows affected could mean either:
+		// 1. vApp doesn't exist, or
+		// 2. vApp exists but status was unchanged
+		// Perform existence check to distinguish between these cases
+		var count int64
+		err := r.db.WithContext(ctx).
+			Model(&models.VApp{}).
+			Where("id = ?", vappID).
+			Count(&count).Error
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		// vApp exists but status was unchanged - this is a no-op, return nil
+		return nil
 	}
 	return nil
 }

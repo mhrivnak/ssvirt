@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -92,17 +93,21 @@ func (e *VAppStatusEvaluator) EvaluateStatus() string {
 // Reconcile handles vApp status updates based on TemplateInstance changes
 func (r *VAppStatusController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	logger.Info("VAppStatusController reconcile triggered", "namespacedName", req.NamespacedName)
 
 	// Get the TemplateInstance
 	var templateInstance templatev1.TemplateInstance
 	if err := r.Get(ctx, req.NamespacedName, &templateInstance); err != nil {
 		if k8serrors.IsNotFound(err) {
 			// TemplateInstance was deleted, ignore
+			logger.Info("TemplateInstance not found, ignoring", "namespacedName", req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
 		logger.Error(err, "Failed to get TemplateInstance")
 		return ctrl.Result{}, err
 	}
+
+	logger.Info("Processing TemplateInstance", "name", templateInstance.Name, "namespace", templateInstance.Namespace)
 
 	// Find corresponding vApp by name and namespace
 	vdc, err := r.VDCRepo.GetByNamespace(ctx, templateInstance.Namespace)
@@ -113,6 +118,12 @@ func (r *VAppStatusController) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 		logger.Error(err, "Failed to get VDC for namespace", "namespace", templateInstance.Namespace)
 		return ctrl.Result{}, err
+	}
+
+	// Ensure vdc is not nil before using it
+	if vdc == nil {
+		logger.Info("VDC is nil for namespace, ignoring", "namespace", templateInstance.Namespace)
+		return ctrl.Result{}, nil
 	}
 
 	vapp, err := r.VAppRepo.GetByNameInVDC(ctx, vdc.ID, templateInstance.Name)
@@ -127,10 +138,12 @@ func (r *VAppStatusController) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Evaluate new status
 	newStatus := r.evaluateVAppStatus(ctx, &templateInstance, vapp, logger)
+	logger.Info("Evaluated vApp status", "vapp", vapp.ID, "currentStatus", vapp.Status, "newStatus", newStatus)
 
 	// Update status if changed
 	if vapp.Status != newStatus {
 		oldStatus := vapp.Status
+		logger.Info("Updating vApp status", "vapp", vapp.ID, "oldStatus", oldStatus, "newStatus", newStatus)
 		err := r.VAppRepo.UpdateStatus(ctx, vapp.ID, newStatus)
 		if err != nil {
 			logger.Error(err, "Failed to update vApp status", "vapp", vapp.ID, "oldStatus", oldStatus, "newStatus", newStatus)
@@ -138,6 +151,8 @@ func (r *VAppStatusController) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 
 		logger.Info("Updated vApp status", "vapp", vapp.ID, "oldStatus", oldStatus, "newStatus", newStatus)
+	} else {
+		logger.Info("vApp status unchanged", "vapp", vapp.ID, "status", vapp.Status)
 	}
 
 	return ctrl.Result{}, nil
@@ -186,12 +201,13 @@ func (r *VAppStatusController) evaluateTemplateInstanceStatus(templateInstance *
 
 // SetupWithManager sets up the controller with the Manager
 func (r *VAppStatusController) SetupWithManager(mgr ctrl.Manager) error {
-	// Watch TemplateInstance resources
+	// Watch TemplateInstance resources and VirtualMachine resources they own
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&templatev1.TemplateInstance{}).
+		Owns(&kubevirtv1.VirtualMachine{}).
 		Complete(r)
 	if err != nil {
-		return fmt.Errorf("failed to setup TemplateInstance controller: %w", err)
+		return fmt.Errorf("failed to setup VAppStatusController: %w", err)
 	}
 
 	return nil
