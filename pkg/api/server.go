@@ -95,7 +95,7 @@ func NewServer(cfg *config.Config, db *database.DB, authSvc *auth.Service, jwtMa
 		catalogItemHandlers: handlers.NewCatalogItemHandler(catalogItemRepo),
 		sessionHandlers:     handlers.NewSessionHandlers(userRepo, authSvc, jwtManager, cfg),
 		vmCreationHandlers:  handlers.NewVMCreationHandlers(vdcRepo, vappRepo, catalogItemRepo, catalogRepo, k8sService),
-		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo),
+		vappHandlers:        handlers.NewVAppHandlers(vappRepo, vdcRepo, vmRepo, k8sService),
 		vmHandlers:          handlers.NewVMHandlers(vmRepo, vappRepo, vdcRepo),
 		powerMgmtHandlers:   createPowerManagementHandler(vmRepo, k8sService),
 	}
