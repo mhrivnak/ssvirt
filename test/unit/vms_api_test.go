@@ -60,7 +60,7 @@ func TestVMAPIEndpoints(t *testing.T) {
 		Name:        "test-vapp",
 		Description: "Test vApp for VM testing",
 		VDCID:       vdc.ID,
-		Status:      "RESOLVED",
+		Status:      models.VAppStatusDeployed,
 	}
 	require.NoError(t, db.DB.Create(vapp).Error)
 

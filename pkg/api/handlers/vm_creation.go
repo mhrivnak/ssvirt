@@ -237,7 +237,7 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		Description: req.Description,
 		VDCID:       vdcID,
 		TemplateID:  nil,
-		Status:      "INSTANTIATING",
+		Status:      models.VAppStatusInstantiating,
 	}
 
 	err = h.vappRepo.CreateWithContext(c.Request.Context(), vapp)
@@ -425,11 +425,11 @@ func (h *VMCreationHandlers) InstantiateTemplate(c *gin.Context) {
 		}
 
 		// Update vApp with template instance details
-		vapp.Status = "INSTANTIATING"
+		vapp.Status = models.VAppStatusInstantiating
 		// Template instance name is tracked internally but not added to description
 	} else {
-		// No k8s service available, set to resolved as placeholder
-		vapp.Status = "RESOLVED"
+		// No k8s service available, remain in instantiating state
+		vapp.Status = models.VAppStatusInstantiating
 	}
 
 	err = h.vappRepo.UpdateWithContext(c.Request.Context(), vapp)

@@ -330,7 +330,7 @@ func TestTemplateMapper(t *testing.T) {
 		assert.Equal(t, catalogID, catalogItem.CatalogID)
 		assert.True(t, catalogItem.IsPublished)
 		assert.False(t, catalogItem.IsExpired)
-		assert.Equal(t, "RESOLVED", catalogItem.Status)
+		assert.Equal(t, "AVAILABLE", catalogItem.Status)
 		assert.Equal(t, "2024-01-15T10:30:00Z", catalogItem.CreationDate)
 
 		// Check entity

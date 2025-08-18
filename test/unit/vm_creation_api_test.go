@@ -95,7 +95,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 
 			assert.Equal(t, "test-vapp", response.Name)
 			assert.Equal(t, "Test vApp from template", response.Description)
-			assert.Equal(t, "RESOLVED", response.Status)
+			assert.Equal(t, models.VAppStatusInstantiating, response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
 			assert.Equal(t, "", response.TemplateID) // No longer auto-generated from description
 			assert.Contains(t, response.ID, "urn:vcloud:vapp:")
@@ -154,7 +154,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 				Name:        "duplicate-vapp",
 				Description: "First vApp",
 				VDCID:       vdc.ID,
-				Status:      "RESOLVED",
+				Status:      models.VAppStatusInstantiating,
 			}
 			require.NoError(t, db.DB.Create(vapp).Error)
 
@@ -376,7 +376,7 @@ func TestVMCreationAPIEndpoints(t *testing.T) {
 
 			assert.Equal(t, "sysadmin-test-vapp", response.Name)
 			assert.Equal(t, "Test vApp from template by System Admin", response.Description)
-			assert.Equal(t, "RESOLVED", response.Status)
+			assert.Equal(t, models.VAppStatusInstantiating, response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
 			assert.Equal(t, "", response.TemplateID) // No longer auto-generated from description
 			assert.Contains(t, response.ID, "urn:vcloud:vapp:")

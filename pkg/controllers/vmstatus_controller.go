@@ -15,6 +15,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -88,11 +89,12 @@ func SetupVMStatusController(mgr ctrl.Manager, vmRepo VMRepositoryInterface, vap
 }
 
 // Reconcile handles VirtualMachine resource changes
-//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines,verbs=get;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachines/status,verbs=get
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachineinstances,verbs=get;list;watch
 //+kubebuilder:rbac:groups=kubevirt.io,resources=virtualmachineinstances/status,verbs=get
-//+kubebuilder:rbac:groups=template.openshift.io,resources=templateinstances,verbs=get;list;watch
+//+kubebuilder:rbac:groups=template.openshift.io,resources=templateinstances,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=template.openshift.io,resources=templateinstances/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *VMStatusController) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -446,7 +448,7 @@ func (r *VMStatusController) findOrCreateVApp(ctx context.Context, vdcID, vappNa
 	vapp = &models.VApp{
 		Name:        vappName,
 		VDCID:       vdcID,
-		Status:      "RESOLVED", // Default status for new vApps
+		Status:      models.VAppStatusInstantiating, // Initial status for new vApps
 		Description: fmt.Sprintf("VApp created from OpenShift TemplateInstance: %s", vappName),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -571,8 +573,8 @@ func (r *VMStatusController) ensureVAppLabel(ctx context.Context, vm *kubevirtv1
 		return nil, err
 	}
 
-	// Set the vapp.ssvirt label to the TemplateInstance name
-	logger.Info("Setting vapp.ssvirt label", "templateInstance", templateInstance.Name)
+	// Set the vapp.ssvirt label and controller reference to the TemplateInstance
+	logger.Info("Setting vapp.ssvirt label and controller reference", "templateInstance", templateInstance.Name)
 
 	// Create a copy to modify
 	vmCopy := vm.DeepCopy()
@@ -581,19 +583,28 @@ func (r *VMStatusController) ensureVAppLabel(ctx context.Context, vm *kubevirtv1
 	}
 	vmCopy.Labels["vapp.ssvirt"] = templateInstance.Name
 
+	// Set controller reference to TemplateInstance
+	err = controllerutil.SetControllerReference(templateInstance, vmCopy, r.Scheme)
+	if err != nil {
+		logger.Error(err, "Failed to set controller reference")
+		recordVMReconcileError(vm.Namespace, vm.Name, "controller_reference_error")
+		recordVMLabelOperation(vm.Namespace, vm.Name, "update", "error")
+		return nil, err
+	}
+
 	// Update the VirtualMachine
 	err = r.Update(ctx, vmCopy)
 	if err != nil {
-		logger.Error(err, "Failed to update VirtualMachine with vapp.ssvirt label")
+		logger.Error(err, "Failed to update VirtualMachine with vapp.ssvirt label and controller reference")
 		recordVMReconcileError(vm.Namespace, vm.Name, "label_update_error")
 		recordVMLabelOperation(vm.Namespace, vm.Name, "update", "error")
 		return nil, err
 	}
 
-	logger.Info("Successfully set vapp.ssvirt label", "templateInstance", templateInstance.Name)
+	logger.Info("Successfully set vapp.ssvirt label and controller reference", "templateInstance", templateInstance.Name)
 	recordVMLabelOperation(vm.Namespace, vm.Name, "update", "success")
-	r.Recorder.Event(vmCopy, "Normal", "LabelUpdated",
-		fmt.Sprintf("Set vapp.ssvirt label to %s", templateInstance.Name))
+	r.Recorder.Event(vmCopy, "Normal", "LabelAndControllerUpdated",
+		fmt.Sprintf("Set vapp.ssvirt label and controller reference to %s", templateInstance.Name))
 
 	return vmCopy, nil
 }
