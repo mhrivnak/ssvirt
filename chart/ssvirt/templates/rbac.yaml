@@ -120,7 +120,7 @@ rules:
 # Watch and update VirtualMachine resources across all namespaces
 - apiGroups: ["kubevirt.io"]
   resources: ["virtualmachines"]
-  verbs: ["get", "list", "watch", "update", "patch"]
+  verbs: ["get", "list", "watch", "update", "patch", "delete"]
 # Read VM status and specs
 - apiGroups: ["kubevirt.io"]
   resources: ["virtualmachines/status"]
@@ -133,10 +133,14 @@ rules:
 - apiGroups: ["kubevirt.io"]
   resources: ["virtualmachineinstances/status"]
   verbs: ["get", "list"]
-# Access TemplateInstances to lookup vApp names
+# Access TemplateInstances to lookup vApp names and set controller references
 - apiGroups: ["template.openshift.io"]
   resources: ["templateinstances"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+# TemplateInstance finalizers for controller references with blockOwnerDeletion
+- apiGroups: ["template.openshift.io"]
+  resources: ["templateinstances/finalizers"]
+  verbs: ["update"]
 # Create events for tracking and debugging
 - apiGroups: [""]
   resources: ["events"]
