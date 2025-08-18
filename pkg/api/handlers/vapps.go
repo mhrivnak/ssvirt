@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -323,8 +324,7 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 		if err != nil {
 			// Log the error but don't fail the API call - continue with database cleanup
 			// This follows the pattern used in VDC deletion
-			// TODO: Add proper logging
-			_ = err
+			log.Printf("Warning: Failed to delete TemplateInstance '%s' in namespace '%s' for vApp '%s': %v", vapp.Name, vdc.Namespace, vapp.ID, err)
 		}
 	}
 

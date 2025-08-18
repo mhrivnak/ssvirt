@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -505,8 +506,7 @@ func (h *VDCHandlers) DeleteVDC(c *gin.Context) {
 	if h.k8sService != nil {
 		if err := h.k8sService.DeleteNamespaceForVDC(c.Request.Context(), vdc); err != nil {
 			// Log the error but don't fail the API call since the VDC is already deleted
-			// TODO: Add proper logging
-			_ = err
+			log.Printf("Warning: Failed to delete namespace '%s' for VDC '%s': %v", vdc.Namespace, vdc.ID, err)
 		}
 	}
 
