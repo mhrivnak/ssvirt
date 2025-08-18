@@ -33,21 +33,24 @@ import (
 	"github.com/mhrivnak/ssvirt/pkg/auth"
 	"github.com/mhrivnak/ssvirt/pkg/database/models"
 	"github.com/mhrivnak/ssvirt/pkg/database/repositories"
+	"github.com/mhrivnak/ssvirt/pkg/services"
 )
 
 // VAppHandlers handles vApp API endpoints
 type VAppHandlers struct {
-	vappRepo *repositories.VAppRepository
-	vdcRepo  *repositories.VDCRepository
-	vmRepo   *repositories.VMRepository
+	vappRepo   *repositories.VAppRepository
+	vdcRepo    *repositories.VDCRepository
+	vmRepo     *repositories.VMRepository
+	k8sService services.KubernetesService
 }
 
 // NewVAppHandlers creates a new VAppHandlers instance
-func NewVAppHandlers(vappRepo *repositories.VAppRepository, vdcRepo *repositories.VDCRepository, vmRepo *repositories.VMRepository) *VAppHandlers {
+func NewVAppHandlers(vappRepo *repositories.VAppRepository, vdcRepo *repositories.VDCRepository, vmRepo *repositories.VMRepository, k8sService services.KubernetesService) *VAppHandlers {
 	return &VAppHandlers{
-		vappRepo: vappRepo,
-		vdcRepo:  vdcRepo,
-		vmRepo:   vmRepo,
+		vappRepo:   vappRepo,
+		vdcRepo:    vdcRepo,
+		vmRepo:     vmRepo,
+		k8sService: k8sService,
 	}
 }
 
@@ -283,8 +286,8 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 	// Parse force parameter
 	force := c.Query("force") == "true"
 
-	// Validate vApp access
-	_, err := h.validateVAppAccess(c.Request.Context(), userClaims.UserID, vappID)
+	// Validate vApp access and get vApp details
+	vapp, err := h.validateVAppAccess(c.Request.Context(), userClaims.UserID, vappID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, NewAPIError(
@@ -300,6 +303,29 @@ func (h *VAppHandlers) DeleteVApp(c *gin.Context) {
 			))
 		}
 		return
+	}
+
+	// Get VDC information to find the namespace for TemplateInstance cleanup
+	vdc, err := h.vdcRepo.GetByIDString(c.Request.Context(), vapp.VDCID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, NewAPIError(
+			http.StatusInternalServerError,
+			"Internal Server Error",
+			"Failed to get VDC information",
+		))
+		return
+	}
+
+	// Delete associated TemplateInstance if k8s service is available
+	if h.k8sService != nil && vdc.Namespace != "" {
+		// The TemplateInstance name should match the vApp name
+		err = h.k8sService.DeleteTemplateInstance(c.Request.Context(), vdc.Namespace, vapp.Name)
+		if err != nil {
+			// Log the error but don't fail the API call - continue with database cleanup
+			// This follows the pattern used in VDC deletion
+			// TODO: Add proper logging
+			_ = err
+		}
 	}
 
 	// Delete vApp with validation
