@@ -211,7 +211,7 @@ func (m *TemplateMapper) TemplateToCatalogItem(template *templatev1.Template, ca
 		IsExpired:    false,
 		CreationDate: template.CreationTimestamp.Format(time.RFC3339),
 		Size:         size,
-		Status:       "RESOLVED",
+		Status:       "AVAILABLE",
 		Entity: models.CatalogItemEntity{
 			Name:              template.Name,
 			Description:       description,

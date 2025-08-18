@@ -112,6 +112,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Setup VApp Status Controller
+	if err = controllers.SetupVAppStatusController(mgr, vappRepo, vmRepo, vdcRepo); err != nil {
+		setupLog.Error(err, "Unable to create controller", "controller", "VAppStatus")
+		os.Exit(1)
+	}
+
 	// Add health checks
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Unable to set up health check")

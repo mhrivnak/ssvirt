@@ -269,3 +269,18 @@ func (r *VAppRepository) GetByNameInVDC(ctx context.Context, vdcID, name string)
 func (r *VAppRepository) CreateVApp(ctx context.Context, vapp *models.VApp) error {
 	return r.db.WithContext(ctx).Create(vapp).Error
 }
+
+// UpdateStatus updates only the status field of a VApp (for controller)
+func (r *VAppRepository) UpdateStatus(ctx context.Context, vappID string, status string) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.VApp{}).
+		Where("id = ?", vappID).
+		Update("status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}

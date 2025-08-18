@@ -446,7 +446,7 @@ func (r *VMStatusController) findOrCreateVApp(ctx context.Context, vdcID, vappNa
 	vapp = &models.VApp{
 		Name:        vappName,
 		VDCID:       vdcID,
-		Status:      "RESOLVED", // Default status for new vApps
+		Status:      models.VAppStatusInstantiating, // Initial status for new vApps
 		Description: fmt.Sprintf("VApp created from OpenShift TemplateInstance: %s", vappName),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),

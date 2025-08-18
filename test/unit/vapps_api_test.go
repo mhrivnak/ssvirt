@@ -61,7 +61,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 		Name:        "test-vapp-1",
 		Description: "First test vApp",
 		VDCID:       vdc.ID,
-		Status:      "RESOLVED",
+		Status:      models.VAppStatusDeployed,
 	}
 	require.NoError(t, db.DB.Create(vapp1).Error)
 
@@ -109,7 +109,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 			for _, vappResp := range response.Values {
 				if vappResp.Name == "test-vapp-1" {
 					assert.Equal(t, "First test vApp", vappResp.Description)
-					assert.Equal(t, "RESOLVED", vappResp.Status)
+					assert.Equal(t, models.VAppStatusDeployed, vappResp.Status)
 					assert.Equal(t, 1, vappResp.NumberOfVMs)
 				} else if vappResp.Name == "test-vapp-2" {
 					assert.Equal(t, "Second test vApp", vappResp.Description)
@@ -206,7 +206,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 
 			assert.Equal(t, "test-vapp-1", response.Name)
 			assert.Equal(t, "First test vApp", response.Description)
-			assert.Equal(t, "RESOLVED", response.Status)
+			assert.Equal(t, models.VAppStatusDeployed, response.Status)
 			assert.Equal(t, vdc.ID, response.VDCID)
 			assert.Equal(t, 1, response.NumberOfVMs)
 			assert.Len(t, response.VMs, 1)
@@ -257,7 +257,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 			Name:        "delete-test-vapp",
 			Description: "vApp for deletion testing",
 			VDCID:       vdc.ID,
-			Status:      "RESOLVED",
+			Status:      models.VAppStatusDeployed,
 		}
 		require.NoError(t, db.DB.Create(deleteVApp).Error)
 
@@ -282,7 +282,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 				Name:        "force-delete-vapp",
 				Description: "vApp for force deletion testing",
 				VDCID:       vdc.ID,
-				Status:      "RESOLVED",
+				Status:      models.VAppStatusDeployed,
 			}
 			require.NoError(t, db.DB.Create(forceDeleteVApp).Error)
 
@@ -300,7 +300,7 @@ func TestVAppAPIEndpoints(t *testing.T) {
 				Name:        "running-vm-vapp",
 				Description: "vApp with running VMs",
 				VDCID:       vdc.ID,
-				Status:      "RESOLVED",
+				Status:      models.VAppStatusDeployed,
 			}
 			require.NoError(t, db.DB.Create(runningVApp).Error)
 
